@@ -42,8 +42,8 @@ def plot_frame_and_traj(ax,dir):
         dir: directory housing the pos.csv and video tif file
     :return:
     """
-    pos_location = glob(path.join(dir, 'pos.csv'))
-    avi_location = glob(path.join(dir, '*.avi'))
+    pos_location = glob(path.join(dir + '\FreezeFrame','pos.csv'))
+    avi_location = glob(path.join(dir + '\FreezeFrame', '*.avi'))
 
     display_frame(ax,avi_location[0])
     plot_trajectory(ax,pos_location[0])
@@ -59,12 +59,12 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
     :return: h: figure handle
     """
     nsesh = len(day_des)
-    narena = len(arena)
+    narena = len(arenas)
     fig, ax = plt.subplots(narena, nsesh)
 
     # Iterate through all sessions and plot stuff
-    for idd, day in day_des:
-        for ida, arena in arenas:
+    for idd, day in enumerate(day_des):
+        for ida, arena in enumerate(arenas):
             try:
                 dir_use = get_dir(mouse,arena,day,list_dir=list_dir)
                 plot_frame_and_traj(ax[ida,idd],dir_use)
@@ -76,7 +76,7 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
                 if ida == 0 and idd == 0:
                     ax[ida, idd].set_title(mouse)
             except:
-                print(['Error processing ' arena + ' ' + str(day)])
+                print(['Error processing ' + arena + ' ' + str(day)])
 
     return fig
 
