@@ -60,25 +60,51 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
     """
     nsesh = len(day_des)
     narena = len(arenas)
-    fig, ax = plt.subplots(narena, nsesh)
+    fig, ax = plt.subplots(narena, nsesh, figsize=(12.7,4.8))
 
     # Iterate through all sessions and plot stuff
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
             try:
                 dir_use = get_dir(mouse,arena,day,list_dir=list_dir)
-                plot_frame_and_traj(ax[ida,idd],dir_use)
+
                 # Label stuff
-                if ida == 1:
-                    ax[ida,idd].set_xlabel(str(day))
+                ax[ida,idd].set_xlabel(str(day))
                 if idd == 0:
                     ax[ida,idd].set_ylabel(arena)
                 if ida == 0 and idd == 0:
                     ax[ida, idd].set_title(mouse)
+
+                axis_off(ax[ida,idd])
+                plot_frame_and_traj(ax[ida,idd],dir_use)
+
+                # Label stuff - hack here to make sure things get labeled regardless of plotting or not
+                ax[ida, idd].set_xlabel(str(day))
+                if idd == 0:
+                    ax[ida, idd].set_ylabel(arena)
+                if ida == 0 and idd == 0:
+                    ax[ida, idd].set_title(mouse)
+
             except:
                 print(['Error processing ' + arena + ' ' + str(day)])
 
     return fig
+
+def axis_off(ax):
+    """
+    Turn off x and y axes and tickmarks
+    :param ax: axes handle
+    :return:
+    """
+    ax.tick_params(
+        axis='both',  # changes apply to the x-axis
+        which='both',  # both major and minor ticks are affected
+        bottom='off',  # ticks along the bottom edge are off
+        top='off',  # ticks along the top edge are off
+        labelbottom='off', # labels along the bottom edge are off
+        right='off',
+        left='off',
+        labelleft='off')
 
 
 
