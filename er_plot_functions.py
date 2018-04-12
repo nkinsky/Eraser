@@ -80,12 +80,9 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
                 plot_frame_and_traj(ax[ida,idd],dir_use)
 
                 if disp_fratio:
-                    # # un-pickle your variables
-                    # pkl_file = path.join(dir_use,'Position.pkl')
-                    # FObj = pickle.load(open(pkl_file,'rb'))
-                    # fratio = FObj.freezing.sum()/len(FObj.freezing)
                     if arena == 'Open':
                         # NK Note - velocity threshold is just a guess at this point
+                        # Also need to ignore positions at 0,0 somehow and/or interpolate
                         velocity_threshold = 15
                         min_freeze_duration = 75
                     elif arena == 'Shock':
@@ -97,7 +94,7 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
                     fratio = freezing.sum()/freezing.__len__()
                     fratio_str = '%0.2f' % fratio # make it a string
 
-                # Label stuff - hack here to make sure things get labeled regardless of plotting or not
+                # Label stuff - hack here to make sure things get labeled if try statement fails during plotting
                 ax[ida, idd].set_xlabel(str(day))
                 if idd == 0:
                     ax[ida, idd].set_ylabel(arena)
@@ -167,7 +164,7 @@ def detect_freezing(dir_use, velocity_threshold=15, min_freeze_duration=10):
         if np.diff(this_epoch) < min_freeze_duration:
             freezing[this_epoch[0]:this_epoch[1]] = False
 
-    return freezing
+    return freezing, velocity
 
 def get_pos(dir_use):
     """
@@ -216,3 +213,42 @@ def get_freezing_epochs(freezing):
     freezing_epochs = freezing_epochs[1:-1]
 
     return freezing_epochs
+
+def get_all_freezing(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
+                         list_dir='E:\Eraser\SessionDirectories'):
+    """
+    Gets freezing ratio for all experimental sessions for a given mouse.
+    :param
+        mouse: Mouse name, e.g. 'DVHPC_5' or 'Marble7'
+        arenas: 'Open' or 'Shock'
+        day_des: array of session days -2,-1,0,1,2,7 and 4 = 4hr session on day 0
+        list_dir: alternate location of SessionDirectories
+    :return:
+        fratios: narena x nsession array of fratios
+    """
+    nsesh = len(day_des)
+    narena = len(arenas)
+
+    # Iterate through all sessions and get fratio
+    fratios = np.empty((narena,nsesh)) # pre-allocate fratio as all nan values
+    fratios[:] = np.nan
+    for idd, day in enumerate(day_des):
+        for ida, arena in enumerate(arenas):
+            try:
+                if arena == 'Open':
+                    # NK Note - velocity threshold is just a guess at this point
+                    # Also need to ignore positions at 0,0 somehow and/or interpolate
+                    velocity_threshold = 15
+                    min_freeze_duration = 75
+                elif arena == 'Shock':
+                    velocity_threshold = 15
+                    min_freeze_duration = 10
+
+                dir_use = get_dir(mouse, arena, day, list_dir=list_dir)
+                freezing = detect_freezing(dir_use, velocity_threshold=velocity_threshold,
+                                                    min_freeze_duration=min_freeze_duration)[0]
+                fratios[ida,idd] = freezing.sum()/freezing.__len__()
+            except:
+                print(['Unknown error processing ' + arena + ' ' + str(day)])
+
+    return fratios
