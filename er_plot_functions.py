@@ -80,10 +80,12 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
                 plot_frame_and_traj(ax[ida,idd],dir_use)
 
                 if disp_fratio:
-                    # un-pickle your variables
-                    pkl_file = path.join(dir_use,'Position.pkl')
-                    FObj = pickle.load(open(pkl_file,'rb'))
-                    fratio = FObj.freezing.sum()/len(FObj.freezing)
+                    # # un-pickle your variables
+                    # pkl_file = path.join(dir_use,'Position.pkl')
+                    # FObj = pickle.load(open(pkl_file,'rb'))
+                    # fratio = FObj.freezing.sum()/len(FObj.freezing)
+                    freezing = detect_freezing(dir_use)
+                    fratio = freezing.sum()/freezing.__len()__()
                     fratio_str = '%0.2f' % fratio # make it a string
 
                 # Label stuff - hack here to make sure things get labeled regardless of plotting or not
@@ -92,6 +94,9 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
                     ax[ida, idd].set_ylabel(arena)
                 if ida == 0 and idd == 0:
                     ax[ida, idd].set_title(mouse)
+
+                if idd != 0 and ida != 0:
+                    ax[ida, idd].set_title(fratio_str)
 
             except:
                 print(['Error processing ' + arena + ' ' + str(day)])
@@ -138,7 +143,7 @@ def detect_freezing(dir_use, velocity_threshold=15, min_freeze_duration=10):
     time_diff = np.diff(video_t)  # Time difference.
     distance = np.hypot(pos_diff[:, 0], pos_diff[:, 1])  # Displacement.
     velocity = np.concatenate(([0], distance // time_diff))  # Velocity.
-    freezing = self.velocity < velocity_threshold
+    freezing = velocity < velocity_threshold
 
     freezing_epochs = get_freezing_epochs(velocity)
 
@@ -152,7 +157,6 @@ def detect_freezing(dir_use, velocity_threshold=15, min_freeze_duration=10):
             self.freezing[this_epoch[0]:this_epoch[1]] = False
 
     return freezing
-
 
 def get_pos(dir_use):
     """
@@ -177,14 +181,17 @@ def get_timestamps(dir_use):
     :return:
         t: nd array of timestamps
     """
-    time_file = path.join(dir_use + '\FreezeFrame', '*Index.csv')
-    temp = pd.read_csv(time_file, header=None)
+    time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index.csv'))
+    temp = pd.read_csv(time_file[0], header=None)
     t = np.array(temp.iloc[:, 0])
 
     return t
 
 
 def get_freezing_epochs(freezing):
+    """
+
+    """
     padded_freezing = np.concatenate(([0], freezing, [0]))
     status_changes = np.abs(np.diff(padded_freezing))
 

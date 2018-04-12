@@ -1,3 +1,13 @@
+import sys
+sys.path.append(r'C:\Users\kinsky.AD\Dropbox\Imaging Project\Python\Eraser')
+sys.path.append(r'C:\Users\kinsky.AD\Dropbox\Imaging Project\Python\FearReinstatement')
+sys.path.append(r'C:\Users\kinsky.AD\Dropbox\Imaging Project\Python\FearReinstatement\Helpers')
+import er_plot_functions as er
+import os
+os.chdir(r'E:\Eraser\Marble3\20180205_1_exposure')
+os.getcwd()
+freezing = er.detect_freezing(os.getcwd())
+
 import numpy as np
 import matplotlib.pyplot as plt
 import os
@@ -54,5 +64,3 @@ sd = msl('C:\\Users\\Nat\\Documents\\BU\\Imaging\\Working\\Eraser\\SessionDirect
 x = [1,2,3,4,5]
 x == 1
 load_session_list('C:\\Users\\Nat\\Documents\\BU\\Imaging\\Working\\Eraser\\SessionDirectories')
-
-
