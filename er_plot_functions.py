@@ -50,7 +50,7 @@ def plot_frame_and_traj(ax,dir):
     plot_trajectory(ax,pos_location[0])
 
 def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
-                         list_dir='E:\Eraser\SessionDirectories', disp_fratio = False):
+                         list_dir='E:\Eraser\SessionDirectories', disp_fratio=False):
     """
     Plot mouse trajectory for each session
     :param
@@ -84,8 +84,17 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
                     # pkl_file = path.join(dir_use,'Position.pkl')
                     # FObj = pickle.load(open(pkl_file,'rb'))
                     # fratio = FObj.freezing.sum()/len(FObj.freezing)
-                    freezing = detect_freezing(dir_use)
-                    fratio = freezing.sum()/freezing.__len()__()
+                    if arena == 'Open':
+                        # NK Note - velocity threshold is just a guess at this point
+                        velocity_threshold = 15
+                        min_freeze_duration = 75
+                    elif arena == 'Shock':
+                        velocity_threshold = 15
+                        min_freeze_duration = 10
+
+                    freezing = detect_freezing(dir_use,velocity_threshold=velocity_threshold,
+                                               min_freeze_duration=min_freeze_duration)
+                    fratio = freezing.sum()/freezing.__len__()
                     fratio_str = '%0.2f' % fratio # make it a string
 
                 # Label stuff - hack here to make sure things get labeled regardless of plotting or not
@@ -95,7 +104,9 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
                 if ida == 0 and idd == 0:
                     ax[ida, idd].set_title(mouse)
 
-                if idd != 0 and ida != 0:
+                if idd == 0 and ida == 0:
+                    ax[ida, idd].set_ylabel(fratio_str)
+                else:
                     ax[ida, idd].set_title(fratio_str)
 
             except:
@@ -139,13 +150,13 @@ def detect_freezing(dir_use, velocity_threshold=15, min_freeze_duration=10):
 
     pos = get_pos(dir_use)
     video_t = get_timestamps(dir_use)
-    pos_diff = np.diff(pos, axis=0)  # For calculating distance.
+    pos_diff = np.diff(pos.T, axis=0)  # For calculating distance.
     time_diff = np.diff(video_t)  # Time difference.
     distance = np.hypot(pos_diff[:, 0], pos_diff[:, 1])  # Displacement.
-    velocity = np.concatenate(([0], distance // time_diff))  # Velocity.
+    velocity = np.concatenate(([0], distance // time_diff[0:-1]))  # Velocity.
     freezing = velocity < velocity_threshold
 
-    freezing_epochs = get_freezing_epochs(velocity)
+    freezing_epochs = get_freezing_epochs(freezing)
 
     # Get duration of freezing in frames.
     freezing_duration = np.diff(freezing_epochs)
@@ -154,7 +165,7 @@ def detect_freezing(dir_use, velocity_threshold=15, min_freeze_duration=10):
     # them.
     for this_epoch in freezing_epochs:
         if np.diff(this_epoch) < min_freeze_duration:
-            self.freezing[this_epoch[0]:this_epoch[1]] = False
+            freezing[this_epoch[0]:this_epoch[1]] = False
 
     return freezing
 
