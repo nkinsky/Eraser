@@ -252,3 +252,37 @@ def get_all_freezing(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
                 print(['Unknown error processing ' + arena + ' ' + str(day)])
 
     return fratios
+
+def plot_all_freezing(mice,days=[-2,-1,0,4,1,2,7],arenas=['Open','Shock']):
+    """
+    Plots freezing ratios for all mice
+    :param mice: list of all mice to include in plot
+    :return: figure and axes handles
+    """
+    plot_colors = ['b','r']
+    ndays = len(days)
+    nmice = len(mice)
+    narenas = len(arenas)
+
+    fratio_all = np.empty((narenas,ndays,nmice))
+    for idm, mouse in enumerate(mice):
+        fratio_all[:,:,idm] = get_all_freezing(mouse,day_des=days,arenas=arenas)
+
+    fig, ax = plt.subplots()
+    # fratio_all = np.random.rand(2,7,5) # for debugging purposes
+
+    # NK note - can make much of below into a general function to plot errorbars over a scatterplot in the future
+    fmean = fratio_all.mean(axis=2)
+    fstd = fratio_all.std(axis=2)
+
+    days_plot = list(range(ndays))
+    days_str = [str(e) for e in days]
+    for ida, arena in enumerate(arenas):
+        ax.errorbar(days_plot,fmean[ida,:],yerr=fstd[ida,:],color=plot_colors[ida])
+    ax.xticks(days,days_str)
+    ax.set_xlim(days[0]-0.5, days[-1]+0.5)
+    ax.set_xlabel('Session/Day')
+    ax.set_ylabel('Freezing Ratio')
+    ax.legend(arenas)
+
+    return fig, ax
