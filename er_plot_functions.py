@@ -89,7 +89,7 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
                         velocity_threshold = 15
                         min_freeze_duration = 10
 
-                    freezing = detect_freezing(dir_use,velocity_threshold=velocity_threshold,
+                    freezing, velocity = detect_freezing(dir_use,velocity_threshold=velocity_threshold,
                                                min_freeze_duration=min_freeze_duration)
                     fratio = freezing.sum()/freezing.__len__()
                     fratio_str = '%0.2f' % fratio # make it a string
@@ -101,9 +101,9 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
                 if ida == 0 and idd == 0:
                     ax[ida, idd].set_title(mouse)
 
-                if idd == 0 and ida == 0:
+                if idd == 0 and ida == 0 and disp_fratio:
                     ax[ida, idd].set_ylabel(fratio_str)
-                else:
+                elif disp_fratio:
                     ax[ida, idd].set_title(fratio_str)
 
             except:
