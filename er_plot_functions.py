@@ -230,8 +230,7 @@ def get_all_freezing(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
     narena = len(arenas)
 
     # Iterate through all sessions and get fratio
-    fratios = np.empty((narena,nsesh)) # pre-allocate fratio as all nan values
-    fratios[:] = np.nan
+    fratios = np.ones((narena,nsesh))*-1 # pre-allocate fratio as -1
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
             try:
