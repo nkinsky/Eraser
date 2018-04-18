@@ -230,7 +230,7 @@ def get_all_freezing(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
     narena = len(arenas)
 
     # Iterate through all sessions and get fratio
-    fratios = np.ones((narena,nsesh))*-1 # pre-allocate fratio as -1
+    fratios = np.ones((narena,nsesh))*float('NaN') # pre-allocate fratio as -1
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
             try:
@@ -256,6 +256,7 @@ def plot_all_freezing(mice,days=[-2,-1,0,4,1,2,7],arenas=['Open','Shock']):
     """
     Plots freezing ratios for all mice
     :param mice: list of all mice to include in plot
+        days
     :return: figure and axes handles
     """
     plot_colors = ['b','r']
@@ -271,15 +272,17 @@ def plot_all_freezing(mice,days=[-2,-1,0,4,1,2,7],arenas=['Open','Shock']):
     fratio_all = np.random.rand(2,7,5) # for debugging purposes
 
     # NK note - can make much of below into a general function to plot errorbars over a scatterplot in the future
-    fmean = fratio_all.mean(axis=2)
-    fstd = fratio_all.std(axis=2)
+    fmean = np.nanmean(fratio_all,axis=2)
+    fstd = np.nanstd(fratio_all,axis=2)
 
     days_plot = list(range(ndays))
     days_str = [str(e) for e in days]
     for ida, arena in enumerate(arenas):
         ax.errorbar(days_plot,fmean[ida,:],yerr=fstd[ida,:],color=plot_colors[ida])
         for idm, mouse in enumerate(mouse):
-            ax.scatter(days_plot,fratio_all[ida,:,idm],c=plot_colors[ida],alpha=0.2)
+            fratio_plot = fratio_all[ida,:,idm] # Grab only the appropriate mouse and day
+            good_bool = ~np.isnan(fratio_plot) # Grab only non-NaN values
+            ax.scatter(days_plot[good_bool],fratio_plot[good_bool],c=plot_colors[ida],alpha=0.2)
 
     plt.xticks(days,days_str)
     ax.set_xlim(days[0]-0.5, days[-1]+0.5)
