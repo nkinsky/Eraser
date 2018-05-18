@@ -13,6 +13,7 @@ import skvideo.io
 from glob import glob
 from session_directory import find_eraser_directory as get_dir
 import pickle
+from scipy.signal import decimate
 
 def display_frame(ax,vidfile):
     """
@@ -80,17 +81,20 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
                 plot_frame_and_traj(ax[ida,idd],dir_use)
 
                 if disp_fratio:
-                    if arena == 'Open':
-                        # NK Note - velocity threshold is just a guess at this point
-                        # Also need to ignore positions at 0,0 somehow and/or interpolate
-                        velocity_threshold = 15
-                        min_freeze_duration = 75
-                    elif arena == 'Shock':
-                        velocity_threshold = 15
-                        min_freeze_duration = 10
+
+                    velocity_threshold, min_freeze_duration, pix2cm = get_conv_factors(arena)
+                    # if arena == 'Open':
+                    #     # NK Note - velocity threshold is just a guess at this point
+                    #     # Also need to ignore positions at 0,0 somehow and/or interpolate
+                    #     velocity_threshold = 15
+                    #     min_freeze_duration = 75
+                    # elif arena == 'Shock':
+                    #     velocity_threshold = 15
+                    #     min_freeze_duration = 10
 
                     freezing, velocity = detect_freezing(dir_use,velocity_threshold=velocity_threshold,
-                                               min_freeze_duration=min_freeze_duration)
+                                               min_freeze_duration=min_freeze_duration, arena=arena,
+                                               pix2cm=pix2cm)
                     fratio = freezing.sum()/freezing.__len__()
                     fratio_str = '%0.2f' % fratio # make it a string
 
@@ -128,17 +132,19 @@ def axis_off(ax):
         labelleft='off')
 
 
-def detect_freezing(dir_use, velocity_threshold=15, min_freeze_duration=10):
+def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, arena='Shock',
+                    pix2cm=0.0969):
     # NK - need to update thresholds and min_freeze_duration above to reflect actual times/velocities,
     # NOT frames so that we can generalize between cages
     """
-        Detect freezing epochs.
+        Detect freezing epochs. input thresholds are in frames/sec and frames and should
+        be calculated using get_conv_factors for freezeframe or cineplex videos. Defaults
+        are set for freeze frame videos using Will's arbitrary ("by eye") method
         :param
             velocity_threshold: anything below this threshold is considered
-                freezing. Default set for freezeframe by Will's arbitrary method,
-                likely NOT good for Cineplex data
+                freezing. Frames/sec.
             min_freeze_duration: also, the epoch needs to be longer than
-                this scalar. Set to approximately 3 seconds.
+                this scalar. Frames.
                 plot_freezing: logical, whether you want to see the results.
         :return:
             freezing: boolean of if mouse if freezing that frame or not
@@ -147,10 +153,25 @@ def detect_freezing(dir_use, velocity_threshold=15, min_freeze_duration=10):
 
     pos = get_pos(dir_use)
     video_t = get_timestamps(dir_use)
+
+    # Downsample Cineplex data to match freezeframe acquisition rate
+    # Lucky for us 30 Hz / 3.75 Hz = 8!!!
+    if arena == 'Open':
+        pos = decimate(pos,8,axis=1)
+        video_t = decimate(video_t,8)
+
+        # Add in an extra point to the end of the time stamp in the event they end up the same
+        # length after downsampling - bugfix
+        if pos.shape[1] == video_t.__len__():
+            video_t = np.append(video_t,video_t[-1])
+
+    pos = pos*pix2cm  # convert to centimeters
     pos_diff = np.diff(pos.T, axis=0)  # For calculating distance.
     time_diff = np.diff(video_t)  # Time difference.
     distance = np.hypot(pos_diff[:, 0], pos_diff[:, 1])  # Displacement.
-    velocity = np.concatenate(([0], distance // time_diff[0:-1]))  # Velocity.
+    if (time_diff.__len__()) == (distance.__len__()):
+        distance = distance[0:-1]
+    velocity = np.concatenate(([0], distance // time_diff[0:-1]))  # Velocity. cm/sec (pixels/sec)
     freezing = velocity < velocity_threshold
 
     freezing_epochs = get_freezing_epochs(freezing)
@@ -158,7 +179,7 @@ def detect_freezing(dir_use, velocity_threshold=15, min_freeze_duration=10):
     # Get duration of freezing in frames.
     freezing_duration = np.diff(freezing_epochs)
 
-    # If any freezing epochs were less than ~3 seconds long, get rid of
+    # If any freezing epochs were less than ~3 seconds long (2.67 at SR = 3.75), get rid of
     # them.
     for this_epoch in freezing_epochs:
         if np.diff(this_epoch) < min_freeze_duration:
@@ -166,7 +187,7 @@ def detect_freezing(dir_use, velocity_threshold=15, min_freeze_duration=10):
 
     return freezing, velocity
 
-def get_pos(dir_use):
+def get_pos(dir_use, list_dir='E:\Eraser\SessionDirectories'):
     """
     Open csv file and get position data
     :param
@@ -174,6 +195,11 @@ def get_pos(dir_use):
     :return
         pos: nd array of x and y position data for each timestamp
     """
+
+    # Grab position either by directory or mouse/arena/day inputs
+    # if dir_use == None and mouse != None and arena != None and exp_day != None:
+    #     dir_use = get_dir(mouse, arena, exp_day, list_dir=list_dir)
+
     pos_file = path.join(dir_use + '\FreezeFrame', 'pos.csv')
     temp = pd.read_csv(pos_file, header=None)
     pos = temp.as_matrix()
@@ -198,7 +224,7 @@ def get_timestamps(dir_use):
 
 def get_freezing_epochs(freezing):
     """
-
+        returns indices of when freezing starts and stops.
     """
     padded_freezing = np.concatenate(([0], freezing, [0]))
     status_changes = np.abs(np.diff(padded_freezing))
@@ -220,7 +246,7 @@ def get_all_freezing(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
     Gets freezing ratio for all experimental sessions for a given mouse.
     :param
         mouse: Mouse name, e.g. 'DVHPC_5' or 'Marble7'
-        arenas: 'Open' or 'Shock'
+        arenas: 'Open' (denotes square) or 'Shock' or 'Circle' (denotes open field circle arena)
         day_des: array of session days -2,-1,0,1,2,7 and 4 = 4hr session on day 0
         list_dir: alternate location of SessionDirectories
     :return:
@@ -230,22 +256,16 @@ def get_all_freezing(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
     narena = len(arenas)
 
     # Iterate through all sessions and get fratio
-    fratios = np.ones((narena,nsesh))*float('NaN') # pre-allocate fratio as -1
+    fratios = np.ones((narena,nsesh))*float('NaN') # pre-allocate fratio as nan
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
             try:
-                if arena == 'Open':
-                    # NK Note - velocity threshold is just a guess at this point
-                    # Also need to ignore positions at 0,0 somehow and/or interpolate
-                    velocity_threshold = 15
-                    min_freeze_duration = 75
-                elif arena == 'Shock':
-                    velocity_threshold = 15
-                    min_freeze_duration = 10
 
+                velocity_threshold, min_freeze_duration, pix2cm = get_conv_factors(arena)
                 dir_use = get_dir(mouse, arena, day, list_dir=list_dir)
                 freezing = detect_freezing(dir_use, velocity_threshold=velocity_threshold,
-                                                    min_freeze_duration=min_freeze_duration)[0]
+                                                    min_freeze_duration=min_freeze_duration,
+                                                    arena=arena, pix2cm=pix2cm)[0]
                 fratios[ida,idd] = freezing.sum()/freezing.__len__()
             except:
                 print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
@@ -275,21 +295,70 @@ def plot_all_freezing(mice,days=[-2,-1,0,4,1,2,7],arenas=['Open','Shock']):
     fmean = np.nanmean(fratio_all,axis=2)
     fstd = np.nanstd(fratio_all,axis=2)
 
-    days_plot = list(range(ndays))
+    days_plot = np.asarray(list(range(ndays)))
     days_str = [str(e) for e in days]
     for ida, arena in enumerate(arenas):
         ax.errorbar(days_plot,fmean[ida,:],yerr=fstd[ida,:],color=plot_colors[ida])
 
-        for idm, mouse in enumerate(mouse):
+        for idm, mouse in enumerate(mice):
             fratio_plot = fratio_all[ida,:,idm] # Grab only the appropriate mouse and day
             good_bool = ~np.isnan(fratio_plot) # Grab only non-NaN values
-            ax.scatter(days_plot[good_bool],fratio_plot[good_bool],c=plot_colors[ida],alpha=0.2)
+            h = ax.scatter(days_plot[good_bool],fratio_plot[good_bool],c=plot_colors[ida],alpha=0.2)
+            if arena == 'Open': # Hack to get figure handles for each separately - need to figure out how to put in iterable variable
+                hopen = h
+            elif arena == 'Shock':
+                hshock = h
 
 
-    plt.xticks(days,days_str)
     ax.set_xlim(days_plot[0]-0.5, days_plot[-1]+0.5)
     ax.set_xlabel('Session/Day')
     ax.set_ylabel('Freezing Ratio')
-    ax.legend(arenas)
+    if len(arenas) == 2:
+        ax.legend((hopen,hshock),arenas)
+    plt.xticks(days_plot, days_str)
 
     return fig, ax
+
+def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
+    """
+    Converts specified freezing threshold speed and minimum epoch duration in cm/sec to pixels/sec and frames
+    Assumes 3.75 Hz framerate (Cineplex data must first be downsampled to 3.75 Hz)
+    Better in future will be to do everything in seconds and cm/sec.
+    :param
+        arena: 'Open' (square open field), or 'Circle' (circle open field), or 'Shock'
+        vthresh: velocity threshold in cm/sec, default = 1.45cm/sec
+        min_dur: mouse must be below vthresh for this amount of time consecutively to
+        be considered freezing, default = 2.67 sec
+    :return:
+        velocity thresh: counts as freezing when mouse is below this, pixels/sec
+        min_freeze_duration: mouse must be below velocity_thresh for this # frames currently in frames
+        pix2cm: conversion factor from pixels to centimeters
+    """
+
+    if arena == 'Open':
+        # Also need to ignore positions at 0,0 somehow and/or interpolate - not that many
+        # Better yet would be to downsample to 4 frames/sec?
+        # Probably need to filter these somehow - 5.5 cm/sec seems awfully fast for freezing
+        # velocity_threshold = 5.4  # in pixels/sec, ~ 1.45cm/sec (3.7 would give us 1 cm/sec)
+        # min_freeze_duration = 80  # 2.67 sec at SR = 30
+        pix2cm = 0.27  # convert pixels to cm
+
+        # SR = 30;  # frames/sec
+    elif arena == 'Circle':
+        # velocity_threshold = 7.2 # in pixels/sec, 5.0 would give us 1 cm/sec
+        # min_freeze_duration = 80  # 2.67 sec at SR = 30
+        pix2cm = 0.20  # convert pixels to cm
+
+        # SR = 30  # frames/sec
+    elif arena == 'Shock':
+        # velocity_threshold = 15  # in pixels/sec ~ 1.45 cm/sec (10.3 would give us 1 cm/sec)
+        # min_freeze_duration = 10  # 2.67 sec at SR = 3.75
+        pix2cm = 0.0969  # convert pixels to cm
+        # SR = 3.75  # frames/sec
+
+    # velocity_threshold = vthresh/pix2cm  # in pixels/sec
+    velocity_threshold = 1.5  # cm/sec
+    min_freeze_duration = 10  # in frames at 3.75 frames/sec (~2.67 sec)
+    # min_freeze_duration = np.round(min_dur*SR)
+
+    return velocity_threshold, min_freeze_duration, pix2cm
