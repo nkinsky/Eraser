@@ -150,20 +150,19 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
             freezing: boolean of if mouse if freezing that frame or not
     """
 
-
     pos = get_pos(dir_use)
     video_t = get_timestamps(dir_use)
 
     # Downsample Cineplex data to match freezeframe acquisition rate
     # Lucky for us 30 Hz / 3.75 Hz = 8!!!
     if arena == 'Open':
-        pos = decimate(pos,8,axis=1)
-        video_t = decimate(video_t,8)
+        pos = decimate(pos, 8, axis=1)
+        video_t = decimate(video_t, 8)
 
         # Add in an extra point to the end of the time stamp in the event they end up the same
         # length after downsampling - bugfix
         if pos.shape[1] == video_t.__len__():
-            video_t = np.append(video_t,video_t[-1])
+            video_t = np.append(video_t, video_t[-1])
 
     pos = pos*pix2cm  # convert to centimeters
     pos_diff = np.diff(pos.T, axis=0)  # For calculating distance.
@@ -187,7 +186,8 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
 
     return freezing, velocity
 
-def get_pos(dir_use, list_dir='E:\Eraser\SessionDirectories'):
+
+def get_pos(dir_use):
     """
     Open csv file and get position data
     :param
@@ -240,8 +240,9 @@ def get_freezing_epochs(freezing):
 
     return freezing_epochs
 
-def get_all_freezing(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
-                         list_dir='E:\Eraser\SessionDirectories'):
+
+def get_all_freezing(mouse, day_des=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock'],
+                     list_dir='E:\Eraser\SessionDirectories'):
     """
     Gets freezing ratio for all experimental sessions for a given mouse.
     :param
@@ -256,7 +257,7 @@ def get_all_freezing(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
     narena = len(arenas)
 
     # Iterate through all sessions and get fratio
-    fratios = np.ones((narena,nsesh))*float('NaN') # pre-allocate fratio as nan
+    fratios = np.ones((narena, nsesh))*float('NaN')  # pre-allocate fratio as nan
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
             try:
@@ -264,29 +265,30 @@ def get_all_freezing(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
                 velocity_threshold, min_freeze_duration, pix2cm = get_conv_factors(arena)
                 dir_use = get_dir(mouse, arena, day, list_dir=list_dir)
                 freezing = detect_freezing(dir_use, velocity_threshold=velocity_threshold,
-                                                    min_freeze_duration=min_freeze_duration,
-                                                    arena=arena, pix2cm=pix2cm)[0]
-                fratios[ida,idd] = freezing.sum()/freezing.__len__()
+                                           min_freeze_duration=min_freeze_duration,
+                                           arena=arena, pix2cm=pix2cm)[0]
+                fratios[ida, idd] = freezing.sum()/freezing.__len__()
             except:
                 print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
 
     return fratios
 
-def plot_all_freezing(mice,days=[-2,-1,0,4,1,2,7],arenas=['Open','Shock']):
+
+def plot_all_freezing(mice, days=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock']):
     """
     Plots freezing ratios for all mice
     :param mice: list of all mice to include in plot
         days
     :return: figure and axes handles
     """
-    plot_colors = ['b','r']
+    plot_colors = ['b', 'r']
     ndays = len(days)
     nmice = len(mice)
     narenas = len(arenas)
 
-    fratio_all = np.empty((narenas,ndays,nmice))
+    fratio_all = np.empty((narenas, ndays, nmice))
     for idm, mouse in enumerate(mice):
-        fratio_all[:,:,idm] = get_all_freezing(mouse,day_des=days,arenas=arenas)
+        fratio_all[:, :, idm] = get_all_freezing(mouse,day_des=days,arenas=arenas)
 
     fig, ax = plt.subplots()
     # fratio_all = np.random.rand(2,7,5) # for debugging purposes
@@ -298,30 +300,33 @@ def plot_all_freezing(mice,days=[-2,-1,0,4,1,2,7],arenas=['Open','Shock']):
     days_plot = np.asarray(list(range(ndays)))
     days_str = [str(e) for e in days]
     for ida, arena in enumerate(arenas):
-        ax.errorbar(days_plot,fmean[ida,:],yerr=fstd[ida,:],color=plot_colors[ida])
+        ax.errorbar(days_plot, fmean[ida, :], yerr=fstd[ida, :], color=plot_colors[ida])
 
         for idm, mouse in enumerate(mice):
-            fratio_plot = fratio_all[ida,:,idm] # Grab only the appropriate mouse and day
-            good_bool = ~np.isnan(fratio_plot) # Grab only non-NaN values
-            h = ax.scatter(days_plot[good_bool],fratio_plot[good_bool],c=plot_colors[ida],alpha=0.2)
-            if arena == 'Open': # Hack to get figure handles for each separately - need to figure out how to put in iterable variable
+            fratio_plot = fratio_all[ida, :, idm]  # Grab only the appropriate mouse and day
+            good_bool = ~np.isnan(fratio_plot)  # Grab only non-NaN values
+            h = ax.scatter(days_plot[good_bool], fratio_plot[good_bool],
+                           c=plot_colors[ida], alpha=0.2)
+
+            # Hack to get figure handles for each separately - need to figure out how to put in iterable variable
+            if arena == 'Open':
                 hopen = h
             elif arena == 'Shock':
                 hshock = h
-
 
     ax.set_xlim(days_plot[0]-0.5, days_plot[-1]+0.5)
     ax.set_xlabel('Session/Day')
     ax.set_ylabel('Freezing Ratio')
     if len(arenas) == 2:
-        ax.legend((hopen,hshock),arenas)
+        ax.legend((hopen, hshock), arenas)
     plt.xticks(days_plot, days_str)
 
-    return fig, ax
+    return fig, ax, fratio_all
+
 
 def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
     """
-    Converts specified freezing threshold speed and minimum epoch duration in cm/sec to pixels/sec and frames
+    Gets thresholds in cm/sec and num frames as well as pix2cm conversion factor for an arena
     Assumes 3.75 Hz framerate (Cineplex data must first be downsampled to 3.75 Hz)
     Better in future will be to do everything in seconds and cm/sec.
     :param
@@ -330,7 +335,7 @@ def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
         min_dur: mouse must be below vthresh for this amount of time consecutively to
         be considered freezing, default = 2.67 sec
     :return:
-        velocity thresh: counts as freezing when mouse is below this, pixels/sec
+        velocity thresh: counts as freezing when mouse is below this, cm/sec
         min_freeze_duration: mouse must be below velocity_thresh for this # frames currently in frames
         pix2cm: conversion factor from pixels to centimeters
     """
