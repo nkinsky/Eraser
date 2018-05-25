@@ -288,7 +288,7 @@ def plot_all_freezing(mice, days=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock
 
     fratio_all = np.empty((narenas, ndays, nmice))
     for idm, mouse in enumerate(mice):
-        fratio_all[:, :, idm] = get_all_freezing(mouse,day_des=days,arenas=arenas)
+        fratio_all[:, :, idm] = get_all_freezing(mouse, day_des=days, arenas=arenas)
 
     fig, ax = plt.subplots()
     # fratio_all = np.random.rand(2,7,5) # for debugging purposes
@@ -367,3 +367,27 @@ def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
     # min_freeze_duration = np.round(min_dur*SR)
 
     return velocity_threshold, min_freeze_duration, pix2cm
+
+
+def write_all_freezing(fratio_all, filepath):
+    """
+
+    :param fratio_all: 2 x 7 x nmice ndarray with freezing ratio values
+           filepath: full file path to output csv file
+    :return: nothing - writes to a csv file
+    """
+
+    nmice = fratio_all.shape[2]
+
+    with open(filepath, 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(['Open field', 'rows = mice', 'values = fratios'])
+        writer.writerow(['day -2', 'day -1', 'day 0', '4 hr', 'day 1', 'day 2', 'day 7'])
+        writer.writerows(fratio_all[0, :, :].T)
+        writer.writerow(['Shock Arena'])
+        writer.writerows(fratio_all[1, :, :].T)
+
+
+if __name__ == '__main__':
+    plot_all_freezing(['Marble3'])
+    pass
