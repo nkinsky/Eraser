@@ -44,13 +44,14 @@ def plot_frame_and_traj(ax,dir):
         dir: directory housing the pos.csv and video tif file
     :return:
     """
-    pos_location = glob(path.join(dir + '\FreezeFrame','pos.csv'))
+    pos_location = glob(path.join(dir + '\FreezeFrame', 'pos.csv'))
     avi_location = glob(path.join(dir + '\FreezeFrame', '*.avi'))
 
     display_frame(ax,avi_location[0])
     plot_trajectory(ax,pos_location[0])
 
-def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
+
+def plot_experiment_traj(mouse, day_des=[-2, -1, 0 ,4, 1, 2, 7], arenas=['Open', 'Shock'],
                          list_dir='E:\Eraser\SessionDirectories', disp_fratio=False):
     """
     Plot mouse trajectory for each session
@@ -58,6 +59,7 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
         mouse: name of mouse
         day_des: days to plot (day 0 = shock day, day -2 = 2 days before shock, 4 = 4 hr after shock (special case))
         arenas: 'Open' and/or 'Shock'
+        disp_fratio: true = display freezing ratio on plot
     :return: h: figure handle
     """
     nsesh = len(day_des)
@@ -68,7 +70,7 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
             try:
-                dir_use = get_dir(mouse,arena,day,list_dir=list_dir)
+                dir_use = get_dir(mouse, arena, day, list_dir=list_dir)
 
                 # Label stuff
                 ax[ida,idd].set_xlabel(str(day))
@@ -197,12 +199,15 @@ def get_pos(dir_use):
     """
 
     # Grab position either by directory or mouse/arena/day inputs
-    # if dir_use == None and mouse != None and arena != None and exp_day != None:
-    #     dir_use = get_dir(mouse, arena, exp_day, list_dir=list_dir)
 
-    pos_file = path.join(dir_use + '\FreezeFrame', 'pos.csv')
-    temp = pd.read_csv(pos_file, header=None)
-    pos = temp.as_matrix()
+    try:  # look in either freezeframe directory or base directory
+        pos_file = path.join(dir_use + '\FreezeFrame', 'pos.csv')
+        temp = pd.read_csv(pos_file, header=None)
+        pos = temp.as_matrix()
+    except FileNotFoundError:  # look in base directory if above is missing
+        pos_file = path.join(dir_use, 'pos.csv')
+        temp = pd.read_csv(pos_file, header=None)
+        pos = temp.as_matrix()
 
     return pos
 
