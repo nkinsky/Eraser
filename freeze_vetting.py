@@ -32,14 +32,15 @@ def get_ff_freezing(mouse_name):
 
     # Loop through and get all freezing data for each 60 sec interval + avg freezing
     frz_avg = [None]*len(ff_paths)
-    frz_by_min = []
+    frz_by_min = np.empty((0,10))
     for idf, ff_path in enumerate(ff_paths):
         ff_freeze_data = pd.read_csv(ff_path[0])
         mouse_min_frz = ff_freeze_data.iloc[int(np.where(mouse_bool)[0])+2, 1:11]
         frz_avg[idf] = mouse_min_frz.mean(axis=0)
-        np.append(frz_by_min, np.reshape(mouse_min_frz.values, [10, 1]))
+        frz_by_min = np.append(frz_by_min, np.reshape(mouse_min_frz.values, [1, 10]), axis=0)
 
     return frz_avg, frz_by_min
+
 
 if __name__ == '__main__':
     get_ff_freezing('GENERAL_1')
