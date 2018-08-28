@@ -12,8 +12,9 @@ from os import path
 import skvideo.io
 from glob import glob
 from session_directory import find_eraser_directory as get_dir
-import pickle
+# import pickle
 from scipy.signal import decimate
+
 
 def display_frame(ax,vidfile):
     """
@@ -23,21 +24,22 @@ def display_frame(ax,vidfile):
         vidfile: full path to video file
     :return:
     """
-    vid = skvideo.io.vread(vidfile,num_frames=1)
+    vid = skvideo.io.vread(vidfile, num_frames=1)
     ax.imshow(vid[0])
 
 
-def plot_trajectory(ax,posfile):
+def plot_trajectory(ax, posfile):
     """
     For plotting mouse trajectories.
     :param
         pos: nparray of x/y mouse location values
     :return:
     """
-    pos = pd.read_csv(posfile,header=None)
-    pos.T.plot(0,1,ax=ax,legend=False)
+    pos = pd.read_csv(posfile, header=None)
+    pos.T.plot(0, 1, ax=ax, legend=False)
 
-def plot_frame_and_traj(ax,dir):
+
+def plot_frame_and_traj(ax, dir):
     """
     Plot mouse trajectory on top of the video frame
     :param
@@ -47,11 +49,15 @@ def plot_frame_and_traj(ax,dir):
     pos_location = glob(path.join(dir + '\FreezeFrame', 'pos.csv'))
     avi_location = glob(path.join(dir + '\FreezeFrame', '*.avi'))
 
-    display_frame(ax,avi_location[0])
-    plot_trajectory(ax,pos_location[0])
+    display_frame(ax, avi_location[0])
+    xlims = ax.get_xlim()
+    ylims = ax.get_ylim()
+    plot_trajectory(ax, pos_location[0])
+    ax.set_xlim(xlims)
+    ax.set_ylim(ylims)
 
 
-def plot_experiment_traj(mouse, day_des=[-2, -1, 0 ,4, 1, 2, 7], arenas=['Open', 'Shock'],
+def plot_experiment_traj(mouse, day_des=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock'],
                          list_dir='E:\Eraser\SessionDirectories', disp_fratio=False):
     """
     Plot mouse trajectory for each session
@@ -64,23 +70,23 @@ def plot_experiment_traj(mouse, day_des=[-2, -1, 0 ,4, 1, 2, 7], arenas=['Open',
     """
     nsesh = len(day_des)
     narena = len(arenas)
-    fig, ax = plt.subplots(narena, nsesh, figsize=(12.7,4.8))
+    fig, ax = plt.subplots(narena, nsesh, figsize=(12.7, 4.8))
 
     # Iterate through all sessions and plot stuff
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
             try:
-                dir_use = get_dir(mouse, arena, day, list_dir=list_dir)
+                dir_use = get_dir(mouse, arena, day)
 
                 # Label stuff
-                ax[ida,idd].set_xlabel(str(day))
+                ax[ida, idd].set_xlabel(str(day))
                 if idd == 0:
-                    ax[ida,idd].set_ylabel(arena)
+                    ax[ida, idd].set_ylabel(arena)
                 if ida == 0 and idd == 0:
                     ax[ida, idd].set_title(mouse)
 
-                axis_off(ax[ida,idd])
-                plot_frame_and_traj(ax[ida,idd],dir_use)
+                axis_off(ax[ida, idd])
+                plot_frame_and_traj(ax[ida, idd], dir_use)
 
                 if disp_fratio:
 
