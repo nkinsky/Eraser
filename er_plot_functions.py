@@ -123,6 +123,7 @@ def plot_experiment_traj(mouse, day_des=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open',
 
     return fig
 
+
 def axis_off(ax):
     """
     Turn off x and y axes and tickmarks
