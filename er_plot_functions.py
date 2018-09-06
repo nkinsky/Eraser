@@ -15,7 +15,8 @@ from session_directory import find_eraser_directory as get_dir
 import pickle
 from scipy.signal import decimate
 
-def display_frame(ax,vidfile):
+
+def display_frame(ax, vidfile):
     """
     For displaying the first frame of a video
     :param
@@ -36,6 +37,7 @@ def plot_trajectory(ax,posfile):
     """
     pos = pd.read_csv(posfile,header=None)
     pos.T.plot(0,1,ax=ax,legend=False)
+
 
 def plot_frame_and_traj(ax,dir):
     """
@@ -117,6 +119,7 @@ def plot_experiment_traj(mouse, day_des=[-2, -1, 0 ,4, 1, 2, 7], arenas=['Open',
 
     return fig
 
+
 def axis_off(ax):
     """
     Turn off x and y axes and tickmarks
@@ -153,6 +156,7 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
     """
 
     pos = get_pos(dir_use)
+    pos = fix_pos(pos)
     video_t = get_timestamps(dir_use)
 
     # Downsample Cineplex data to match freezeframe acquisition rate
@@ -210,6 +214,34 @@ def get_pos(dir_use):
         pos = temp.as_matrix()
 
     return pos
+
+
+def fix_pos(pos):
+    """
+    Fixes any points at (0,0) by interpolating between closest defined points
+    :param pos: position data from get_pot
+    :return: pos_fix: fixed position data
+    """
+    bad_pts = np.where(np.bitwise_and(pos[0, :] == 0, pos[1,:] == 0))
+
+    pos_fix = pos
+    for pt in bad_pts[0]:
+
+        # Increment/decrement until you find closest good point above/below bad point
+        pt_p = [pt - 1, pt + 1]
+        while pt_p[0] in bad_pts[0]:
+            pt_p[0] -= 1
+        while pt_p[1] in bad_pts[0]:
+            pt_p[1] += 1
+
+        x_p = pos[0, pt_p]
+        y_p = pos[1, pt_p]
+
+        pos_fix[0, pt] = np.interp(pt, pt_p, x_p)
+        pos_fix[1, pt] = np.interp(pt, pt_p, y_p)
+
+    pos_fix
+    return pos_fix
 
 
 def get_timestamps(dir_use):
@@ -394,5 +426,6 @@ def write_all_freezing(fratio_all, filepath):
 
 
 if __name__ == '__main__':
-    plot_all_freezing(['Marble3'])
+    pos = get_pos('E:\\Eraser\\Marble7\\20180319_2_fcbox')
+    pos_fix = fix_pos(pos)
     pass
