@@ -291,7 +291,7 @@ def plot_all_freezing(mice, days=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock
     Plots freezing ratios for all mice
     :param mice: list of all mice to include in plot
         days
-    :return: figure and axes handles
+    :return: figure and axes handles, and all freezing values in freeze_ratio_all (narenas x ndays x nmice)
     """
     plot_colors = ['b', 'r']
     ndays = len(days)
