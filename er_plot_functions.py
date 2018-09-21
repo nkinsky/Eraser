@@ -156,7 +156,7 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
                 this scalar. Frames.
                 plot_freezing: logical, whether you want to see the results.
         :return:
-            freezing: boolean of if mouse if freezing that frame or not
+            freezing: boolean of if mouse is freezing that frame or not
     """
 
     pos = get_pos(dir_use)
@@ -165,7 +165,7 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
     # Downsample Cineplex data to match freezeframe acquisition rate
     # Lucky for us 30 Hz / 3.75 Hz = 8!!!
     if arena == 'Open':
-        pos = decimate(pos, 8, axis=1)
+        pos = decimate(pos, 8, axis=1, zero_phase=True)
         video_t = decimate(video_t, 8)
 
         # Add in an extra point to the end of the time stamp in the event they end up the same
@@ -227,7 +227,7 @@ def get_timestamps(dir_use):
     :return:
         t: nd array of timestamps
     """
-    time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index.csv'))
+    time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index*.csv'))
     temp = pd.read_csv(time_file[0], header=None)
     t = np.array(temp.iloc[:, 0])
 
@@ -254,7 +254,7 @@ def get_freezing_epochs(freezing):
 
 
 def get_all_freezing(mouse, day_des=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock'],
-                     list_dir='E:\Eraser\SessionDirectories'):
+                     list_dir='E:\Eraser\SessionDirectories', velocity_threshold=1.5, min_freeze_duration=10):
     """
     Gets freezing ratio for all experimental sessions for a given mouse.
     :param
@@ -272,21 +272,22 @@ def get_all_freezing(mouse, day_des=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Sh
     fratios = np.ones((narena, nsesh))*float('NaN')  # pre-allocate fratio as nan
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
-            try:
+            # try:
 
-                velocity_threshold, min_freeze_duration, pix2cm = get_conv_factors(arena)
+                pix2cm = get_conv_factors(arena)
                 dir_use = get_dir(mouse, arena, day, list_dir=list_dir)
                 freezing = detect_freezing(dir_use, velocity_threshold=velocity_threshold,
                                            min_freeze_duration=min_freeze_duration,
                                            arena=arena, pix2cm=pix2cm)[0]
                 fratios[ida, idd] = freezing.sum()/freezing.__len__()
-            except:
-                print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
+            # except:
+            #     print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
 
     return fratios
 
 
-def plot_all_freezing(mice, days=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock']):
+def plot_all_freezing(mice, days=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock'], velocity_threshold=1.5,
+                      min_freeze_duration=10):
     """
     Plots freezing ratios for all mice
     :param mice: list of all mice to include in plot
@@ -300,7 +301,8 @@ def plot_all_freezing(mice, days=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock
 
     fratio_all = np.empty((narenas, ndays, nmice))
     for idm, mouse in enumerate(mice):
-        fratio_all[:, :, idm] = get_all_freezing(mouse, day_des=days, arenas=arenas)
+        fratio_all[:, :, idm] = get_all_freezing(mouse, day_des=days, arenas=arenas,
+                                        velocity_threshold=velocity_threshold, min_freeze_duration=min_freeze_duration)
 
     fig, ax = plt.subplots()
     # fratio_all = np.random.rand(2,7,5) # for debugging purposes
@@ -374,11 +376,11 @@ def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
         # SR = 3.75  # frames/sec
 
     # velocity_threshold = vthresh/pix2cm  # in pixels/sec
-    velocity_threshold = 1.5  # cm/sec
-    min_freeze_duration = 10  # in frames at 3.75 frames/sec (~2.67 sec)
+    # velocity_threshold = 1.5  # cm/sec
+    # min_freeze_duration = 10  # in frames at 3.75 frames/sec (~2.67 sec)
     # min_freeze_duration = np.round(min_dur*SR)
 
-    return velocity_threshold, min_freeze_duration, pix2cm
+    return pix2cm
 
 
 def write_all_freezing(fratio_all, filepath):
