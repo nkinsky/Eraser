@@ -215,7 +215,7 @@ def get_timestamps(dir_use):
     :return:
         t: nd array of timestamps
     """
-    time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index.csv'))
+    time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index*.csv'))
     temp = pd.read_csv(time_file[0], header=None)
     t = np.array(temp.iloc[:, 0])
 
@@ -370,7 +370,7 @@ def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
 
 
 def write_all_freezing(fratio_all, filepath):
-    """
+    """Writes freezing levels each day to a csv file
 
     :param fratio_all: 2 x 7 x nmice ndarray with freezing ratio values
            filepath: full file path to output csv file
@@ -389,5 +389,5 @@ def write_all_freezing(fratio_all, filepath):
 
 
 if __name__ == '__main__':
-    plot_all_freezing(['Marble3'])
+    plot_experiment_traj('GEN_1', disp_fratio=True)
     pass
