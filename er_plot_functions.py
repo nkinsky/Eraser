@@ -12,10 +12,11 @@ from os import path
 import skvideo.io
 from glob import glob
 from session_directory import find_eraser_directory as get_dir
-import pickle
+# import pickle
 from scipy.signal import decimate
 
-def display_frame(ax,vidfile):
+def display_frame(ax, vidfile):
+
     """
     For displaying the first frame of a video
     :param
@@ -23,34 +24,41 @@ def display_frame(ax,vidfile):
         vidfile: full path to video file
     :return:
     """
-    vid = skvideo.io.vread(vidfile,num_frames=1)
+    vid = skvideo.io.vread(vidfile, num_frames=1)
     ax.imshow(vid[0])
 
 
-def plot_trajectory(ax,posfile):
+def plot_trajectory(ax, posfile):
     """
     For plotting mouse trajectories.
     :param
         pos: nparray of x/y mouse location values
     :return:
     """
-    pos = pd.read_csv(posfile,header=None)
-    pos.T.plot(0,1,ax=ax,legend=False)
+    pos = pd.read_csv(posfile, header=None)
+    pos.T.plot(0, 1, ax=ax, legend=False)
 
-def plot_frame_and_traj(ax,dir):
+
+def plot_frame_and_traj(ax, dir_use):
+
     """
     Plot mouse trajectory on top of the video frame
     :param
         dir: directory housing the pos.csv and video tif file
     :return:
     """
-    pos_location = glob(path.join(dir + '\FreezeFrame','pos.csv'))
-    avi_location = glob(path.join(dir + '\FreezeFrame', '*.avi'))
+    pos_location = glob(path.join(dir_use + '\FreezeFrame', 'pos.csv'))
+    avi_location = glob(path.join(dir_use + '\FreezeFrame', '*.avi'))
 
-    display_frame(ax,avi_location[0])
-    plot_trajectory(ax,pos_location[0])
+    display_frame(ax, avi_location[0])
+    xlims = ax.get_xlim()
+    ylims = ax.get_ylim()
+    plot_trajectory(ax, pos_location[0])
+    ax.set_xlim(xlims)
+    ax.set_ylim(ylims)
 
-def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock'],
+
+def plot_experiment_traj(mouse, day_des=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock'],
                          list_dir='E:\Eraser\SessionDirectories', disp_fratio=False):
     """
     Plot mouse trajectory for each session
@@ -58,27 +66,28 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
         mouse: name of mouse
         day_des: days to plot (day 0 = shock day, day -2 = 2 days before shock, 4 = 4 hr after shock (special case))
         arenas: 'Open' and/or 'Shock'
+        disp_fratio: true = display freezing ratio on plot
     :return: h: figure handle
     """
     nsesh = len(day_des)
     narena = len(arenas)
-    fig, ax = plt.subplots(narena, nsesh, figsize=(12.7,4.8))
+    fig, ax = plt.subplots(narena, nsesh, figsize=(12.7, 4.8))
 
     # Iterate through all sessions and plot stuff
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
             try:
-                dir_use = get_dir(mouse,arena,day,list_dir=list_dir)
+                dir_use = get_dir(mouse, arena, day)
 
                 # Label stuff
-                ax[ida,idd].set_xlabel(str(day))
+                ax[ida, idd].set_xlabel(str(day))
                 if idd == 0:
-                    ax[ida,idd].set_ylabel(arena)
+                    ax[ida, idd].set_ylabel(arena)
                 if ida == 0 and idd == 0:
                     ax[ida, idd].set_title(mouse)
 
-                axis_off(ax[ida,idd])
-                plot_frame_and_traj(ax[ida,idd],dir_use)
+                axis_off(ax[ida, idd])
+                plot_frame_and_traj(ax[ida, idd], dir_use)
 
                 if disp_fratio:
 
@@ -115,6 +124,7 @@ def plot_experiment_traj(mouse, day_des=[-2,-1,0,4,1,2,7], arenas=['Open','Shock
 
     return fig
 
+
 def axis_off(ax):
     """
     Turn off x and y axes and tickmarks
@@ -147,16 +157,17 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
                 this scalar. Frames.
                 plot_freezing: logical, whether you want to see the results.
         :return:
-            freezing: boolean of if mouse if freezing that frame or not
+            freezing: boolean of if mouse is freezing that frame or not
     """
 
     pos = get_pos(dir_use)
+    pos = fix_pos(pos)
     video_t = get_timestamps(dir_use)
 
     # Downsample Cineplex data to match freezeframe acquisition rate
     # Lucky for us 30 Hz / 3.75 Hz = 8!!!
     if arena == 'Open':
-        pos = decimate(pos, 8, axis=1)
+        pos = decimate(pos, 8, axis=1, zero_phase=True)
         video_t = decimate(video_t, 8)
 
         # Add in an extra point to the end of the time stamp in the event they end up the same
@@ -197,14 +208,45 @@ def get_pos(dir_use):
     """
 
     # Grab position either by directory or mouse/arena/day inputs
-    # if dir_use == None and mouse != None and arena != None and exp_day != None:
-    #     dir_use = get_dir(mouse, arena, exp_day, list_dir=list_dir)
 
-    pos_file = path.join(dir_use + '\FreezeFrame', 'pos.csv')
-    temp = pd.read_csv(pos_file, header=None)
-    pos = temp.as_matrix()
+    try:  # look in either freezeframe directory or base directory
+        pos_file = path.join(dir_use + '\FreezeFrame', 'pos.csv')
+        temp = pd.read_csv(pos_file, header=None)
+        pos = temp.as_matrix()
+    except FileNotFoundError:  # look in base directory if above is missing
+        pos_file = path.join(dir_use, 'pos.csv')
+        temp = pd.read_csv(pos_file, header=None)
+        pos = temp.as_matrix()
 
     return pos
+
+
+def fix_pos(pos):
+    """
+    Fixes any points at (0,0) by interpolating between closest defined points
+    :param pos: position data from get_pot
+    :return: pos_fix: fixed position data
+    """
+    bad_pts = np.where(np.bitwise_and(pos[0, :] == 0, pos[1,:] == 0))
+
+    pos_fix = pos
+    for pt in bad_pts[0]:
+
+        # Increment/decrement until you find closest good point above/below bad point
+        pt_p = [pt - 1, pt + 1]
+        while pt_p[0] in bad_pts[0]:
+            pt_p[0] -= 1
+        while pt_p[1] in bad_pts[0]:
+            pt_p[1] += 1
+
+        x_p = pos[0, pt_p]
+        y_p = pos[1, pt_p]
+
+        pos_fix[0, pt] = np.interp(pt, pt_p, x_p)
+        pos_fix[1, pt] = np.interp(pt, pt_p, y_p)
+
+    pos_fix
+    return pos_fix
 
 
 def get_timestamps(dir_use):
@@ -242,7 +284,7 @@ def get_freezing_epochs(freezing):
 
 
 def get_all_freezing(mouse, day_des=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock'],
-                     list_dir='E:\Eraser\SessionDirectories'):
+                     list_dir='E:\Eraser\SessionDirectories', velocity_threshold=1.5, min_freeze_duration=10):
     """
     Gets freezing ratio for all experimental sessions for a given mouse.
     :param
@@ -260,26 +302,27 @@ def get_all_freezing(mouse, day_des=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Sh
     fratios = np.ones((narena, nsesh))*float('NaN')  # pre-allocate fratio as nan
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
-            try:
+            # try:
 
-                velocity_threshold, min_freeze_duration, pix2cm = get_conv_factors(arena)
+                pix2cm = get_conv_factors(arena)
                 dir_use = get_dir(mouse, arena, day, list_dir=list_dir)
                 freezing = detect_freezing(dir_use, velocity_threshold=velocity_threshold,
                                            min_freeze_duration=min_freeze_duration,
                                            arena=arena, pix2cm=pix2cm)[0]
                 fratios[ida, idd] = freezing.sum()/freezing.__len__()
-            except:
-                print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
+            # except:
+            #     print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
 
     return fratios
 
 
-def plot_all_freezing(mice, days=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock']):
+def plot_all_freezing(mice, days=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock'], velocity_threshold=1.5,
+                      min_freeze_duration=10):
     """
     Plots freezing ratios for all mice
     :param mice: list of all mice to include in plot
         days
-    :return: figure and axes handles
+    :return: figure and axes handles, and all freezing values in freeze_ratio_all (narenas x ndays x nmice)
     """
     plot_colors = ['b', 'r']
     ndays = len(days)
@@ -288,7 +331,8 @@ def plot_all_freezing(mice, days=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock
 
     fratio_all = np.empty((narenas, ndays, nmice))
     for idm, mouse in enumerate(mice):
-        fratio_all[:, :, idm] = get_all_freezing(mouse, day_des=days, arenas=arenas)
+        fratio_all[:, :, idm] = get_all_freezing(mouse, day_des=days, arenas=arenas,
+                                        velocity_threshold=velocity_threshold, min_freeze_duration=min_freeze_duration)
 
     fig, ax = plt.subplots()
     # fratio_all = np.random.rand(2,7,5) # for debugging purposes
@@ -362,11 +406,11 @@ def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
         # SR = 3.75  # frames/sec
 
     # velocity_threshold = vthresh/pix2cm  # in pixels/sec
-    velocity_threshold = 1.5  # cm/sec
-    min_freeze_duration = 10  # in frames at 3.75 frames/sec (~2.67 sec)
+    # velocity_threshold = 1.5  # cm/sec
+    # min_freeze_duration = 10  # in frames at 3.75 frames/sec (~2.67 sec)
     # min_freeze_duration = np.round(min_dur*SR)
 
-    return velocity_threshold, min_freeze_duration, pix2cm
+    return pix2cm
 
 
 def write_all_freezing(fratio_all, filepath):
@@ -389,5 +433,7 @@ def write_all_freezing(fratio_all, filepath):
 
 
 if __name__ == '__main__':
-    plot_experiment_traj('GEN_1', disp_fratio=True)
+    pos = get_pos('E:\\Eraser\\Marble7\\20180319_2_fcbox')
+    pos_fix = fix_pos(pos)
+
     pass
