@@ -164,11 +164,11 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
     pos = fix_pos(pos)
     video_t = get_timestamps(dir_use)
 
-    # Downsample Cineplex data to match freezeframe acquisition rate
+    # Downsample Cineplex data to approximately match freezeframe acquisition rate
     # Lucky for us 30 Hz / 3.75 Hz = 8!!!
     if arena == 'Open':
-        pos = decimate(pos, 8, axis=1, zero_phase=True)
-        video_t = decimate(video_t, 8)
+        pos = decimate(pos, 8, axis=1, zero_phase=True, ftype='fir')
+        video_t = decimate(video_t, 8, zero_phase=True, ftype='fir')
 
         # Add in an extra point to the end of the time stamp in the event they end up the same
         # length after downsampling - bugfix
@@ -223,11 +223,13 @@ def get_pos(dir_use):
 
 def fix_pos(pos):
     """
-    Fixes any points at (0,0) by interpolating between closest defined points
+    Fixes any points at (0,0) or (nan,nan) by interpolating between closest defined points
     :param pos: position data from get_pot
     :return: pos_fix: fixed position data
     """
-    bad_pts = np.where(np.bitwise_and(pos[0, :] == 0, pos[1,:] == 0))
+    zero_bool = np.bitwise_and(pos[0, :] == 0, pos[1,:] == 0)
+    nan_bool = np.bitwise_and(np.isnan(pos[0, :]), np.isnan(pos[1, :]))
+    bad_pts = np.where(np.bitwise_or(zero_bool, nan_bool))
 
     pos_fix = pos
     for pt in bad_pts[0]:

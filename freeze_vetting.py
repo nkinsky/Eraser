@@ -18,7 +18,9 @@ ff_append = ['*1_EXPOSURE.csv', '*2_EXPOSURE.csv', '*4_4hr.csv',
              '*5_REEXPOSURE.csv', '*6_REEXPOSURE.csv', '*7_week.csv']
 mouse_names = ['GENERAL_1', 'GENERAL_2', 'GENERAL_3', 'GENERAL_4']
 
-ff_dir = r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser\GEN_pilots\GEN_1'
+## NRK update below to grab the appropriate file location for each computer
+ff_dir = r'E:\Evan\0.25mA protocol\GEN_Pilots\FREEZING\GEN_1' # Evan's computer
+# ff_dir = r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser\GEN_pilots\GEN_1'  # Nat's laptop
 
 ff_paths = [None]*len(ff_append)
 for ida, names in enumerate(ff_append):
