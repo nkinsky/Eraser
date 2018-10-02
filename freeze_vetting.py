@@ -25,6 +25,9 @@ if environ['COMPUTERNAME'] == 'CAS-2CUMM202-02':
 elif environ['COMPUTERNAME'] == 'NATLAPTOP':
     ff_dir = r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser\GEN_pilots\GEN_1'  # Nat's laptop
     list_dir = r'C:\Eraser\SessionDirectories'
+elif environ['COMPUTERNAME'] == 'NORVAL':
+    ff_dir = r'E:\Eraser\GEN_pilots\GEN_1'
+    list_dir = r'E:\Eraser\SessionDirectories'
 
 ff_paths = [None]*len(ff_append)
 for ida, names in enumerate(ff_append):
@@ -65,6 +68,8 @@ def plot_frz_comp(mouse_name, velocity_threshold=1.5, min_freeze_duration=10):
     :param velocity_threshold: considered freezing if mouse is below this, cm/s (1.5 = default)
     :param min_freeze_duration: considered freezing only if => this # frames (10 = default at 3.75 fps)
     :return: ax: axes handle to freezing comparison plot
+    :return: fratio: freezing ratio calculated by us
+    :return: ff_frz_avg: freezing % calculated by FreezeFrame
     """
     # get freezing by us
     fratio = er.get_all_freezing(mouse_name, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Shock'],
