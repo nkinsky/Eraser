@@ -318,8 +318,9 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
     return fratios
 
 
-def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'], velocity_threshold=1.5,
-                      min_freeze_duration=10):
+def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'], velocity_threshold=1.0,
+                      min_freeze_duration=10, title=''):
+
     """
     Plots freezing ratios for all mice
     :param mice: list of all mice to include in plot
@@ -366,6 +367,7 @@ def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
     if len(arenas) == 2:
         ax.legend((hopen, hshock), arenas)
     plt.xticks(days_plot, days_str)
+    ax.set_title(title)
 
     return fig, ax, fratio_all
 

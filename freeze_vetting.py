@@ -6,7 +6,7 @@ Created on Mon Aug 27 12:59:20 2018
 """
 
 import pandas as pd
-from os import path
+from os import path, environ
 from glob import glob
 import numpy as np
 import er_plot_functions as er
@@ -18,9 +18,16 @@ ff_append = ['*1_EXPOSURE.csv', '*2_EXPOSURE.csv', '*4_4hr.csv',
              '*5_REEXPOSURE.csv', '*6_REEXPOSURE.csv', '*7_week.csv']
 mouse_names = ['GENERAL_1', 'GENERAL_2', 'GENERAL_3', 'GENERAL_4']
 
-## NRK update below to grab the appropriate file location for each computer
-ff_dir = r'E:\Evan\0.25mA protocol\GEN_Pilots\FREEZING\GEN_1' # Evan's computer
-# ff_dir = r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser\GEN_pilots\GEN_1'  # Nat's laptop
+# NRK update below to grab the appropriate file location for each computer
+if environ['COMPUTERNAME'] == 'CAS-2CUMM202-02':
+    ff_dir = r'E:\Evan\0.25mA protocol\GEN_Pilots\FREEZING\GEN_1'  # Evan's computer
+    list_dir = r'E:\Eraser\SessionDirectories'
+elif environ['COMPUTERNAME'] == 'NATLAPTOP':
+    ff_dir = r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser\GEN_pilots\GEN_1'  # Nat's laptop
+    list_dir = r'C:\Eraser\SessionDirectories'
+elif environ['COMPUTERNAME'] == 'NORVAL':
+    ff_dir = r'E:\Eraser\GEN_pilots\GEN_1'
+    list_dir = r'E:\Eraser\SessionDirectories'
 
 ff_paths = [None]*len(ff_append)
 for ida, names in enumerate(ff_append):
@@ -55,29 +62,50 @@ def get_ff_freezing(mouse_name):
 
 
 def plot_frz_comp(mouse_name, velocity_threshold=1.5, min_freeze_duration=10):
-    """ Plots comparison between FF freezing and freezing calculated by us
+    """
 
-    :param mouse_name:
-    :return:
+    :param mouse_name: self explanatory
+    :param velocity_threshold: considered freezing if mouse is below this, cm/s (1.5 = default)
+    :param min_freeze_duration: considered freezing only if => this # frames (10 = default at 3.75 fps)
+    :return: ax: axes handle to freezing comparison plot
+    :return: fratio: freezing ratio calculated by us
+    :return: ff_frz_avg: freezing % calculated by FreezeFrame
     """
     # get freezing by us
     fratio = er.get_all_freezing(mouse_name, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Shock'],
                                  velocity_threshold=velocity_threshold, min_freeze_duration=min_freeze_duration,
-                                 list_dir='E:\Eraser\SessionDirectories')
+                                 list_dir=list_dir)
+    fratio = np.reshape(fratio, fratio.shape[1])  # resize to make 1d
 
     # get freezing by freezeframe
-    frz_avg, frz_by_min = get_ff_freezing(mouse_name)
+    ff_frz_avg, ff_frz_by_min = get_ff_freezing(mouse_name)
     _, ax = plt.subplots()
-    ax.scatter(frz_avg, fratio*100)
+    ax.scatter(ff_frz_avg, fratio*100)
     ax.set_xlabel('Freezing by FF (%)')
     ax.set_ylabel('Freezing by us (%)')
-    ax.set_title('Vel thresh = ?? min_freeze_dur = ??')
+    ax.set_title('Vel thresh = ' + str(velocity_threshold) +
+                 'cm/s, min_freeze_dur = ' + str(min_freeze_duration) + ' frames')
 
     # plot theoretically perfect match
     bounds = np.append(ax.get_ybound(), ax.get_xbound())
     bmin = np.min(bounds)
     bmax = np.max(bounds)
+    xlim = ax.get_xlim()
     ax.plot([bmin, bmax], [bmin, bmax], 'k--')
+
+    # get correlation coeff
+    rmat = np.corrcoef(ff_frz_avg, fratio*100)
+    rtxt = "%0.2f" % rmat[0, 1]  # make into a string
+
+    # get linear correlation
+    a = np.polyfit(ff_frz_avg, fratio*100, 1)
+
+    # Plot linear regression line and put corr. coeff. on plot
+    ax.plot(np.asarray(xlim), np.asarray(xlim) * a[0] + a[1], 'r-.')
+    ax.set_xlim(xlim)
+    ax.text(10, 40, r'$r^2$ = ' + rtxt)
+
+    return ax, fratio, ff_frz_avg
 
 
 if __name__ == '__main__':
