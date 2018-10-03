@@ -39,6 +39,7 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
     # Get position and time information for .csv file (later need to align to imaging)
     dir_use = get_dir(mouse, arena, day, list_dir)
     speed, pos, t_track, sr = get_speed(dir_use)
+    t_track = t_track[0:-1]  # chop last time data point to match t_track match speed/pos length
 
     # Import imaging data
     im_data_file = path.join(dir_use + '\imaging', 'FinalOutput.mat')
@@ -50,8 +51,8 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
     except KeyError:
         sr_image = 20
 
-        # Convert position to cm
-    _, _, pix2cm = er.get_conv_factors(arena)  # get conversion to cm for the arena
+    # Convert position to cm
+    pix2cm = er.get_conv_factors(arena)  # get conversion to cm for the arena
     pos_cm = pos*pix2cm
     speed_cm = speed*pix2cm
 
@@ -78,16 +79,16 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
     yBinrun = yBin[isrunning]
     nGood = len(xrun)
 
-# Construct place field and compute mutual information
-neurons = list(range(0, nneurons))
-# TCounts = cell(1, nNeurons);
-# TMap_gauss = cell(1, nNeurons);
-# TMap_unsmoothed = cell(1, nNeurons);
-# pos = [x; y];
-for neuron in neurons:
-    tmap_us[neuron], tcounts[neuron], tmap_gauss[neuron] = \
-        makeplacefield(PSAboolrun[neuron, :], xrun, yrun, xEdges, yEdges, runoccmap,
-                       cmperbin=cmperbin)
+    # Construct place field and compute mutual information
+    neurons = list(range(0, nneurons))
+    # TCounts = cell(1, nNeurons);
+    # TMap_gauss = cell(1, nNeurons);
+    # TMap_unsmoothed = cell(1, nNeurons);
+    # pos = [x; y];
+    # for idn, neuron in enumerate(neurons):
+    #     tmap_us[idn], tcounts[idn], tmap_gauss[idn] = \
+    #     makeplacefield(PSAboolrun[neuron, :], xrun, yrun, xEdges, yEdges, runoccmap,
+    #                    cmperbin=cmperbin)
 
 
 def makeoccmap(pos_cm, lims, good, isrunning, cmperbin):
@@ -138,9 +139,9 @@ def get_speed(dir_use):
 
     # Get position and time information for .csv file (later need to align to imaging)
     pos = er.get_pos(dir_use)  # pos in pixels
+    pos = er.fix_pos(pos)  # fix any points at 0,0 by interpolating between closest good points
     t = er.get_timestamps(dir_use)  # time in seconds
-    # Adjust/align to imaging here or above
-    # NK - need to interpolate any positions at 0,0 here and spit out the total number in the output
+
 
     # Calculate speed
     pos_diff = np.diff(pos.T, axis=0)  # For calculating distance.
@@ -189,8 +190,9 @@ def align_imaging_to_tracking(pos_cm, speed_cm, time_tracking, PSAbool, sr_imagi
     _, nframes = np.shape(PSAbool)
     t_imaging = np.arange(0, nframes/sr_imaging, 1/sr_imaging) + \
                 np.min(time_tracking)  # tracking software starts image capture
-
-    pos_align = np.interp(t_imaging, time_tracking, pos_cm)
+    pos_align = np.empty((2, t_imaging.shape[0]))
+    pos_align[0, :] = np.interp(t_imaging, time_tracking, pos_cm[0, :])
+    pos_align[1, :] = np.interp(t_imaging, time_tracking, pos_cm[1, :])
     speed_align = np.interp(t_imaging, time_tracking, speed_cm)
 
     # Chop any frames in imaging data that extend beyond tracking data
@@ -200,6 +202,7 @@ def align_imaging_to_tracking(pos_cm, speed_cm, time_tracking, PSAbool, sr_imagi
     speed_align = speed_align[t_im_include_bool]
 
     return pos_align, speed_align, PSAbool_align, t_imaging
+
 
 def makeplacefield(PSAbool, x, y, xEdges, yEdges, runoccmap, cmperbin=4, gauss_std=2.5):
     """
@@ -237,5 +240,5 @@ def makeplacefield(PSAbool, x, y, xEdges, yEdges, runoccmap, cmperbin=4, gauss_s
 
 
 if __name__ == '__main__':
-    placefields('Marble07', 'Open', -2)
+    placefields('Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories')
     pass
