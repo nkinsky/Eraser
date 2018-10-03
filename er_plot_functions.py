@@ -58,7 +58,7 @@ def plot_frame_and_traj(ax, dir_use):
     ax.set_ylim(ylims)
 
 
-def plot_experiment_traj(mouse, day_des=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock'],
+def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
                          list_dir='E:\Eraser\SessionDirectories', disp_fratio=False):
     """
     Plot mouse trajectory for each session
@@ -285,7 +285,7 @@ def get_freezing_epochs(freezing):
     return freezing_epochs
 
 
-def get_all_freezing(mouse, day_des=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock'],
+def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
                      list_dir='E:\Eraser\SessionDirectories', velocity_threshold=1.5, min_freeze_duration=10):
     """
     Gets freezing ratio for all experimental sessions for a given mouse.
@@ -318,8 +318,9 @@ def get_all_freezing(mouse, day_des=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Sh
     return fratios
 
 
-def plot_all_freezing(mice, days=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock'], velocity_threshold=1.5,
-                      min_freeze_duration=10):
+def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'], velocity_threshold=1.0,
+                      min_freeze_duration=10, title=''):
+
     """
     Plots freezing ratios for all mice
     :param mice: list of all mice to include in plot
@@ -366,6 +367,7 @@ def plot_all_freezing(mice, days=[-2, -1, 0, 4, 1, 2, 7], arenas=['Open', 'Shock
     if len(arenas) == 2:
         ax.legend((hopen, hshock), arenas)
     plt.xticks(days_plot, days_str)
+    ax.set_title(title)
 
     return fig, ax, fratio_all
 
