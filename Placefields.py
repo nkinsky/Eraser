@@ -9,17 +9,21 @@ import matplotlib.pyplot as plt
 import matplotlib as mp
 import scipy.io as sio
 import scipy.ndimage as sim
-# import csv
-import pandas as pd
 from os import path
-# import skvideo.io
-# from glob import glob
 from session_directory import find_eraser_directory as get_dir
 import er_plot_functions as er
 from mouse_sessions import make_session_list
+from plot_helper import ScrollPlot
+from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos
+
+# Might want these later
+# import csv
+# import pandas as pd
+
+# np.seterr(divide='ignore', invalid='ignore')  # ignore warnings due to NaNs produced from dividing by zero
 
 
-def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmperbin=4,
+def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmperbin=1,
                 lims_method='auto'):
 
     """
@@ -57,7 +61,7 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
     speed_cm = speed*pix2cm
 
     # Align imaging and position data
-    pos_align, speed_align, PSAbool_align, PSAoffset, PSoffsetRear, time_interp  = \
+    pos_align, speed_align, PSAbool_align, time_interp  = \
         align_imaging_to_tracking(pos_cm, speed_cm, t_track, PSAbool, sr_image)
 
     # Smooth speed data for legitimate thresholding, get limits of data
@@ -81,14 +85,20 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
 
     # Construct place field and compute mutual information
     neurons = list(range(0, nneurons))
-    # TCounts = cell(1, nNeurons);
-    # TMap_gauss = cell(1, nNeurons);
-    # TMap_unsmoothed = cell(1, nNeurons);
-    # pos = [x; y];
-    # for idn, neuron in enumerate(neurons):
-    #     tmap_us[idn], tcounts[idn], tmap_gauss[idn] = \
-    #     makeplacefield(PSAboolrun[neuron, :], xrun, yrun, xEdges, yEdges, runoccmap,
-    #                    cmperbin=cmperbin)
+    tmap_us = []
+    tcounts = []
+    tmap_gauss = []
+    for idn, neuron in enumerate(neurons):
+        tmap_us_temp, tcounts_temp, tmap_gauss_temp = \
+            makeplacefield(PSAboolrun[neuron, :], xrun, yrun, xEdges, yEdges, runoccmap,
+                       cmperbin=cmperbin)
+        tmap_us.append(tmap_us_temp)
+        tcounts.append(tcounts_temp)
+        tmap_gauss.append(tmap_gauss_temp)
+
+    # Shuffle to get p-value!
+
+    return occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, tcounts, xrun, yrun, PSAboolrun
 
 
 def makeoccmap(pos_cm, lims, good, isrunning, cmperbin):
@@ -124,6 +134,10 @@ def makeoccmap(pos_cm, lims, good, isrunning, cmperbin):
                                      bins=[xEdges, yEdges])
     xBin = np.digitize(pos_cm[0, :], xEdges)
     yBin = np.digitize(pos_cm[1, :], yEdges)
+
+    # rotate maps 90 degrees to match trajectory
+    occmap = np.rot90(occmap, 1)
+    runoccmap = np.rot90(runoccmap, 1)
 
     return occmap, runoccmap, xEdges, yEdges, xBin, yBin
 
@@ -219,11 +233,15 @@ def makeplacefield(PSAbool, x, y, xEdges, yEdges, runoccmap, cmperbin=4, gauss_s
     :return:
     """
     # Get counts of where mouse was for each calcium event in PSAbool
-    tcounts, _, _ = np.histogram2d(x[PSAbool], y[PSAbool], bins=[xEdges, yEdges])
+    tcounts, _, _ = np.histogram2d(x[PSAbool==1], y[PSAbool==1], bins=[xEdges, yEdges])
     tsum = np.sum(tcounts)
 
+    # rotate tcounts 90 degrees to match mouse trajectory when plotting later
+    tcounts = np.rot90(tcounts, 1)
+
     # Normalize it
-    tmap_us = np.divide(tcounts, runoccmap)
+    with np.errstate(divide='ignore', invalid='ignore'):  # ignore warnings due to NaNs produced from dividing by zero
+        tmap_us = np.divide(tcounts, runoccmap)
     tmap_us[np.isnan(tmap_us)] = 0
 
     if tsum != 0:
@@ -239,6 +257,39 @@ def makeplacefield(PSAbool, x, y, xEdges, yEdges, runoccmap, cmperbin=4, gauss_s
     return tmap_us, tcounts, tmap_sm
 
 
+class PFobj:
+    def __init__(self, tmap_us, tmap_gauss, x, y, PSAbool):
+        self.tmap_us = tmap_us
+        self.tmap_sm = tmap_gauss
+        self.x = x
+        self.y = y
+        self.PSAbool = PSAbool
+        self.nneurons = PSAbool.shape[0]
+
+    def pfscroll(self, current_position=0):
+        """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
+        and unsmoothed tmaps in another
+
+        :param current_position:
+        :return:
+        """
+
+        # Plot frame and position of mouse.
+        titles = ["Neuron " + str(n) for n in range(self.nneurons)]  # set up array of neuron numbers
+
+        # Hijack Will's ScrollPlot function to make it through
+        self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm),
+                            current_position=current_position, n_frames=self.nneurons,
+                            n_rows=1, n_cols=3, figsize=(17.2, 5.3), titles=titles,
+                            x=self.x, y=self.y, PSAbool=self.PSAbool,
+                            tmap_us=self.tmap_us, tmap_sm=self.tmap_sm)
+
+
 if __name__ == '__main__':
-    placefields('Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories')
+    # placefields('Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories')
+    occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, \
+    tcounts, xrun, yrun, PSAbool = placefields(
+        'Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories')
+    PFo = PFobj(tmap_us, tmap_gauss, xrun, yrun, PSAbool)
+    PFo.pfscroll()
     pass
