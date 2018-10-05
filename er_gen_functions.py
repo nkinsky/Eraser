@@ -18,6 +18,7 @@ def plot_tmap_us(obj, ax_ind):
 
     obj.ax[ax_ind].imshow(obj.tmap_us[obj.current_position], cmap='viridis')
     obj.last_position = obj.n_frames - 1
+    plt.axis('off')
 
 
 def plot_tmap_sm(obj, ax_ind):
@@ -29,6 +30,7 @@ def plot_tmap_sm(obj, ax_ind):
 
     obj.ax[ax_ind].imshow(obj.tmap_sm[obj.current_position], cmap='viridis')
     obj.last_position = obj.n_frames - 1
+    plt.axis('off')
 
 
 def plot_events_over_pos(obj, ax_ind):
@@ -40,6 +42,7 @@ def plot_events_over_pos(obj, ax_ind):
     obj.ax[ax_ind].plot(obj.x, obj.y, 'k-')
     obj.ax[ax_ind].plot(obj.x[psa_use == 1], obj.y[psa_use == 1], 'r*')
     obj.last_position = obj.n_frames - 1
+    plt.axis('off')
     # print("sum psa_use = " + str(np.sum(psa_use)))
 
 
