@@ -327,7 +327,7 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
         # compute information content per second or event
         isec.append(np.nansum(p1xtemp * p_x * np.log2(p1xtemp / p_k1[neuron])))
         ispk.append(isec[neuron] * p_k1[neuron])
-        
+
 
 class PFobj:
     def __init__(self, tmap_us, tmap_gauss, x, y, PSAbool):
