@@ -20,14 +20,12 @@ from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos
 # import csv
 # import pandas as pd
 
-# np.seterr(divide='ignore', invalid='ignore')  # ignore warnings due to NaNs produced from dividing by zero
-
 
 def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmperbin=1,
                 lims_method='auto'):
-
     """
-    Make placefields of each neuron
+    Make placefields of each neuron. Ported over from Will Mau's/Dave Sullivan's MATLAB
+    function
     :param mouse: mouse name to analyze
     :param arena: arena to analyze
     :param day: day to analyze
@@ -97,6 +95,9 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
         tmap_gauss.append(tmap_gauss_temp)
 
     # Shuffle to get p-value!
+
+    # save variables to working dir! as .pkl files?
+
 
     return occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, tcounts, xrun, yrun, PSAboolrun
 
@@ -257,13 +258,84 @@ def makeplacefield(PSAbool, x, y, xEdges, yEdges, runoccmap, cmperbin=4, gauss_s
     return tmap_us, tcounts, tmap_sm
 
 
+def spatinfo(tmap_us, runoccmap, PSAbool):
+    """
+    Calculates the Shannon mutual information I(X,K) between the random
+    variables spike count [0,1] and position via the equations:
+
+    (1) I_pos(xi) = sum[k>=0](P_k|xi * log(P_k|xi / P_k))
+
+    (2) MI = sum[i=1->N](P_xi * I_pos(xi)
+
+    where:
+       P_xi is the probability the mouse is in pixel xi,
+       RunOccMap./sum(RunOccMap(:)
+
+       P_k is the probability of observing k spikes,
+       sum(FT(neuron,:),2)/size(FT,2)
+
+       P_k|xi is the conditional probability of observing k spikes in
+       pixel xi, TMap_unsmoothed
+
+   Ported over from Will Mau's MATLAB function
+
+    :param tmap_us:
+    :param runoccmap:
+    :param PSAbool:
+    :return:
+    """
+
+    # number of frames and neurons
+    nframes = np.sum(runoccmap)
+    nneurons = PSAbool.shape(0)
+
+    # get dwell map
+    p_x = runoccmap.flatten()/nframes
+    okpix = runoccmap.flatten() > 4  # only grab pixels occupied for at least 4 frames...
+    p_x = p_x[okpix]  # only grab good pixels
+
+    # get probability of spiking and not spiking
+    p_k1 = np.sum(PSAbool,1)/nframes  # probability of spiking
+    p_k0 = 1 - p_k1
+
+    # Compute information metrics
+    p_1x = []
+    p_0x = []
+    ipos = []
+    mi = []
+    isec = []
+    ispk = []
+    for neuron in np.arange(nneurons):
+        # Get probability of spike given location, tmap, only taking good pixels
+        p1xtemp = tmap_us.flatten()
+        p1xtemp = p1xtemp[okpix]
+        p_1x.append(p1xtemp)
+        p0xtemp = 1 - p1xtemp
+        p_0x.append(p0xtemp)
+
+        # compute positional information for k=1 and k=0
+        i_k1 = p1xtemp * np.log(p1xtemp / p_k1[neuron])
+        i_k0 = p0xtemp * np.log(p0xtemp / p_k0[neuron])
+
+        # sum these to make true positional information - NK follow up here to understand this
+        ipostemp = i_k1 + i_k0
+        ipos.append(ipostemp)
+
+        # compute mutual information
+        mi.append(np.nansum(p_x * ipostemp))
+
+        # compute information content per second or event
+        isec.append(np.nansum(p1xtemp * p_x * np.log2(p1xtemp / p_k1[neuron])))
+        ispk.append(isec[neuron] * p_k1[neuron])
+        
+
 class PFobj:
     def __init__(self, tmap_us, tmap_gauss, x, y, PSAbool):
         self.tmap_us = tmap_us
         self.tmap_sm = tmap_gauss
         self.x = x
         self.y = y
-        self.PSAbool = PSAbool
+        self.PSAbool = PSAbbool
         self.nneurons = PSAbool.shape[0]
 
     def pfscroll(self, current_position=0):
