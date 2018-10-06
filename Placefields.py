@@ -5,6 +5,7 @@ Created on Thu Apr 05 11:06:20 2018
 @author: Nat Kinsky
 """
 import numpy as np
+from numpy.matlib import repmat
 import matplotlib.pyplot as plt
 import matplotlib as mp
 import scipy.io as sio
@@ -15,6 +16,7 @@ import er_plot_functions as er
 from mouse_sessions import make_session_list
 from plot_helper import ScrollPlot
 from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos
+from progressbar import ProgressBar  # NK need a better version of this
 
 # Might want these later
 # import csv
@@ -22,7 +24,7 @@ from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos
 
 
 def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmperbin=1,
-                lims_method='auto'):
+                nshuf = 1000, lims_method='auto'):
     """
     Make placefields of each neuron. Ported over from Will Mau's/Dave Sullivan's MATLAB
     function
@@ -33,6 +35,7 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
     :param cmperbin: 4 default
     :param lims_method: 'auto' (default) takes limits of data, 'manual' looks for arena_lims.csv
             file in the session directory which supplies [[xmin, ymin],[xmax, ymax]]
+    :param nshuf: number of shuffles to perform for determining significance
     :return:
     """
 
@@ -77,8 +80,8 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
     xrun = pos_align[0, isrunning]
     yrun = pos_align[1, isrunning]
     PSAboolrun = PSAbool_align[:, isrunning]
-    xBinrun = xBin[isrunning]
-    yBinrun = yBin[isrunning]
+    # xBinrun = xBin[isrunning]
+    # yBinrun = yBin[isrunning]
     nGood = len(xrun)
 
     # Construct place field and compute mutual information
@@ -94,7 +97,27 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
         tcounts.append(tcounts_temp)
         tmap_gauss.append(tmap_gauss_temp)
 
+    # calculate mutual information
+    mi, _, _, _, _ = spatinfo(tmap_us, runoccmap, PSAboolrun)
+
     # Shuffle to get p-value!
+    pval = []
+    pbar = ProgressBar()
+    for neuron in pbar(np.arange(nneurons)):
+        rtmap = []
+        shifts = np.random.randint(0, nGood, nshuf)
+        for ns in np.arange(nshuf):
+            # circularly shift PSAbool to disassociate transients from mouse location
+            shuffled = np.roll(PSAboolrun[neuron,:], shifts[ns])
+            map_temp = makeplacefield(shuffled, xrun, yrun, xEdges, yEdges, runoccmap,
+                                      cmperbin=cmperbin)
+            rtmap.append(rtmap)
+
+        # Calculate mutual information of randomized vectors
+        rmi = spatinfo(map_temp, runoccmap, repmat(PSAboolrun[neuron, :], nshuf, 1))
+
+        # Calculate p-value
+        pval.append(1 - np.sum(mi[neuron] > rmi) / nshuf)
 
     # save variables to working dir! as .pkl files?
 
@@ -282,7 +305,7 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
     :param tmap_us:
     :param runoccmap:
     :param PSAbool:
-    :return:
+    :return: mi, isec, ispk, ipos, okpix
     """
 
     # number of frames and neurons
@@ -295,7 +318,7 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
     p_x = p_x[okpix]  # only grab good pixels
 
     # get probability of spiking and not spiking
-    p_k1 = np.sum(PSAbool,1)/nframes  # probability of spiking
+    p_k1 = np.sum(PSAbool, 1)/nframes  # probability of spiking
     p_k0 = 1 - p_k1
 
     # Compute information metrics
@@ -307,7 +330,7 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
     ispk = []
     for neuron in np.arange(nneurons):
         # Get probability of spike given location, tmap, only taking good pixels
-        p1xtemp = tmap_us.flatten()
+        p1xtemp = tmap_us[neuron].flatten()
         p1xtemp = p1xtemp[okpix]
         p_1x.append(p1xtemp)
         p0xtemp = 1 - p1xtemp
@@ -328,6 +351,8 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
         isec.append(np.nansum(p1xtemp * p_x * np.log2(p1xtemp / p_k1[neuron])))
         ispk.append(isec[neuron] * p_k1[neuron])
 
+        return mi, isec, ispk, ipos, okpix
+
 
 class PFobj:
     def __init__(self, tmap_us, tmap_gauss, x, y, PSAbool):
@@ -335,7 +360,7 @@ class PFobj:
         self.tmap_sm = tmap_gauss
         self.x = x
         self.y = y
-        self.PSAbool = PSAbbool
+        self.PSAbool = PSAbool
         self.nneurons = PSAbool.shape[0]
 
     def pfscroll(self, current_position=0):
