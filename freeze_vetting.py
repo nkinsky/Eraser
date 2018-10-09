@@ -61,12 +61,13 @@ def get_ff_freezing(mouse_name):
     return frz_avg, frz_by_min
 
 
-def plot_frz_comp(mouse_name, velocity_threshold=1.5, min_freeze_duration=10):
+def plot_frz_comp(mouse_name, velocity_threshold=1.5, min_freeze_duration=10, ax=None):
     """
 
     :param mouse_name: self explanatory
     :param velocity_threshold: considered freezing if mouse is below this, cm/s (1.5 = default)
     :param min_freeze_duration: considered freezing only if => this # frames (10 = default at 3.75 fps)
+    :param ax: axes to plot into, default=None-> create new figure/axes
     :return: ax: axes handle to freezing comparison plot
     :return: fratio: freezing ratio calculated by us
     :return: ff_frz_avg: freezing % calculated by FreezeFrame
@@ -79,7 +80,12 @@ def plot_frz_comp(mouse_name, velocity_threshold=1.5, min_freeze_duration=10):
 
     # get freezing by freezeframe
     ff_frz_avg, ff_frz_by_min = get_ff_freezing(mouse_name)
-    _, ax = plt.subplots()
+
+    # create a new figure/axes if none are specified
+    if ax is None:
+        _, ax = plt.subplots()
+
+    # Plot everything
     ax.scatter(ff_frz_avg, fratio*100)
     ax.set_xlabel('Freezing by FF (%)')
     ax.set_ylabel('Freezing by us (%)')
@@ -108,6 +114,26 @@ def plot_frz_comp(mouse_name, velocity_threshold=1.5, min_freeze_duration=10):
     return ax, fratio, ff_frz_avg
 
 
+def param_sweep_plot(mouse_name, vel_thresh=[0.25, 1, 1.5], frz_dur_thresh=[5, 10, 15]):
+    """Does a parameter sweep of velocity and min_freeze thresholds to see how well
+    our freezing values match up with FreezeFrame
+
+    :param mouse_name: self-explanatory
+    :param vel_thresh: velocities to sweep through
+    :param frz_dur_thresh: minimum freeze durations in frames to sweep through
+    :return: ax: plot axes
+    """
+
+    _, ax = plt.subplots(len(vel_thresh), len(frz_dur_thresh))
+
+    for idv, vthresh_use in enumerate(vel_thresh):
+        for idf, fthresh_use in enumerate(frz_dur_thresh):
+            plot_frz_comp(mouse_name, velocity_threshold=vthresh_use,
+                          min_freeze_duration=fthresh_use, ax=ax[idv, idf])
+
+    return ax
+
+
 if __name__ == '__main__':
-    get_ff_freezing('GENERAL_1')
+    param_sweep_plot('GENERAL_1')
     pass
