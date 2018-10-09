@@ -240,8 +240,10 @@ def fix_pos(pos):
             pt_p[0] -= 1
         while pt_p[1] in bad_pts[0]:
             pt_p[1] += 1
-
+        # try:
         x_p = pos[0, pt_p]
+        # except IndexError:
+        #     x_p = pos[0, pt_p]
         y_p = pos[1, pt_p]
 
         pos_fix[0, pt] = np.interp(pt, pt_p, x_p)
@@ -304,7 +306,7 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
     fratios = np.ones((narena, nsesh))*float('NaN')  # pre-allocate fratio as nan
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
-            # try:
+            try:
 
                 pix2cm = get_conv_factors(arena)
                 dir_use = get_dir(mouse, arena, day, list_dir=list_dir)
@@ -312,8 +314,10 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
                                            min_freeze_duration=min_freeze_duration,
                                            arena=arena, pix2cm=pix2cm)[0]
                 fratios[ida, idd] = freezing.sum()/freezing.__len__()
-            # except:
-            #     print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
+            except (FileNotFoundError, IndexError):
+                # print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
+                print(['Unknown file missing and/or IndexError for ' + mouse + ' ' + arena + ' ' + str(day)])
+                print('Freezing left as NaN for this session')
 
     return fratios
 
@@ -437,7 +441,6 @@ def write_all_freezing(fratio_all, filepath):
 
 
 if __name__ == '__main__':
-    pos = get_pos('E:\\Eraser\\Marble7\\20180319_2_fcbox')
-    pos_fix = fix_pos(pos)
+    get_all_freezing(['ANI_1', 'ANI_2', 'ANI_3', 'ANI_4'])
 
     pass
