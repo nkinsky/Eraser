@@ -136,7 +136,7 @@ def axis_off(ax):
         which='both',  # both major and minor ticks are affected
         bottom='off',  # ticks along the bottom edge are off
         top='off',  # ticks along the top edge are off
-        labelbottom='off', # labels along the bottom edge are off
+        labelbottom='off',  # labels along the bottom edge are off
         right='off',
         left='off',
         labelleft='off')
@@ -161,7 +161,8 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
     """
 
     pos = get_pos(dir_use)
-    pos = fix_pos(pos)
+    pos, nbad = fix_pos(pos)
+    # print(str(nbad[0]))  # for debugging
     video_t = get_timestamps(dir_use)
 
     # Downsample Cineplex data to approximately match freezeframe acquisition rate
@@ -175,7 +176,10 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
         if pos.shape[1] == video_t.__len__():
             video_t = np.append(video_t, video_t[-1])
 
-    pos = pos*pix2cm  # convert to centimeters
+    try:
+        pos = pos*pix2cm  # convert to centimeters
+    except TypeError:
+        pos = pos * pix2cm  # convert to centimeters
     pos_diff = np.diff(pos.T, axis=0)  # For calculating distance.
     time_diff = np.diff(video_t)  # Time difference.
     distance = np.hypot(pos_diff[:, 0], pos_diff[:, 1])  # Displacement.
@@ -246,10 +250,10 @@ def fix_pos(pos):
             pt_p[1] += 1
 
         if pt_p[0] < 0:  # use first good point if bad pt is at the beginning
-            pos_fix[0, pt] = pos[:, pt_p[1]]
-            nbad_start += 1
+                pos_fix[:, pt] = pos[:, pt_p[1]]
+                nbad_start += 1
         elif pt_p[1] > npts:  # use last good point if bad pt is at the end
-            pos_fix[0, pt] = pos[:, pt_p[0]]
+            pos_fix[:, pt] = pos[:, pt_p[0]]
             nbad_end += 1
         else:  # interpolate if good pts exist on either side
             x_p = pos[0, pt_p]
@@ -258,7 +262,7 @@ def fix_pos(pos):
             pos_fix[0, pt] = np.interp(pt, pt_p, x_p)
             pos_fix[1, pt] = np.interp(pt, pt_p, y_p)
 
-        nbad = (bad_pts.__len__(), nbad_start, nbad_end)
+    nbad = (bad_pts[0].shape[0], nbad_start, nbad_end)
 
     return pos_fix, nbad
 
@@ -316,7 +320,8 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
     fratios = np.ones((narena, nsesh))*float('NaN')  # pre-allocate fratio as nan
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
-            # try:
+            # print(mouse + " " + str(day) + " " + arena)
+            try:
 
                 pix2cm = get_conv_factors(arena)
                 dir_use = get_dir(mouse, arena, day, list_dir=list_dir)
@@ -324,8 +329,10 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
                                            min_freeze_duration=min_freeze_duration,
                                            arena=arena, pix2cm=pix2cm)[0]
                 fratios[ida, idd] = freezing.sum()/freezing.__len__()
-            # except:
-            #     print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
+            except (FileNotFoundError, IndexError):
+                # print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
+                print(['Unknown file missing and/or IndexError for ' + mouse + ' ' + arena + ' ' + str(day)])
+                print('Freezing left as NaN for this session')
 
     return fratios
 
@@ -353,8 +360,8 @@ def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
     # fratio_all = np.random.rand(2,7,5) # for debugging purposes
 
     # NK note - can make much of below into a general function to plot errorbars over a scatterplot in the future
-    fmean = np.nanmean(fratio_all,axis=2)
-    fstd = np.nanstd(fratio_all,axis=2)
+    fmean = np.nanmean(fratio_all, axis=2)
+    fstd = np.nanstd(fratio_all, axis=2)
 
     days_plot = np.asarray(list(range(ndays)))
     days_str = [str(e) for e in days]
@@ -429,20 +436,29 @@ def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
     return pix2cm
 
 
-def write_all_freezing(fratio_all, filepath):
+def write_all_freezing(fratio_all, filepath, days = [-2, -1, 4, 1, 2, 7]):
     """Writes freezing levels each day to a csv file
 
     :param fratio_all: 2 x 7 x nmice ndarray with freezing ratio values
-           filepath: full file path to output csv file
+    :param filepath: full file path to output csv file
+    :param days: list of days to plot (note day 0 is by default missing)
     :return: nothing - writes to a csv file
     """
 
-    nmice = fratio_all.shape[2]
+    # nmice = fratio_all.shape[2]
+
+    # Construct day labels from input
+    day_labels = []
+    for day in days:
+        if day != 4:
+            day_labels.append('day ' + str(day))
+        elif day == 4:
+            day_labels.append(str(day) + ' hrs')
 
     with open(filepath, 'w') as f:
         writer = csv.writer(f)
         writer.writerow(['Open field', 'rows = mice', 'values = fratios'])
-        writer.writerow(['day -2', 'day -1', 'day 0', '4 hr', 'day 1', 'day 2', 'day 7'])
+        writer.writerow(day_labels)
         writer.writerows(fratio_all[0, :, :].T)
         writer.writerow(['Shock Arena'])
         writer.writerows(fratio_all[1, :, :].T)
