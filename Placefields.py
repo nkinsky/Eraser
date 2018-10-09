@@ -24,7 +24,7 @@ from progressbar import ProgressBar  # NK need a better version of this
 
 
 def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmperbin=1,
-                nshuf = 1000, lims_method='auto'):
+                nshuf=1000, lims_method='auto'):
     """
     Make placefields of each neuron. Ported over from Will Mau's/Dave Sullivan's MATLAB
     function
@@ -103,26 +103,26 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
     # Shuffle to get p-value!
     pval = []
     pbar = ProgressBar()
+    print('Shuffling to get placefield p-values')
     for neuron in pbar(np.arange(nneurons)):
         rtmap = []
         shifts = np.random.randint(0, nGood, nshuf)
         for ns in np.arange(nshuf):
             # circularly shift PSAbool to disassociate transients from mouse location
             shuffled = np.roll(PSAboolrun[neuron,:], shifts[ns])
-            map_temp = makeplacefield(shuffled, xrun, yrun, xEdges, yEdges, runoccmap,
+            map_temp, _, _ = makeplacefield(shuffled, xrun, yrun, xEdges, yEdges, runoccmap,
                                       cmperbin=cmperbin)
-            rtmap.append(rtmap)
+            rtmap.append(map_temp)
 
         # Calculate mutual information of randomized vectors
-        rmi = spatinfo(map_temp, runoccmap, repmat(PSAboolrun[neuron, :], nshuf, 1))
+        rmi, _, _, _, _ = spatinfo(rtmap, runoccmap, repmat(PSAboolrun[neuron, :], nshuf, 1))
 
         # Calculate p-value
         pval.append(1 - np.sum(mi[neuron] > rmi) / nshuf)
 
     # save variables to working dir! as .pkl files?
 
-
-    return occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, tcounts, xrun, yrun, PSAboolrun
+    return occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, tcounts, xrun, yrun, PSAboolrun, pval
 
 
 def makeoccmap(pos_cm, lims, good, isrunning, cmperbin):
@@ -310,7 +310,7 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
 
     # number of frames and neurons
     nframes = np.sum(runoccmap)
-    nneurons = PSAbool.shape(0)
+    nneurons = PSAbool.shape[0]
 
     # get dwell map
     p_x = runoccmap.flatten()/nframes
@@ -330,7 +330,10 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
     ispk = []
     for neuron in np.arange(nneurons):
         # Get probability of spike given location, tmap, only taking good pixels
-        p1xtemp = tmap_us[neuron].flatten()
+        try:
+            p1xtemp = tmap_us[neuron].flatten()
+        except (IndexError, AttributeError):
+            p1xtemp = tmap_us[neuron].flatten()
         p1xtemp = p1xtemp[okpix]
         p_1x.append(p1xtemp)
         p0xtemp = 1 - p1xtemp
@@ -351,7 +354,7 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
         isec.append(np.nansum(p1xtemp * p_x * np.log2(p1xtemp / p_k1[neuron])))
         ispk.append(isec[neuron] * p_k1[neuron])
 
-        return mi, isec, ispk, ipos, okpix
+    return mi, isec, ispk, ipos, okpix
 
 
 class PFobj:
@@ -386,7 +389,7 @@ if __name__ == '__main__':
     # placefields('Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories')
     occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, \
     tcounts, xrun, yrun, PSAbool = placefields(
-        'Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories')
-    PFo = PFobj(tmap_us, tmap_gauss, xrun, yrun, PSAbool)
-    PFo.pfscroll()
+        'Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories', nshuf=10)
+    # PFo = PFobj(tmap_us, tmap_gauss, xrun, yrun, PSAbool)
+    # PFo.pfscroll()
     pass
