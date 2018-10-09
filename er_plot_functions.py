@@ -226,12 +226,16 @@ def fix_pos(pos):
     Fixes any points at (0,0) or (nan,nan) by interpolating between closest defined points
     :param pos: position data from get_pot
     :return: pos_fix: fixed position data
+    :return: nbad: length 3 tuple (total # bad pts, # at start, # at end)
     """
+    npts = pos.shape[1]
     zero_bool = np.bitwise_and(pos[0, :] == 0, pos[1,:] == 0)
     nan_bool = np.bitwise_and(np.isnan(pos[0, :]), np.isnan(pos[1, :]))
     bad_pts = np.where(np.bitwise_or(zero_bool, nan_bool))
 
     pos_fix = pos
+    nbad_start = 0
+    nbad_end = 0
     for pt in bad_pts[0]:
 
         # Increment/decrement until you find closest good point above/below bad point
@@ -241,14 +245,22 @@ def fix_pos(pos):
         while pt_p[1] in bad_pts[0]:
             pt_p[1] += 1
 
-        x_p = pos[0, pt_p]
-        y_p = pos[1, pt_p]
+        if pt_p[0] < 0:  # use first good point if bad pt is at the beginning
+            pos_fix[0, pt] = pos[:, pt_p[1]]
+            nbad_start += 1
+        elif pt_p[1] > npts:  # use last good point if bad pt is at the end
+            pos_fix[0, pt] = pos[:, pt_p[0]]
+            nbad_end += 1
+        else:  # interpolate if good pts exist on either side
+            x_p = pos[0, pt_p]
+            y_p = pos[1, pt_p]
 
-        pos_fix[0, pt] = np.interp(pt, pt_p, x_p)
-        pos_fix[1, pt] = np.interp(pt, pt_p, y_p)
+            pos_fix[0, pt] = np.interp(pt, pt_p, x_p)
+            pos_fix[1, pt] = np.interp(pt, pt_p, y_p)
 
-    pos_fix
-    return pos_fix
+        nbad = (bad_pts.__len__(), nbad_start, nbad_end)
+
+    return pos_fix, nbad
 
 
 def get_timestamps(dir_use):
@@ -437,7 +449,6 @@ def write_all_freezing(fratio_all, filepath):
 
 
 if __name__ == '__main__':
-    pos = get_pos('E:\\Eraser\\Marble7\\20180319_2_fcbox')
-    pos_fix = fix_pos(pos)
+    plot_all_freezing(['ANI_1', 'ANI_2'])
 
     pass
