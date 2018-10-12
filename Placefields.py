@@ -12,6 +12,7 @@ import scipy.io as sio
 import scipy.ndimage as sim
 from os import path
 from session_directory import find_eraser_directory as get_dir
+from session_directory import load_session_list
 import er_plot_functions as er
 from mouse_sessions import make_session_list
 from plot_helper import ScrollPlot
@@ -23,6 +24,22 @@ from pickle import dump, load
 # Might want these later
 # import csv
 # import pandas as pd
+
+session_list = load_session_list()
+
+
+def load_pf(mouse, arena, day, session_index=None, list_dir='E:\Eraser\SessionDirectories',
+            pf_file='placefields_cm1.pkl'):
+    if session_index is None:
+        dir_use = get_dir(mouse, arena, day, list_dir)
+    elif session_index >= 0:
+        dir_use = session_list[session_index]["Location"]
+
+    position_path = path.join(dir_use, pf_file)
+    with open(position_path, 'rb') as file:
+        PF = load(file)
+
+    return PF
 
 
 def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmperbin=1,
@@ -417,7 +434,8 @@ class PlaceFieldObject:
         self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm),
                             current_position=current_position, n_frames=self.nneurons,
                             n_rows=1, n_cols=3, figsize=(17.2, 5.3), titles=titles,
-                            x=self.x, y=self.y, PSAbool=self.PSAbool,
+                            x=self.pos_align[0, :], y=self.pos_align[1, :],
+                            PSAbool=self.PSAbool_align,
                             tmap_us=self.tmap_us, tmap_sm=self.tmap_sm)
 
 
