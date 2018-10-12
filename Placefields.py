@@ -16,7 +16,9 @@ import er_plot_functions as er
 from mouse_sessions import make_session_list
 from plot_helper import ScrollPlot
 from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos
-from progressbar import ProgressBar  # NK need a better version of this
+# from progressbar import ProgressBar  # NK need a better version of this
+from tqdm import tqdm
+from pickle import dump, load
 
 # Might want these later
 # import csv
@@ -24,7 +26,7 @@ from progressbar import ProgressBar  # NK need a better version of this
 
 
 def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmperbin=1,
-                nshuf=1000, lims_method='auto'):
+                nshuf=1000, speed_thresh=1.5, lims_method='auto'):
     """
     Make placefields of each neuron. Ported over from Will Mau's/Dave Sullivan's MATLAB
     function
@@ -36,6 +38,7 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
     :param lims_method: 'auto' (default) takes limits of data, 'manual' looks for arena_lims.csv
             file in the session directory which supplies [[xmin, ymin],[xmax, ymax]]
     :param nshuf: number of shuffles to perform for determining significance
+    :param speed_thresh: speed threshold in cm/s
     :return:
     """
 
@@ -70,7 +73,7 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
     lims = [np.min(pos_cm, axis=1), np.max(pos_cm, axis=1)]
     good = np.ones(len(speed_sm)) == 1
     isrunning = good
-    isrunning[speed_sm < 1.5] = False
+    isrunning[speed_sm < speed_thresh] = False
 
     # Get the mouse's occupancy in each spatial bin
     occmap, runoccmap, xEdges, yEdges, xBin, yBin = \
@@ -102,14 +105,13 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
 
     # Shuffle to get p-value!
     pval = []
-    pbar = ProgressBar()
     print('Shuffling to get placefield p-values')
-    for neuron in pbar(np.arange(nneurons)):
+    for neuron in tqdm(np.arange(nneurons)):
         rtmap = []
         shifts = np.random.randint(0, nGood, nshuf)
         for ns in np.arange(nshuf):
             # circularly shift PSAbool to disassociate transients from mouse location
-            shuffled = np.roll(PSAboolrun[neuron,:], shifts[ns])
+            shuffled = np.roll(PSAboolrun[neuron, :], shifts[ns])
             map_temp, _, _ = makeplacefield(shuffled, xrun, yrun, xEdges, yEdges, runoccmap,
                                       cmperbin=cmperbin)
             rtmap.append(map_temp)
@@ -120,7 +122,12 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
         # Calculate p-value
         pval.append(1 - np.sum(mi[neuron] > rmi) / nshuf)
 
-    # save variables to working dir! as .pkl files?
+    # save variables to working dirs as .pkl files in PFobject
+    PFobj = PlaceFieldObject(tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
+                 xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
+                 speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, list_dir,
+                 nshuf)
+    PFobj.save_data()
 
     return occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, tcounts, xrun, yrun, PSAboolrun, pval
 
@@ -177,9 +184,8 @@ def get_speed(dir_use):
 
     # Get position and time information for .csv file (later need to align to imaging)
     pos = er.get_pos(dir_use)  # pos in pixels
-    pos = er.fix_pos(pos)  # fix any points at 0,0 by interpolating between closest good points
+    pos, _ = er.fix_pos(pos)  # fix any points at 0,0 by interpolating between closest good points
     t = er.get_timestamps(dir_use)  # time in seconds
-
 
     # Calculate speed
     pos_diff = np.diff(pos.T, axis=0)  # For calculating distance.
@@ -357,14 +363,44 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
     return mi, isec, ispk, ipos, okpix
 
 
-class PFobj:
-    def __init__(self, tmap_us, tmap_gauss, x, y, PSAbool):
+class PlaceFieldObject:
+    def __init__(self, tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
+                 xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
+                 speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day,
+                 list_dir, nshuf):
         self.tmap_us = tmap_us
         self.tmap_sm = tmap_gauss
-        self.x = x
-        self.y = y
-        self.PSAbool = PSAbool
-        self.nneurons = PSAbool.shape[0]
+        self.xrun = xrun
+        self.yrun = yrun
+        self.PSAboolrun = PSAboolrun
+        self.nneurons = PSAboolrun.shape[0]
+        self.occmap = occmap
+        self.runoccmap = runoccmap
+        self.xEdges = xEdges
+        self.yEdges = yEdges
+        self.xBin = xBin
+        self.yBin = yBin
+        self.tcounts = tcounts
+        self.pval = pval
+        self.mi = mi
+        self.pos_align = pos_align
+        self.PSAbool_align = PSAbool_align
+        self.speed_sm = speed_sm
+        self.isrunning = isrunning
+        self.cmperbin = cmperbin
+        self.speed_thresh = speed_thresh
+        self.mouse = mouse
+        self.arena = arena
+        self.day = day
+        self.list_dir = list_dir
+        self.nshuf = nshuf
+
+    def save_data(self, filename='placefields_cm1.pkl'):
+        dir_use = get_dir(self.mouse, self.arena, self.day, self.list_dir)
+        save_file = path.join(dir_use, filename)
+
+        with open(save_file, 'wb') as output:
+            dump(self, output)
 
     def pfscroll(self, current_position=0):
         """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
@@ -390,6 +426,5 @@ if __name__ == '__main__':
     occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, \
     tcounts, xrun, yrun, PSAbool = placefields(
         'Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories', nshuf=10)
-    # PFo = PFobj(tmap_us, tmap_gauss, xrun, yrun, PSAbool)
     # PFo.pfscroll()
     pass
