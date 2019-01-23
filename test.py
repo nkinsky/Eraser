@@ -20,17 +20,17 @@
 # import sys
 # sys.path
 
-## Code to run placefields on all sessions for mouse entered below
+#  Code to run placefields on all sessions for mouse entered below
 import Placefields as pf
 
 mouse = 'Marble07'
-arenas = ['Open', 'Shock']
-days = [-2, -1, 0, 4, 1, 2, 7]
+arenas = ['Shock']  # ['Open', 'Shock']
+days = [1]  # [-2, -1, 0, 4, 1, 2, 7]
 for arena in arenas:
     for day in days:
         print('Processing ' + arena + ' day ' + str(day))
         try:
-            pf.placefields(mouse, arena, day, list_dir=r'C:\Eraser\SessionDirectories',
+            pf.placefields(mouse, arena, day, list_dir=r'E:\Eraser\SessionDirectories',
                        nshuf=1000)
         except:
             print(['Unknown error processing session'])
