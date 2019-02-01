@@ -151,7 +151,7 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5,
     PFobj = PlaceFieldObject(tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
                  xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
                  speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, list_dir, nshuf)
-    PFobj.save_data(pf_file=save_file)
+    PFobj.save_data(filename=save_file)
 
     return occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, tcounts, xrun, yrun, PSAboolrun, pval
 
