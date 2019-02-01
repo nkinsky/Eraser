@@ -33,9 +33,15 @@ def get_num_neurons(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories'):
     """
 
     dir_use = get_dir(mouse, arena, day, list_dir)
-    im_data_file = path.join(dir_use + '\imaging', 'FinalOutput.mat')
-    im_data = sio.loadmat(im_data_file)
-    PSAbool = im_data['PSAbool']
-    nneurons, _ = np.shape(PSAbool)
+    im_data_file = path.join(dir_use, 'FinalOutput.mat')
+    im_data = sio.loadmat(im_data_file, variable_names='NumNeurons')
+    # PSAbool = im_data['PSAbool']
+    nneurons = im_data['NumNeurons']
 
     return nneurons
+
+
+if __name__ == '__main__':
+    get_num_neurons('Marble12', 'Open', -2)
+
+    pass
