@@ -12,7 +12,7 @@ import scipy.io as sio
 import scipy.ndimage as sim
 from os import path
 from session_directory import find_eraser_directory as get_dir
-from session_directory import load_session_list
+from session_directory import load_session_list, master_directory
 import er_plot_functions as er
 from mouse_sessions import make_session_list
 from plot_helper import ScrollPlot
@@ -42,7 +42,7 @@ def load_pf(mouse, arena, day, session_index=None, pf_file='placefields_cm1.pkl'
 
 
 def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5,
-                lims_method='auto', save_file='placefields_cm1.pkl'):
+                lims_method='auto', save_file='placefields_cm1.pkl', list_dir=master_directory):
     """
     Make placefields of each neuron. Ported over from Will Mau's/Dave Sullivan's MATLAB
     function
@@ -59,7 +59,7 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5,
     :return:
     """
 
-    make_session_list()
+    make_session_list(list_dir)
 
     # Get position and time information for .csv file (later need to align to imaging)
     dir_use = get_dir(mouse, arena, day)
@@ -150,7 +150,7 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5,
     # save variables to working dirs as .pkl files in PFobject
     PFobj = PlaceFieldObject(tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
                  xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
-                 speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, nshuf)
+                 speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, list_dir, nshuf)
     PFobj.save_data(pf_file=save_file)
 
     return occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, tcounts, xrun, yrun, PSAboolrun, pval
