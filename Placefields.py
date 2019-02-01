@@ -28,10 +28,9 @@ from pickle import dump, load
 session_list = load_session_list()
 
 
-def load_pf(mouse, arena, day, session_index=None, list_dir='E:\Eraser\SessionDirectories',
-            pf_file='placefields_cm1.pkl'):
+def load_pf(mouse, arena, day, session_index=None, pf_file='placefields_cm1.pkl'):
     if session_index is None:
-        dir_use = get_dir(mouse, arena, day, list_dir)
+        dir_use = get_dir(mouse, arena, day)
     elif session_index >= 0:
         dir_use = session_list[session_index]["Location"]
 
@@ -42,27 +41,28 @@ def load_pf(mouse, arena, day, session_index=None, list_dir='E:\Eraser\SessionDi
     return PF
 
 
-def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmperbin=1,
-                nshuf=1000, speed_thresh=1.5, lims_method='auto'):
+def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5,
+                lims_method='auto', save_file='placefields_cm1.pkl'):
     """
     Make placefields of each neuron. Ported over from Will Mau's/Dave Sullivan's MATLAB
     function
     :param mouse: mouse name to analyze
     :param arena: arena to analyze
     :param day: day to analyze
-    :param list_dir: list alternate sessiondirectories location here
     :param cmperbin: 4 default
-    :param lims_method: 'auto' (default) takes limits of data, 'manual' looks for arena_lims.csv
-            file in the session directory which supplies [[xmin, ymin],[xmax, ymax]]
+    :param lims_method: 'auto' (default) takes limits of data, 'file' looks for arena_lims.csv
+            file in the session directory which supplies [[xmin, ymin],[xmax, ymax]], or you
+            you can enter in [[xmin, ymin], [xmax, ymax]] manually
     :param nshuf: number of shuffles to perform for determining significance
     :param speed_thresh: speed threshold in cm/s
+    :param save_file: default = 'placefields_cm1.pkl'
     :return:
     """
 
-    make_session_list(list_dir)
+    make_session_list()
 
     # Get position and time information for .csv file (later need to align to imaging)
-    dir_use = get_dir(mouse, arena, day, list_dir)
+    dir_use = get_dir(mouse, arena, day)
     speed, pos, t_track, sr = get_speed(dir_use)
     t_track = t_track[0:-1]  # chop last time data point to match t_track match speed/pos length
 
@@ -87,7 +87,15 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
 
     # Smooth speed data for legitimate thresholding, get limits of data
     speed_sm = np.convolve(speed_align, np.ones(2*int(sr))/(2*sr), mode='same')  # smooth speed
-    lims = [np.min(pos_cm, axis=1), np.max(pos_cm, axis=1)]
+
+    # Get data limits
+    if lims_method == 'auto':  # automatic by default
+        lims = [np.min(pos_cm, axis=1), np.max(pos_cm, axis=1)]
+    elif lims_method == 'file':  # file not yet enabled
+        print('lims_method=''file'' not enabled yet')
+    else:  # grab array!
+        lims=lims_method
+
     good = np.ones(len(speed_sm)) == 1
     isrunning = good
     isrunning[speed_sm < speed_thresh] = False
@@ -142,9 +150,8 @@ def placefields(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories', cmpe
     # save variables to working dirs as .pkl files in PFobject
     PFobj = PlaceFieldObject(tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
                  xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
-                 speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, list_dir,
-                 nshuf)
-    PFobj.save_data()
+                 speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, nshuf)
+    PFobj.save_data(pf_file=save_file)
 
     return occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, tcounts, xrun, yrun, PSAboolrun, pval
 
@@ -441,8 +448,9 @@ class PlaceFieldObject:
 
 if __name__ == '__main__':
     # placefields('Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories')
-    occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, \
-    tcounts, xrun, yrun, PSAbool = placefields(
-        'Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories', nshuf=10)
+    # occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, \
+    # tcounts, xrun, yrun, PSAbool = placefields(
+    #     'Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories', nshuf=10)
     # PFo.pfscroll()
+    PF = load_pf('Marble07', 'Open', -2)
     pass

@@ -34,9 +34,12 @@ def plot_trajectory(ax, posfile):
     :param
         pos: nparray of x/y mouse location values
     :return:
+        ax: numpy axes!
     """
     pos = pd.read_csv(posfile, header=None)
-    pos.T.plot(0, 1, ax=ax, legend=False)
+    ax = pos.T.plot(0, 1, ax=ax, legend=False)
+
+    return ax
 
 
 def plot_frame_and_traj(ax, dir_use):
@@ -50,12 +53,15 @@ def plot_frame_and_traj(ax, dir_use):
     pos_location = glob(path.join(dir_use + '\FreezeFrame', 'pos.csv'))
     avi_location = glob(path.join(dir_use + '\FreezeFrame', '*.avi'))
 
-    display_frame(ax, avi_location[0])
-    xlims = ax.get_xlim()
-    ylims = ax.get_ylim()
-    plot_trajectory(ax, pos_location[0])
-    ax.set_xlim(xlims)
-    ax.set_ylim(ylims)
+    try:
+        display_frame(ax, avi_location[0])
+        xlims = ax.get_xlim()
+        ylims = ax.get_ylim()
+        plot_trajectory(ax, pos_location[0])
+        ax.set_xlim(xlims)
+        ax.set_ylim(ylims)
+    except IndexError:
+        plot_trajectory(ax, pos_location[0])
 
 
 def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
@@ -76,7 +82,7 @@ def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'S
     # Iterate through all sessions and plot stuff
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
-            try:
+            # try:
                 dir_use = get_dir(mouse, arena, day)
 
                 # Label stuff
@@ -119,10 +125,10 @@ def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'S
                 elif disp_fratio:
                     ax[ida, idd].set_title(fratio_str)
 
-            except:
-                print(['Error processing ' + mouse + ' ' + arena + ' ' + str(day)])
+            # except:
+            #     print(['Error processing ' + mouse + ' ' + arena + ' ' + str(day)])
 
-    return fig
+    return fig, ax
 
 
 def axis_off(ax):
@@ -465,6 +471,6 @@ def write_all_freezing(fratio_all, filepath, days = [-2, -1, 4, 1, 2, 7]):
 
 
 if __name__ == '__main__':
-    plot_all_freezing(['ANI_1', 'ANI_2'])
-
+    # plot_all_freezing(['ANI_1', 'ANI_2'])
+    plot_experiment_traj('Marble07')
     pass
