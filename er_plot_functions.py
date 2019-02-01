@@ -15,6 +15,7 @@ from session_directory import find_eraser_directory as get_dir
 # import pickle
 from scipy.signal import decimate
 
+
 def display_frame(ax, vidfile):
 
     """
@@ -168,7 +169,9 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
 
     pos = get_pos(dir_use)
     pos, nbad = fix_pos(pos)
+    print(dir_use + ': nbadpts = ' + str(nbad[0]) + ' max_in_a_row = ' + str(nbad[3]))
     # print(str(nbad[0]))  # for debugging
+    # print('nbadpts = ' + str(nbad[0]))
     video_t = get_timestamps(dir_use)
 
     # Downsample Cineplex data to approximately match freezeframe acquisition rate
@@ -236,7 +239,7 @@ def fix_pos(pos):
     Fixes any points at (0,0) or (nan,nan) by interpolating between closest defined points
     :param pos: position data from get_pot
     :return: pos_fix: fixed position data
-    :return: nbad: length 3 tuple (total # bad pts, # at start, # at end)
+    :return: nbad: length 3 tuple (total # bad pts, # at start, # at end, max # in a row)
     """
     npts = pos.shape[1]
     zero_bool = np.bitwise_and(pos[0, :] == 0, pos[1,:] == 0)
@@ -246,18 +249,22 @@ def fix_pos(pos):
     pos_fix = pos
     nbad_start = 0
     nbad_end = 0
+    nbad_max = 1
     for pt in bad_pts[0]:
 
         # Increment/decrement until you find closest good point above/below bad point
         pt_p = [pt - 1, pt + 1]
+        n = 0
         while pt_p[0] in bad_pts[0]:
             pt_p[0] -= 1
+            n += 1
         while pt_p[1] in bad_pts[0]:
             pt_p[1] += 1
+            n += 1
 
         if pt_p[0] < 0:  # use first good point if bad pt is at the beginning
-                pos_fix[:, pt] = pos[:, pt_p[1]]
-                nbad_start += 1
+            pos_fix[:, pt] = pos[:, pt_p[1]]
+            nbad_start += 1
         elif pt_p[1] > npts:  # use last good point if bad pt is at the end
             pos_fix[:, pt] = pos[:, pt_p[0]]
             nbad_end += 1
@@ -267,8 +274,9 @@ def fix_pos(pos):
 
             pos_fix[0, pt] = np.interp(pt, pt_p, x_p)
             pos_fix[1, pt] = np.interp(pt, pt_p, y_p)
+        nbad_max = np.max([nbad_max, n])
 
-    nbad = (bad_pts[0].shape[0], nbad_start, nbad_end)
+    nbad = (bad_pts[0].shape[0], nbad_start, nbad_end, nbad_max)
 
     return pos_fix, nbad
 
@@ -312,7 +320,7 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
     """
     Gets freezing ratio for all experimental sessions for a given mouse.
     :param
-        mouse: Mouse name, e.g. 'DVHPC_5' or 'Marble7'
+        mouse: Mouse name (string), e.g. 'DVHPC_5' or 'Marble7'
         arenas: 'Open' (denotes square) or 'Shock' or 'Circle' (denotes open field circle arena)
         day_des: array of session days -2,-1,0,1,2,7 and 4 = 4hr session on day 0
         list_dir: alternate location of SessionDirectories
@@ -442,7 +450,7 @@ def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
     return pix2cm
 
 
-def write_all_freezing(fratio_all, filepath, days = [-2, -1, 4, 1, 2, 7]):
+def write_all_freezing(fratio_all, filepath, days=[-2, -1, 4, 1, 2, 7]):
     """Writes freezing levels each day to a csv file
 
     :param fratio_all: 2 x 7 x nmice ndarray with freezing ratio values
