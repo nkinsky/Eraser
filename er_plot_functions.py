@@ -289,8 +289,13 @@ def get_timestamps(dir_use):
     :return:
         t: nd array of timestamps
     """
-    time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index*.csv'))
-    temp = pd.read_csv(time_file[0], header=None)
+    try:
+        time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index*.csv'))
+        temp = pd.read_csv(time_file[0], header=None)
+    except FileNotFoundError:
+        time_file = glob(path.join(dir_use, '*Index*.csv'))
+        temp = pd.read_csv(time_file[0], header=None)
+
     t = np.array(temp.iloc[:, 0])
 
     return t

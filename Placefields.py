@@ -67,7 +67,8 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5,
     t_track = t_track[0:-1]  # chop last time data point to match t_track match speed/pos length
 
     # Import imaging data
-    im_data_file = path.join(dir_use + '\imaging', 'FinalOutput.mat')
+    # im_data_file = path.join(dir_use + '\imaging', 'FinalOutput.mat')
+    im_data_file = path.join(dir_use, 'FinalOutput.mat')
     im_data = sio.loadmat(im_data_file)
     PSAbool = im_data['PSAbool']
     nneurons, _ = np.shape(PSAbool)
