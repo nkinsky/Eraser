@@ -19,40 +19,74 @@ import session_directory as sd
 from scipy.signal import decimate
 import Placefields as pf
 from mouse_sessions import make_session_list
+import cell_tracking as ct
 
 
 def get_neuronmap(mouse, arena1, day1, arena2, day2):
     """
     Get mapping between registered neurons from arena1/day1 to arena2/day2
     :param mouse:
-    :param arena1:
+    :param arena1: session 1 day/arena
     :param day1:
-    :param arena2:
+    :param arena2: session 2 day/arena
     :param day2:
-    :return: neuron_map (and maybe some other stuff I might need?)
+    :return: neuron_map: an array the length of the number of neurons in session1. zeros indicate
+    that neuron has no matched counterpart in session2.
     """
 
     make_session_list()  # Initialize session list
 
-    # Identify map file and load it in
+    # Identify map file
     dir_use = get_dir(mouse, arena1, day1)
     reg_session = sd.find_eraser_session(mouse, arena2, day2)
-    # NRK - need to write code to get date in underscore format out and also get session # out!
-    reg_filename = 'neuron_map - ' + mouse + ' - ' + reg_session['Date'] + ' - session' + reg_session['Session'] + '.mat'
-    # neuron_map - Marble25 - 12_04_2018 - session1
-    # im_data_file = path.join(dir_use, 'neuron_map - ' + mouse + ' - ' + )
-    # im_data = sio.loadmat(im_data_file)
-    # return neuron_map
+    reg_filename = 'neuron_map-' + mouse + '-' + sd.fix_slash_date(reg_session['Date']) + \
+                   '-session' + reg_session['Session'] + '.mat'
+    map_file = path.join(dir_use, reg_filename)
+
+    # Load file in
+    map_data = sio.loadmat(map_file)
+    map_import = map_data['neuron_map']['neuron_id'][0][0]  # Grab terribly formatted neuron map from matlab
+
+    # Fix the map - spit out an array!
+    neuron_map = fix_neuronmap(map_import)
+
+    good_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
+
+    return neuron_map
 
 
-def classify_cells(neuron_map, overlap_thresh):
+def fix_neuronmap(map_import):
+    """
+    Fixes neuronmap input imported from matlab in cell format to spit out an array and converts
+    to python nomenclature (e.g. first entry = 0)
+    :param map_import: poorly formatted map imported from Nat's matlab output
+    :return: map_fixed: a fixed map
+    """
+
+    map_fixed = np.ones_like(map_import)*np.nan  #pre-allocate to NaNs
+    for idn, neuron in enumerate(map_import):
+        if neuron[0] != 0:
+            map_fixed[idn] = neuron[0][0]-1  # subtract 1 to convert to python numbering!
+
+    return map_fixed
+
+
+def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     """
     Classifies cells as good, silent, and new.
     :param neuron_map:
-    :param overlap_thresh: for now only consider new/silent if 0.5 overlap or less
+    :param overlap_thresh: not functional yet. default (eventually) = consider new/silent if 0.5 overlap or less
     :return: good_map_bool, silent_ind, new_ind
     """
 
+    # Get silent neurons
+    silent_ind, _ = np.where(np.isnan(neuron_map))
+
+    # Get new neurons
+    nneurons2 = ct.get_num_neurons(reg_session['Animal'], reg_session['Date'],
+                                   reg_session['Session'])
+
+    new_ind, _ = np.where(np.ismember(np.arange(0,nneurons2), neuron_map))
 
 def get_overlap(mouse, arena1, day1, arena2, day2):
     """
@@ -118,5 +152,6 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2):
 
 if __name__ == '__main__':
 
-    get_neuronmap('Marble11', 'Shock', -2, 'Shock', -1)
+    neuron_map = get_neuronmap('Marble11', 'Shock', -2, 'Shock', -1)
+    classify_cells(neuron_map)
     pass

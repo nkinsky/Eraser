@@ -12,7 +12,7 @@ import matplotlib as mp
 import scipy.io as sio
 import scipy.ndimage as sim
 from os import path
-from session_directory import find_eraser_directory as get_dir
+import session_directory as sd
 from session_directory import load_session_list
 import er_plot_functions as er
 from mouse_sessions import make_session_list
@@ -23,7 +23,7 @@ from tqdm import tqdm
 from pickle import dump, load
 
 
-def get_num_neurons(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories'):
+def get_num_neurons(mouse, date, session):
     """
     :param mouse:
     :param arena:
@@ -32,11 +32,11 @@ def get_num_neurons(mouse, arena, day, list_dir='E:\Eraser\SessionDirectories'):
     :return: nneurons: # neurons in a session
     """
 
-    dir_use = get_dir(mouse, arena, day, list_dir)
+    dir_use = sd.find_session_directory(mouse, date, session)
     im_data_file = path.join(dir_use, 'FinalOutput.mat')
     im_data = sio.loadmat(im_data_file, variable_names='NumNeurons')
     # PSAbool = im_data['PSAbool']
-    nneurons = im_data['NumNeurons']
+    nneurons = im_data['NumNeurons'][0][0]
 
     return nneurons
 
