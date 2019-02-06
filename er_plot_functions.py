@@ -483,6 +483,44 @@ def write_all_freezing(fratio_all, filepath, days=[-2, -1, 4, 1, 2, 7]):
         writer.writerows(fratio_all[1, :, :].T)
 
 
+def plot_overlaps(overlaps):
+    """
+
+    :param overlaps: nmice x 5sesh x narenas ndarray with cell overlap ratios
+    relative to day -2. if multiple arenas dim 0 must be Shock v Shock and dim 1 must
+    be Shock v Open
+    :return: fig and ax handles
+    """
+
+    try:
+        nmice, _, narenas = overlaps.shape
+    except ValueError:
+        nmice = 1
+        _, narenas = overlaps.shape
+    fig, ax = plt.subplots()
+    if nmice != 1:
+        ax.plot(np.matlib.repmat(np.arange(0, 5), nmice, 1), overlaps[:, :, 0], 'bo')
+        lineshock, = ax.plot([0, 1, 2, 3, 4], np.mean(overlaps[:, :, 0], axis=0), 'b-')
+    elif nmice == 1:
+        lineshock, = ax.plot(np.arange(0, 5), overlaps[:, 0], 'bo-')
+    ax.set_xlabel('Lag (days)')
+    ax.set_ylabel('Overlap Ratio (Shock Day -2 = ref)')
+    ax.set_xticks([0, 1, 2, 3, 4])
+    ax.set_xticklabels(['1', '2', '3', '4', '9'])
+
+    if narenas == 2:
+        if nmice != 1:
+            ax.plot(np.matlib.repmat(np.arange(0, 5), nmice, 1), overlaps[:, :, 1], 'ro')
+            linebw, = ax.plot([0, 1, 2, 3, 4], np.mean(overlaps[:, :, 1], axis=0), 'r-')
+        elif nmice == 1:
+            linebw, = ax.plot(np.arange(0, 5), overlaps[:, 1], 'ro-')
+
+        ax.legend((lineshock, linebw), ('Shock v Shock', 'Shock v Open'))
+    elif narenas == 1:
+        ax.legend((lineshock,), ('Shock v Shock',))
+
+    return fig, ax
+
 if __name__ == '__main__':
     # plot_all_freezing(['ANI_1', 'ANI_2'])
     plot_experiment_traj('Marble07')

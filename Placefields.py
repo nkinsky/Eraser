@@ -442,9 +442,10 @@ class PlaceFieldObject:
         self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm),
                             current_position=current_position, n_frames=self.nneurons,
                             n_rows=1, n_cols=3, figsize=(17.2, 5.3), titles=titles,
-                            x=self.pos_align[0, :], y=self.pos_align[1, :],
-                            PSAbool=self.PSAbool_align,
-                            tmap_us=self.tmap_us, tmap_sm=self.tmap_sm)
+                            x=self.pos_align[0, self.isrunning], y=self.pos_align[1, self.isrunning],
+                            PSAbool=self.PSAboolrun,
+                            tmap_us=self.tmap_us, tmap_sm=self.tmap_sm, mouse=self.mouse,
+                            arena=self.arena, day=self.day)
 
 
 if __name__ == '__main__':
