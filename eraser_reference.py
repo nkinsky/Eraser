@@ -8,3 +8,9 @@ control_mice_good = ['Marble06', 'Marble07', 'Marble11', 'Marble12', 'Marble24']
 ani_mice = ['Marble17', 'Marble18', 'Marble19', 'Marble20', 'Marble21', 'Marble25']
 
 ani_mice_good = ['Marble17', 'Marble19', 'Marble25']
+
+all_mice = control_mice.copy()
+all_mice.append(ani_mice)
+
+all_mice_good = control_mice_good.copy()
+all_mice_good.append(ani_mice_good)

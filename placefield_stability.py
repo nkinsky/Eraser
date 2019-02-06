@@ -165,6 +165,40 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2):
     return corrs_us, corrs_sm
 
 
+def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7]):
+    """
+    Get mean placefield correlations between all sessions
+    :param mouse:
+    :param arena1:
+    :param arena2:
+    :param days:
+    :return: corr_mean_us/sm: mean spearman correlation for placefields between sessions.
+    ndays x ndays ndarray. rows = arena1, columns = arena2.
+    """
+
+    # pre-allocate arrays
+    ndays = len(days)
+    corr_mean_us = np.ones((ndays, ndays)) * np.nan
+    corr_mean_sm = np.ones((ndays, ndays)) * np.nan
+
+    # loop through each pair of sessions and get the mean correlation for each session
+    for id1, day1 in enumerate(days):
+        for id2, day2 in enumerate(days):
+            if id1 <= id2:  # Don't loop through things you don't have reg files for
+                try:
+                    corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2)
+                    corr_mean_us[id1, id2] = corrs_us.mean(axis=0)
+                    corr_mean_sm[id1, id2] = corrs_sm.mean(axis=0)
+                except FileNotFoundError:
+                    print('Missing pf files for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) +
+                          ' to ' + arena2 + ' Day ' + str(day2))
+                except TypeError:  # Do nothing if registering session to itself
+                    print('No reg file for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) +
+                          ' to ' + arena2 + ' Day ' + str(day2))
+
+    return corr_mean_us, corr_mean_sm
+
+
 class PFCombineObject:
     def __init__(self, mouse, arena1, day1, arena2, day2):
         self.mouse = mouse
@@ -236,13 +270,14 @@ if __name__ == '__main__':
 
     # neuron_map = get_neuronmap('Marble11', 'Shock', -2, 'Shock', -1)
     # classify_cells(neuron_map)
-    oratio1, oratio2, oratioboth = get_overlap('Marble11', 'Shock', -2, 'Shock', -1)
+    # oratio1, oratio2, oratioboth = get_overlap('Marble11', 'Shock', -2, 'Shock', -1)
 
     # NRK - need to compare the below to MATLAB!!! Also need to plot sessions side-by-side
     # corrs_us, corrs_sm = pf_corr_bw_sesh('Marble11', 'Shock', -2, 'Shock', -1)
     # t = np.mean(corrs_us)
 
-    PFcomb = PFCombineObject('Marble11', 'Shock', -2, 'Shock', -1)
-    PFcomb.pfscroll()
+    # PFcomb = PFCombineObject('Marble11', 'Shock', -2, 'Shock', -1)
+    # PFcomb.pfscroll()
+    pf_corr_mean('Marble11', 'Shock', 'Shock', [-2, -1, 0, 4, 1, 2, 7])
 
     pass
