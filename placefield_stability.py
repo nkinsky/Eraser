@@ -124,13 +124,14 @@ def get_overlap(mouse, arena1, day1, arena2, day2):
 
 def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2):
     """
-    Gets placefield correlations between sessions.
+    Gets placefield correlations between sessions. Note that
     :param mouse:
     :param arena1:
     :param day1:
     :param arena2:
     :param day2:
-    :return:
+    :return: corrs_us, corrs_sm: spearman rho values between all cells that are active
+    in both sessions. us = unsmoothed, sm = smoothed
     """
 
     # Get mapping between sessions
@@ -200,6 +201,9 @@ class PFCombineObject:
         self.PSAalign1 = self.PF1.PSAbool_align[good_map_ind, :]
         self.PSAalign2 = self.PF2.PSAbool_align[good_map, :]
 
+        # Get correlations between sessions!
+        self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2)
+
     def pfscroll(self, current_position=0):
         """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
         and unsmoothed tmaps in another
@@ -224,7 +228,8 @@ class PFCombineObject:
                             PSAbool2=self.PSAalign2[:, self.PF2.isrunning],
                             tmap_us2=self.tmap2_us_reg, tmap_sm2=self.tmap2_sm_reg,
                             arena=self.PF1.arena, day=self.PF1.day, arena2=self.PF2.arena,
-                            day2=self.PF2.day, mouse=self.PF1.mouse)
+                            day2=self.PF2.day, mouse=self.PF1.mouse,
+                            corrs_us=self.corrs_us, corrs_sm=self.corrs_sm)
 
 
 if __name__ == '__main__':
