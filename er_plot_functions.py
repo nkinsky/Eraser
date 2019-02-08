@@ -500,7 +500,7 @@ def plot_overlaps(overlaps):
     fig, ax = plt.subplots()
     if nmice != 1:
         ax.plot(np.matlib.repmat(np.arange(0, 5), nmice, 1), overlaps[:, :, 0], 'bo')
-        lineshock, = ax.plot([0, 1, 2, 3, 4], np.mean(overlaps[:, :, 0], axis=0), 'b-')
+        lineshock, = ax.plot([0, 1, 2, 3, 4], np.nanmean(overlaps[:, :, 0], axis=0), 'b-')
     elif nmice == 1:
         lineshock, = ax.plot(np.arange(0, 5), overlaps[:, 0], 'bo-')
     ax.set_xlabel('Lag (days)')
@@ -511,7 +511,7 @@ def plot_overlaps(overlaps):
     if narenas == 2:
         if nmice != 1:
             ax.plot(np.matlib.repmat(np.arange(0, 5), nmice, 1), overlaps[:, :, 1], 'ro')
-            linebw, = ax.plot([0, 1, 2, 3, 4], np.mean(overlaps[:, :, 1], axis=0), 'r-')
+            linebw, = ax.plot([0, 1, 2, 3, 4], np.nanmean(overlaps[:, :, 1], axis=0), 'r-')
         elif nmice == 1:
             linebw, = ax.plot(np.arange(0, 5), overlaps[:, 1], 'ro-')
 
@@ -520,6 +520,7 @@ def plot_overlaps(overlaps):
         ax.legend((lineshock,), ('Shock v Shock',))
 
     return fig, ax
+
 
 if __name__ == '__main__':
     # plot_all_freezing(['ANI_1', 'ANI_2'])

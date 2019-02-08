@@ -22,6 +22,7 @@ from mouse_sessions import make_session_list
 import cell_tracking as ct
 from plot_helper import ScrollPlot
 from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos, plot_tmap_us2, plot_tmap_sm2, plot_events_over_pos2
+import eraser_reference as err
 
 
 def get_neuronmap(mouse, arena1, day1, arena2, day2):
@@ -105,6 +106,8 @@ def get_overlap(mouse, arena1, day1, arena2, day2):
     :return: overlap_ratio1, overlap_ratio2, overlap_ratio_both:
     #overlapping cells between sessions divided by the
     the number of cells active in 1st/2nd/both sessions
+            overlap_ratio_max/min: same as above but divided by max/min number
+            of cells active in either session
     """
     neuron_map  = get_neuronmap(mouse, arena1, day1, arena2, day2)
     reg_session = sd.find_eraser_session(mouse, arena2, day2)
@@ -112,14 +115,18 @@ def get_overlap(mouse, arena1, day1, arena2, day2):
 
     num_active1 = len(good_map_bool)
     num_active2 = sum(good_map_bool) + len(new_ind)
+    num_active_min = min(num_active1, num_active2)
+    num_active_max = max(num_active1, num_active2)
     num_active_both = len(good_map_bool) + len(new_ind)
     num_overlap = sum(good_map_bool)
 
     overlap_ratio1 = num_overlap/num_active1
     overlap_ratio2 = num_overlap/num_active2
     overlap_ratio_both = num_overlap/num_active_both
+    overlap_ratio_min = num_overlap/num_active_min
+    overlap_ratio_max = num_overlap/num_active_max
 
-    return overlap_ratio1, overlap_ratio2, overlap_ratio_both
+    return overlap_ratio1, overlap_ratio2, overlap_ratio_both, overlap_ratio_min, overlap_ratio_max
 
 
 def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2):
@@ -197,6 +204,106 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
                           ' to ' + arena2 + ' Day ' + str(day2))
 
     return corr_mean_us, corr_mean_sm
+
+
+def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True,
+                        color='b', ax_use=None, offset=0, group_desig=1):
+    """
+    Scatterplot of correlations before shock, after, and several other groupings
+    :param corr_mean_mat: nmice x 7 x 7 array of mean corr values for each mouse
+    :param arena1: 'Shock' or 'Neutral'
+    :param arena2:
+    :param group_type: e.g. 'Control' or 'Anisomycin'
+    :param save_fig: default = 'True' to save to eraser figures folder
+    :param group_desig: 1 = include day 7 in post-shock plots, 2 = do not include day 7
+    :return: fig, ax
+    """
+
+    # Define groups for scatter plots
+    if group_desig == 1:
+        groups = np.ones_like(corr_mean_mat) * np.nan
+        groups[:, 0:2, 0:2] = 1  # 1 = before shock
+        groups[:, 4:7, 4:7] = 2  # 2 = after shock days 1,2,7
+        groups[:, 0:2, 4:7] = 3  # 3 = before-v-after shock
+        groups[:, 0:2, 3] = 4  # 4 = before-v-STM
+        groups[:, 3, 4:7] = 5  # 5 = STM-v-LTM
+    elif group_desig == 2:
+        groups = np.ones_like(corr_mean_mat) * np.nan
+        groups[:, 0:2, 0:2] = 1  # 1 = before shock
+        groups[:, 4:6, 4:6] = 2  # 2 = after shock days 1,2 only
+        groups[:, 0:2, 4:6] = 3  # 3 = before-v-after shock
+        groups[:, 0:2, 3] = 4  # 4 = before-v-STM
+        groups[:, 3, 4:6] = 5  # 5 = STM-v-LTM (days 1 and 2 only)
+
+    # Add in jitter to groups
+    xpts = groups.copy() + 0.1 * np.random.standard_normal(groups.shape)
+
+    # Add in offset
+    xpts = xpts + offset
+
+    # Set up new fig/axes if required
+    if ax_use is None:
+        fig, ax = plt.subplots()
+    else:
+        ax = ax_use
+        fig = ax.figure
+
+    # Plot corrs in scatterplot form
+    ax.scatter(xpts.reshape(-1), corr_mean_mat.reshape(-1), color=color)
+    ax.set_xticks(np.arange(1, 6))
+    if group_desig == 1:
+        ax.set_xticklabels(['Before Shk', 'After Shk (Days1-7)', 'Bef-Aft',
+                            'Bef-STM', 'STM-Aft'])
+    elif group_desig == 2:
+        ax.set_xticklabels(['Before Shk', 'After Shk (Days1,2 only)', 'Bef-Aft',
+                            'Bef-STM', 'STM-Aft'])
+
+    ax.set_ylabel('Mean Spearman Rho')
+    ax.set_title(group_type)
+    unique_groups = np.unique(groups[~np.isnan(groups)])
+    corr_means = []
+    for group_num in unique_groups:
+        corr_means.append(np.nanmean(corr_mean_mat[groups == group_num]))
+    ax.plot(unique_groups, corr_means, color + '-')
+    if save_fig:
+        fig.savefig(path.join(err.pathname, 'PFcorrs ' + arena1 + ' v '
+                    + arena2 + ' ' + group_type + 'group_desig' + str(group_desig) + '.pdf'))
+
+    return fig, ax
+
+
+def plot_confmat(corr_mean_mat, arena1, arena2, group_type, ndays=7, ax_use=None, save_fig=True):
+    """
+    Plots confusion matrix of mean pf corrs fo all sessions in arena1 v arena2
+    :param corr_mean_mat: 7x7 array of mean pf corrs for mouse/mice
+    :param arena1:
+    :param arena2:
+    :param group_type:
+    :param ax_use:
+    :param save_fig:
+    :return:
+    """
+
+    # Set up fig/axes if not specified
+    if ax_use is None:
+        fig, ax = plt.subplots()
+    else:
+        ax = ax_use
+        fig = ax_use.figure
+
+    # Plot corrs in confusion matrix
+    ax.imshow(corr_mean_mat)
+    ax.set_xlim((0.5, ndays - 0.5))
+    ax.set_ylim((ndays - 1.5, -0.5))
+    ax.set_xticklabels(['-2', '-1', '0', '4hr', '1', '2', '7'])
+    ax.set_yticklabels([' ', '-2', '-1', '0', '4hr', '1', '2', '7'])
+    ax.set_xlabel(arena2 + ' Day #')
+    ax.set_ylabel(arena1 + ' Day #')
+    ax.set_title(' Mean Spearman Rho: ' + group_type)
+
+    if save_fig:
+        fig.savefig(path.join(err.pathname, 'PFcorr Matrices ' + arena1 + ' v '
+                              + arena2 + ' ' + group_type + '.pdf'))
 
 
 class PFCombineObject:

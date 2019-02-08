@@ -55,9 +55,9 @@ def plot_num_neurons(nneurons, arena1='Shock', arena2='Open',
     nmice, ndays, narenas = nneurons.shape
     fig, ax = plt.subplots()
     ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), nneurons[:, :, 0], 'bo')
-    lineshock, = ax.plot(np.arange(0, ndays), nneurons[:, :, 0].mean(axis=0), 'b-')
+    lineshock, = ax.plot(np.arange(0, ndays), np.nanmean(nneurons[:, :, 0], axis=0), 'b-')
     ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), nneurons[:, :, 1], 'ro')
-    lineopen, = ax.plot(np.arange(0, ndays), nneurons[:, :, 1].mean(axis=0), 'r-')
+    lineopen, = ax.plot(np.arange(0, ndays), np.nanmean(nneurons[:, :, 1], axis=0), 'r-')
     plt.legend((lineshock, lineopen), (arena1, arena2))
     ax.set_ylabel('# Neurons')
     ax.set_xlabel('Day')
