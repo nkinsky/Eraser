@@ -40,6 +40,32 @@ def plot_trajectory(ax, posfile):
     pos.T.plot(0, 1, ax=ax, legend=False)
 
 
+def get_bad_epochs(mouse, arena, day):
+    """
+    Identifies bad epochs where mouse is at 0,0 for manual correction
+    :param mouse:
+    :param arena:
+    :param day:
+    :return:
+    """
+
+    # Commment here
+    dir_use = get_dir(mouse, arena, day)
+
+    # Comment here
+    pos = get_pos(dir_use)
+
+    # Comment here
+    bad_bool = np.logical_and(pos[0, :] == 0, pos[1, :] == 0)
+
+    # Comment here
+    bad_epochs = get_freezing_epochs(bad_bool)
+
+    # Insert code here to print bad epochs to screen if you wish. Might be easier in the long run
+
+    return bad_epochs
+
+
 def plot_frame_and_traj(ax, dir_use):
 
     """
@@ -310,7 +336,7 @@ def get_freezing_epochs(freezing):
 
 
 def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
-                     list_dir='E:\Eraser\SessionDirectories', velocity_threshold=1.5, min_freeze_duration=10):
+                     list_dir='E:\Eraser\SessionDirectories', velocity_threshold=1.044, min_freeze_duration=10):
     """
     Gets freezing ratio for all experimental sessions for a given mouse.
     :param
