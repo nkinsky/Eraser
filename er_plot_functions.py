@@ -35,9 +35,12 @@ def plot_trajectory(ax, posfile):
     :param
         pos: nparray of x/y mouse location values
     :return:
+        ax: numpy axes!
     """
     pos = pd.read_csv(posfile, header=None)
-    pos.T.plot(0, 1, ax=ax, legend=False)
+    ax = pos.T.plot(0, 1, ax=ax, legend=False)
+
+    return ax
 
 
 def get_bad_epochs(mouse, arena, day):
@@ -77,12 +80,15 @@ def plot_frame_and_traj(ax, dir_use):
     pos_location = glob(path.join(dir_use + '\FreezeFrame', 'pos.csv'))
     avi_location = glob(path.join(dir_use + '\FreezeFrame', '*.avi'))
 
-    display_frame(ax, avi_location[0])
-    xlims = ax.get_xlim()
-    ylims = ax.get_ylim()
-    plot_trajectory(ax, pos_location[0])
-    ax.set_xlim(xlims)
-    ax.set_ylim(ylims)
+    try:
+        display_frame(ax, avi_location[0])
+        xlims = ax.get_xlim()
+        ylims = ax.get_ylim()
+        plot_trajectory(ax, pos_location[0])
+        ax.set_xlim(xlims)
+        ax.set_ylim(ylims)
+    except IndexError:
+        plot_trajectory(ax, pos_location[0])
 
 
 def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
@@ -103,7 +109,7 @@ def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'S
     # Iterate through all sessions and plot stuff
     for idd, day in enumerate(day_des):
         for ida, arena in enumerate(arenas):
-            try:
+            # try:
                 dir_use = get_dir(mouse, arena, day)
 
                 # Label stuff
@@ -146,10 +152,10 @@ def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'S
                 elif disp_fratio:
                     ax[ida, idd].set_title(fratio_str)
 
-            except:
-                print(['Error processing ' + mouse + ' ' + arena + ' ' + str(day)])
+            # except:
+            #     print(['Error processing ' + mouse + ' ' + arena + ' ' + str(day)])
 
-    return fig
+    return fig, ax
 
 
 def axis_off(ax):
@@ -309,8 +315,13 @@ def get_timestamps(dir_use):
     :return:
         t: nd array of timestamps
     """
-    time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index*.csv'))
-    temp = pd.read_csv(time_file[0], header=None)
+    try:
+        time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index*.csv'))
+        temp = pd.read_csv(time_file[0], header=None)
+    except FileNotFoundError:
+        time_file = glob(path.join(dir_use, '*Index*.csv'))
+        temp = pd.read_csv(time_file[0], header=None)
+
     t = np.array(temp.iloc[:, 0])
 
     return t
@@ -498,7 +509,46 @@ def write_all_freezing(fratio_all, filepath, days=[-2, -1, 4, 1, 2, 7]):
         writer.writerows(fratio_all[1, :, :].T)
 
 
-if __name__ == '__main__':
-    plot_all_freezing(['ANI_1', 'ANI_2'])
+def plot_overlaps(overlaps):
+    """
 
+    :param overlaps: nmice x 5sesh x narenas ndarray with cell overlap ratios
+    relative to day -2. if multiple arenas dim 0 must be Shock v Shock and dim 1 must
+    be Shock v Open
+    :return: fig and ax handles
+    """
+
+    try:
+        nmice, _, narenas = overlaps.shape
+    except ValueError:
+        nmice = 1
+        _, narenas = overlaps.shape
+    fig, ax = plt.subplots()
+    if nmice != 1:
+        ax.plot(np.matlib.repmat(np.arange(0, 5), nmice, 1), overlaps[:, :, 0], 'bo')
+        lineshock, = ax.plot([0, 1, 2, 3, 4], np.nanmean(overlaps[:, :, 0], axis=0), 'b-')
+    elif nmice == 1:
+        lineshock, = ax.plot(np.arange(0, 5), overlaps[:, 0], 'bo-')
+    ax.set_xlabel('Lag (days)')
+    ax.set_ylabel('Overlap Ratio (Shock Day -2 = ref)')
+    ax.set_xticks([0, 1, 2, 3, 4])
+    ax.set_xticklabels(['1', '2', '3', '4', '9'])
+
+    if narenas == 2:
+        if nmice != 1:
+            ax.plot(np.matlib.repmat(np.arange(0, 5), nmice, 1), overlaps[:, :, 1], 'ro')
+            linebw, = ax.plot([0, 1, 2, 3, 4], np.nanmean(overlaps[:, :, 1], axis=0), 'r-')
+        elif nmice == 1:
+            linebw, = ax.plot(np.arange(0, 5), overlaps[:, 1], 'ro-')
+
+        ax.legend((lineshock, linebw), ('Shock v Shock', 'Shock v Open'))
+    elif narenas == 1:
+        ax.legend((lineshock,), ('Shock v Shock',))
+
+    return fig, ax
+
+
+if __name__ == '__main__':
+    # plot_all_freezing(['ANI_1', 'ANI_2'])
+    plot_experiment_traj('Marble07')
     pass
