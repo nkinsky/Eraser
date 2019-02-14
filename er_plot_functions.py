@@ -65,7 +65,7 @@ def get_bad_epochs(mouse, arena, day):
     bad_epochs = get_freezing_epochs(bad_bool)
 
     # Insert code here to print bad epochs to screen if you wish. Might be easier in the long run
-
+    print(bad_epochs)
     return bad_epochs
 
 
@@ -374,7 +374,7 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
                                            min_freeze_duration=min_freeze_duration,
                                            arena=arena, pix2cm=pix2cm)[0]
                 fratios[ida, idd] = freezing.sum()/freezing.__len__()
-            except (FileNotFoundError, IndexError):
+            except (FileNotFoundError, IndexError, TypeError):
                 # print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
                 print(['Unknown file missing and/or IndexError for ' + mouse + ' ' + arena + ' ' + str(day)])
                 print('Freezing left as NaN for this session')
