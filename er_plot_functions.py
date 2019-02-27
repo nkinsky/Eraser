@@ -65,7 +65,7 @@ def get_bad_epochs(mouse, arena, day):
     bad_epochs = get_freezing_epochs(bad_bool)
 
     # Insert code here to print bad epochs to screen if you wish. Might be easier in the long run
-    print(bad_epochs)
+    #print(bad_epochs)
     return bad_epochs
 
 
@@ -341,7 +341,7 @@ def get_freezing_epochs(freezing):
     freezing_epochs[freezing_epochs >= len(freezing)] = len(freezing) - 1
 
     # Only take the middle.
-    freezing_epochs = freezing_epochs[1:-1]
+    # freezing_epochs = freezing_epochs[1:-1]
 
     return freezing_epochs
 
@@ -547,8 +547,17 @@ def plot_overlaps(overlaps):
 
     return fig, ax
 
+def DIFreeze(mouse):
+    fratios = get_all_freezing(mouse)
+    frz_shock = fratios[1,:]
+    frz_open = fratios[0,:]
+    DIfrzing = []
+    for (fo, fs) in zip(frz_open,frz_shock):
+        DIfrz = [(fo-fs)/(fo+fs)]
+        DIfrzing += DIfrz
+    return(DIfrzing)
+
 
 if __name__ == '__main__':
-    # plot_all_freezing(['ANI_1', 'ANI_2'])
-    plot_experiment_traj('Marble07')
+    bad_frames = get_bad_epochs('Marble29', 'Open', -2)
     pass
