@@ -528,7 +528,7 @@ def plot_overlaps(overlaps):
         ax.plot(np.matlib.repmat(np.arange(0, 5), nmice, 1), overlaps[:, :, 0], 'bo')
         lineshock, = ax.plot([0, 1, 2, 3, 4], np.nanmean(overlaps[:, :, 0], axis=0), 'b-')
     elif nmice == 1:
-        lineshock, = ax.plot(np.arange(0, 5), overlaps[:, 0], 'bo-')
+        lineshock, = ax.plot(np.arange(0, 5), np.nanmean(overlaps, axis=0), 'bo-')
     ax.set_xlabel('Lag (days)')
     ax.set_ylabel('Overlap Ratio (Shock Day -2 = ref)')
     ax.set_xticks([0, 1, 2, 3, 4])
