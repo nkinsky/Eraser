@@ -89,9 +89,11 @@ def plot_num_neurons(nneurons, arena1='Shock', arena2='Open',
 
     ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), nneurons[:, 0, :], 'bo')
     lineshock, = ax.plot(np.arange(0, ndays), np.nanmean(nneurons[:, 0, :], axis=0), 'b-')
-    ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), nneurons[:, 1, :], 'ro')
-    lineopen, = ax.plot(np.arange(0, ndays), np.nanmean(nneurons[:, 1, :], axis=0), 'r-')
-    plt.legend((lineshock, lineopen), (arena1, arena2))
+    if narenas == 2:
+        ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), nneurons[:, 1, :], 'ro')
+        lineopen, = ax.plot(np.arange(0, ndays), np.nanmean(nneurons[:, 1, :], axis=0), 'r-')
+        plt.legend((lineshock, lineopen), (arena1, arena2))
+
     if normalize is False:
         ax.set_ylabel('# Neurons')
     else:

@@ -9,8 +9,12 @@ import eraser_reference as err
 # Make text save as whole words
 plt.rcParams['pdf.fonttype'] = 42
 
-group_title = 'Anisomycin'
-mice = err.ani_mice_good  # ['Marble11']
+group_title = 'Control'
+if group_title is 'Control':
+    mice = err.control_mice_good
+elif group_title is 'Anisomycin':
+    mice = err.ani_mice_good
+
 days = [-1, 4, 1, 2, 7]
 arenas = ['Shock', 'Open']
 oratio1 = np.ones((len(mice), len(days), len(arenas)))*np.nan
@@ -48,8 +52,10 @@ ax3.set_title(group_title + ' Min normalized')
 fig3.savefig(os.path.join(pathname, 'Cell Overlap ' + group_title + ' Min normalized.pdf'))
 
 # Now combine!
-oratioboth_comb = np.concatenate((oratioboth[:, :, 0], oratioboth[:, :, 1]), 0)
+oratioboth_comb = np.expand_dims(np.concatenate((oratioboth[:, :, 0], oratioboth[:, :, 1]), 0), 2)
 figc, axc = er.plot_overlaps(oratioboth_comb)
+axc.set_title(group_title + ' Combined Both normalized')
+figc.savefig(os.path.join(pathname, 'Cell Overlap ' + group_title + ' Combined Min normalized.pdf'))
 
 ## Plot Number of Neurons active for each session
 
@@ -60,8 +66,11 @@ import matplotlib.pyplot as plt
 import cell_tracking as ct
 import eraser_reference as err
 
-group_title = 'Control'
-mice = err.control_mice_good
+group_title = 'Anisomycin'
+if group_title is 'Control':
+    mice = err.control_mice_good
+elif group_title is 'Anisomycin':
+    mice = err.ani_mice_good
 days = [-2, -1, 4, 1, 2, 7]
 arenas = ['Shock', 'Open']
 
@@ -77,6 +86,12 @@ fig2, ax2 = ct.plot_num_neurons(nneurons, normalize='1')
 ax2.set_title(group_title)
 fig2.savefig(os.path.join(pathname, group_title + ' - ' + 'NumNeuronsNorm.pdf'))
 
+# Combine and plot
+nneurons_comb = np.expand_dims(np.concatenate((nneurons[:, 0, :], nneurons[:, 1, :])), 1)
+figc, axc = ct.plot_num_neurons(nneurons_comb)
+axc.set_title(group_title + ' Combined')
+figc.savefig(os.path.join(pathname, group_title + ' Combined - ' + 'NumNeurons.pdf'))
+
 ## Get stats for difference between all the above!
 import scipy.stats as stats
 import cell_tracking as ct
@@ -85,7 +100,7 @@ import matplotlib.pyplot as plt
 import os as os
 pathname = r'C:\Users\kinsky.AD\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'  # Plotting folder
 days = [-2, -1, 4, 1, 2, 7]
-day_labels=['-2', '-1', '4hr', '1', '2', '7']
+day_labels = ['-2', '-1', '4hr', '1', '2', '7']
 arenas = ['Shock', 'Open']
 norm_day = -1  # use -1 until you fix Marble20 day -2 data, then use -2
 
