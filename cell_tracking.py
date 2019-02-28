@@ -22,6 +22,9 @@ from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos
 from tqdm import tqdm
 from pickle import dump, load
 
+# Make text save as whole words
+plt.rcParams['pdf.fonttype'] = 42
+
 
 def get_num_neurons(mouse, date, session, er_arena=None, er_day=None):
     """Gets number of neurons in a given session.
@@ -44,27 +47,82 @@ def get_num_neurons(mouse, date, session, er_arena=None, er_day=None):
     return nneurons
 
 
+def get_group_num_neurons(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Shock', 'Open']):
+    """Gets # neurons for all mice/days/arenas specified
+
+    :param mice: list
+    :param days: list
+    :param arenas: list
+    :return: nneurons_all: nmice x ndays x narenas ndarray
+    """
+    nneurons = np.ones((len(mice), len(arenas), len(days))) * np.nan
+    for idm, mouse in enumerate(mice):
+        for ida, arena in enumerate(arenas):
+            for idd, day in enumerate(days):
+                try:
+                    nneurons[idm, ida, idd] = get_num_neurons(mouse, '', '',
+                                                er_arena=arena, er_day=day)
+                except TypeError:
+                    print('Missing neural data file for ' + mouse + ' Day ' + str(day) + ' ' + arena)
+
+    return nneurons
+
+
 def plot_num_neurons(nneurons, arena1='Shock', arena2='Open',
-                     day_labels=['-2', '-1', '4hr', '1', '2', '7']):
+                     day_labels=['-2', '-1', '4hr', '1', '2', '7'], normalize=False):
     """
     Plots # neurons active in each arena on a given day. For eraser but could be used elsewhere
     :param nneurons: nmice x ndays x narenas array. arena1/2 = shock/open by default
+    :param arena1/2: arena labels default1/2 = 'Shock'/'Open'.
+    :param normalize: boolean False(default) = do not normalize, otherwise takes a
+        string = day to normalize to, e.g. '-1' or '7'
     :return: fig, ax
     """
 
-    nmice, ndays, narenas = nneurons.shape
+    nmice, narenas, ndays = nneurons.shape
     fig, ax = plt.subplots()
-    ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), nneurons[:, :, 0], 'bo')
-    lineshock, = ax.plot(np.arange(0, ndays), np.nanmean(nneurons[:, :, 0], axis=0), 'b-')
-    ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), nneurons[:, :, 1], 'ro')
-    lineopen, = ax.plot(np.arange(0, ndays), np.nanmean(nneurons[:, :, 1], axis=0), 'r-')
-    plt.legend((lineshock, lineopen), (arena1, arena2))
-    ax.set_ylabel('# Neurons')
+
+    # normalize nneurons to day indicated
+    if normalize is not False:
+        norm_sesh_ind = [day_labels.index(i) for i in day_labels if normalize in i][0]
+        nneurons = norm_num_neurons(nneurons, norm_sesh_ind)
+
+    ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), nneurons[:, 0, :], 'bo')
+    lineshock, = ax.plot(np.arange(0, ndays), np.nanmean(nneurons[:, 0, :], axis=0), 'b-')
+    if narenas == 2:
+        ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), nneurons[:, 1, :], 'ro')
+        lineopen, = ax.plot(np.arange(0, ndays), np.nanmean(nneurons[:, 1, :], axis=0), 'r-')
+        plt.legend((lineshock, lineopen), (arena1, arena2))
+
+    if normalize is False:
+        ax.set_ylabel('# Neurons')
+    else:
+        ax.set_ylabel('Norm. # Neurons ' + normalize + '=ref')
     ax.set_xlabel('Day')
     ax.set_xticks(np.arange(0, ndays))
     ax.set_xticklabels(day_labels)
 
     return fig, ax
+
+
+def norm_num_neurons(nneurons, norm_sesh_ind):
+    """Normalize nneurons to a particular session
+
+    :param nneurons: nmice x ndays x narenas array of active neurons
+    :param norm_sesh_ind: index in dimension 1 (days) to normalize to. Default = 0.
+    :return: nnorm:
+    """
+    nmice, narenas, ndays = nneurons.shape
+    nnorm = nneurons.reshape(narenas * nmice, ndays) / \
+            nneurons[:, :, norm_sesh_ind].reshape(narenas * nmice, -1)
+    nnorm = nnorm.reshape((nmice, narenas, ndays))
+
+    ### Old code here where I had ndays in dim 1. above should be better.
+    # nnorm = nneurons.swapaxes(1, 2).reshape(narenas * nmice, ndays) / \
+    #            nneurons[:, norm_sesh_ind, :].reshape(narenas * nmice, -1).copy()
+    # nnorm = nnorm.reshape((nmice, narenas, ndays)).swapaxes(2, 1)
+
+    return nnorm
 
 
 if __name__ == '__main__':
