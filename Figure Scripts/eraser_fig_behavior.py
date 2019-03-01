@@ -39,7 +39,7 @@ for id in range(0, 6):
         pval_bwgroup_1sidedt_specific_no29[id] = 1 - pval_no29 / 2
 # Good for one-sided test!
 
-## Now between day -1 and day 1 for each group, shock arena only
+##  Now between day -1 and day 1 for each group, shock arena only
 
 statsc, pvalc = s.ttest_rel(fratio_cont[1, 1, :], fratio_cont[1, 3, :])
 pvalc = pvalc/2
