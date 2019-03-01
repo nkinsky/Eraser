@@ -415,12 +415,17 @@ def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
     days_plot = np.asarray(list(range(ndays)))
     days_str = [str(e) for e in days]
     for ida, arena in enumerate(arenas):
-        ax.errorbar(days_plot, fmean[ida, :], yerr=fstd[ida, :], color=plot_colors[ida])
+        if arena is 'Open':
+            offset = -0.05
+        elif arena is 'Shock':
+            offset = 0.05
+
+        ax.errorbar(days_plot + offset, fmean[ida, :], yerr=fstd[ida, :], color=plot_colors[ida])
 
         for idm, mouse in enumerate(mice):
             fratio_plot = fratio_all[ida, :, idm]  # Grab only the appropriate mouse and day
             good_bool = ~np.isnan(fratio_plot)  # Grab only non-NaN values
-            h = ax.scatter(days_plot[good_bool], fratio_plot[good_bool],
+            h = ax.scatter(days_plot[good_bool] + offset, fratio_plot[good_bool],
                            c=plot_colors[ida], alpha=0.2)
 
             # Hack to get figure handles for each separately - need to figure out how to put in iterable variable
