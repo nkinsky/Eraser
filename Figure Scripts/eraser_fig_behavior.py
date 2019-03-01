@@ -25,5 +25,9 @@ for id in range(0, 6):
         pval_bwgroup_1sidedt_specific[id] = 1 - pval/2
 # Good for one-sided test!
 
+## Get differences between day -1 and day 1 for shock and anisomycin groups
+
+
+
 
 

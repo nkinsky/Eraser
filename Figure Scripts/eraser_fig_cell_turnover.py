@@ -110,6 +110,32 @@ nnormc = ct.norm_num_neurons(nneurons_c, norm_sesh_ind)
 nneurons_a = ct.get_group_num_neurons(err.ani_mice_good, days=days, arenas=arenas)
 nnorma = ct.norm_num_neurons(nneurons_a, norm_sesh_ind)
 
+## Do ANOVA for number neurons changing across all days
+from statsmodels.stats.multicomp import pairwise_tukeyhsd
+nmice, narena, ndays = nneurons_a.shape
+
+
+# Friednman test - probably not enough samples for this to be legit
+# Omit day -2 (index 0) for now due to nans from Marble20
+stata, pfra = stats.friedmanchisquare(nneurons_a[:, :, 1].reshape(-1), nneurons_a[:, :, 2].reshape(-1),
+                            nneurons_a[:, :, 3].reshape(-1), nneurons_a[:, :, 4].reshape(-1),
+                            nneurons_a[:, :, 5].reshape(-1))
+
+
+statc, pfrc = stats.friedmanchisquare(nneurons_c[:, :, 0].reshape(-1), nneurons_c[:, :, 1].reshape(-1),
+                            nneurons_c[:, :, 2].reshape(-1), nneurons_c[:, :, 3].reshape(-1),
+                            nneurons_c[:, :, 4].reshape(-1), nneurons_c[:, :, 5].reshape(-1))
+
+# ANOVA - really should be a repeated measures ANOVA
+stata, panovaa = stats.f_oneway(nneurons_a[:, :, 1].reshape(-1), nneurons_a[:, :, 2].reshape(-1),
+                            nneurons_a[:, :, 3].reshape(-1), nneurons_a[:, :, 4].reshape(-1),
+                            nneurons_a[:, :, 5].reshape(-1))
+# Omit Marble 14 day 2 due to missing data
+statc, panovac = stats.f_oneway(nneurons_c[:, :, 0].reshape(-1), nneurons_c[:, :, 1].reshape(-1),
+                                nneurons_c[:, :, 2].reshape(-1), nneurons_c[:, :, 3].reshape(-1),
+                                nneurons_c[[0, 1, 2, 3, 5], :, 4].reshape(-1),
+                                nneurons_c[:, :, 5].reshape(-1))
+
 ## Check between shock and neutral arena within groups
 tc_win = np.ones(len(days))*np.nan
 pc_win = np.ones(len(days))*np.nan
