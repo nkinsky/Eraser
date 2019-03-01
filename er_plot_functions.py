@@ -14,6 +14,10 @@ from glob import glob
 from session_directory import find_eraser_directory as get_dir
 # import pickle
 from scipy.signal import decimate
+import session_directory as sd
+import eraser_reference as err
+
+sd.make_session_list()  # update session list
 
 
 def display_frame(ax, vidfile):
@@ -411,12 +415,17 @@ def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
     days_plot = np.asarray(list(range(ndays)))
     days_str = [str(e) for e in days]
     for ida, arena in enumerate(arenas):
-        ax.errorbar(days_plot, fmean[ida, :], yerr=fstd[ida, :], color=plot_colors[ida])
+        if arena is 'Open':
+            offset = -0.05
+        elif arena is 'Shock':
+            offset = 0.05
+
+        ax.errorbar(days_plot + offset, fmean[ida, :], yerr=fstd[ida, :], color=plot_colors[ida])
 
         for idm, mouse in enumerate(mice):
             fratio_plot = fratio_all[ida, :, idm]  # Grab only the appropriate mouse and day
             good_bool = ~np.isnan(fratio_plot)  # Grab only non-NaN values
-            h = ax.scatter(days_plot[good_bool], fratio_plot[good_bool],
+            h = ax.scatter(days_plot[good_bool] + offset, fratio_plot[good_bool],
                            c=plot_colors[ida], alpha=0.2)
 
             # Hack to get figure handles for each separately - need to figure out how to put in iterable variable
@@ -547,17 +556,36 @@ def plot_overlaps(overlaps):
 
     return fig, ax
 
+
 def DIFreeze(mouse):
     fratios = get_all_freezing(mouse)
-    frz_shock = fratios[1,:]
-    frz_open = fratios[0,:]
+    frz_shock = fratios[1, :]
+    frz_open = fratios[0, :]
     DIfrzing = []
     for (fo, fs) in zip(frz_open,frz_shock):
         DIfrz = [(fo-fs)/(fo+fs)]
         DIfrzing += DIfrz
-    return(DIfrzing)
+    return DIfrzing
+
+
+def DIhist(mice):
+    import matplotlib.pyplot as plt
+    DIarray = []
+    for mouse in mice:
+        # this should spit out the mouse with issues, then you can zero in after that via debugging
+        # (make sure to comment out try/except statement first)
+        try:
+            DIval = DIFreeze(mouse)
+            DIarray += DIval
+        except ValueError:
+            print('Error in ' + mouse)
+
+    fig, ax = plt.subplots()
+    ax.hist(DIarray)
+    ax.set_xlabel('Discrim. Index')
+    ax.set_ylabel('count')
 
 
 if __name__ == '__main__':
-    bad_frames = get_bad_epochs('Marble29', 'Open', -2)
+    DIhist(err.control_mice_good)
     pass
