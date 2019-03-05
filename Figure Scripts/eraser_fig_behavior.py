@@ -40,10 +40,12 @@ for id in range(0, 6):
 # Good for one-sided test!
 
 
+
 ## Get differences between day -1 and day 1 for shock and anisomycin groups
 
 
-## Now between day -1 and day 1 for each group, shock arena only
+
+##  Now between day -1 and day 1 for each group, shock arena only
 
 statsc, pvalc = s.ttest_rel(fratio_cont[1, 1, :], fratio_cont[1, 3, :])
 pvalc = pvalc/2
