@@ -56,6 +56,7 @@ statsa, pvala = s.ttest_rel(fratio_ani[1, 1, :], fratio_ani[1, 3, :])
 pvala = pvala/2
 
 
-
+## Plot the above - day -1 to day 1 in shock arena, then day shock-freezing compared between
+# each arena
 
 
