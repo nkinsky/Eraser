@@ -42,7 +42,37 @@ for id in range(0, 6):
 
 
 ## Get differences between day -1 and day 1 for shock and anisomycin groups
+from plot_functions import scatter_box, scatter_bar
 
+# Scatterbox form
+figc, axc = scatter_box([100*fratio_cont[1, 1, 0:6], 100*fratio_cont[1, 3, 0:6],
+                         100*fratio_cont[0, 3, 0:6]],
+                        xlabels=['Day -1', 'Day 1', 'Day 1 Neutral'], ylabel='Freezing (%)',
+                        alpha=0.5)
+axc.set_title('Control Mice')
+
+figa, axa = scatter_box([100*fratio_ani[1, 1, [0, 2, 3, 5]],
+                         100*fratio_ani[1, 3, [0, 2, 3, 5]],
+                         100 * fratio_ani[0, 3:6, [0, 3, 5]][
+                             np.logical_not(np.isnan(100 * fratio_ani[0, 3:6, [0, 3, 5]]))]],
+                        xlabels=['Day -1', 'Day 1', 'Day 1 Neutral'], ylabel='Freezing (%)',
+                        alpha=0.5)
+axa.set_title('Anisomycin Mice')
+
+# scatter_bar form
+figc, axc = scatter_bar([100*fratio_cont[1, 1, 0:6], 100*fratio_cont[1, 3, 0:6],
+                         100*fratio_cont[0, 3, 0:6]],
+                        xlabels=['Day -1', 'Day 1', 'Days 1-7 Neutral'],
+                        ylabel='Freezing (%)', alpha=0.5)
+axc.set_title('Control Mice')
+
+figab, axab = scatter_bar([100*fratio_ani[1, 1, [0, 2, 3, 5]],
+                         100*fratio_ani[1, 3, [0, 2, 3, 5]],
+                         100 * fratio_ani[0, 3:6, [0, 3, 5]][
+                             np.logical_not(np.isnan(100 * fratio_ani[0, 3:6, [0, 3, 5]]))]],
+                         xlabels=['Day -1', 'Day 1', 'Days 1-7 Neutral'],
+                          ylabel='Freezing (%)', alpha=0.5)
+axab.set_title('Anisomycin Mice')
 
 
 ##  Now between day -1 and day 1 for each group, shock arena only

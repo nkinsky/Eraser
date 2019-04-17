@@ -18,6 +18,7 @@ import session_directory as sd
 import eraser_reference as err
 
 sd.make_session_list()  # update session list
+plt.rcParams['pdf.fonttype'] = 42
 
 
 def display_frame(ax, vidfile):
