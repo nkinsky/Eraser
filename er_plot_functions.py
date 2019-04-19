@@ -18,6 +18,7 @@ import session_directory as sd
 import eraser_reference as err
 import scipy as sp
 sd.make_session_list()  # update session list
+plt.rcParams['pdf.fonttype'] = 42
 
 
 def display_frame(ax, vidfile):
@@ -518,7 +519,7 @@ def write_all_freezing(fratio_all, filepath, days=[-2, -1, 4, 1, 2, 7]):
         writer.writerows(fratio_all[1, :, :].T)
 
 
-def plot_overlaps(overlaps):
+def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7]):
     """
 
     :param overlaps: nmice x 5sesh x narenas ndarray with cell overlap ratios
@@ -538,10 +539,10 @@ def plot_overlaps(overlaps):
         lineshock, = ax.plot(np.arange(0, 5), np.nanmean(overlaps[:, :, 0], axis=0), 'b-')
     elif nmice == 1:
         lineshock, = ax.plot(np.arange(0, 5), overlaps[:, 0], 'bo-')
-    ax.set_xlabel('Lag (days)')
+    ax.set_xlabel('Day/session')
     ax.set_ylabel('Overlap Ratio (Shock Day -2 = ref)')
     ax.set_xticks([0, 1, 2, 3, 4])
-    ax.set_xticklabels(['1', '2', '3', '4', '9'])
+    ax.set_xticklabels([str(sesh) for sesh in days])
 
     if narenas == 2:
         if nmice != 1:
