@@ -828,5 +828,6 @@ def DI_CC_scatter_2(mice1,mice2):
 if __name__ == '__main__':
     import eraser_reference as err
     DI_CC_scatter_2(err.ani_mice_good_2, err.ani_mice_good_2)
+    # test comment by evan
 
     pass
