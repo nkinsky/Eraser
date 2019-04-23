@@ -257,7 +257,7 @@ def get_pos(dir_use):
         pos_file = path.join(dir_use + '\FreezeFrame', 'pos.csv')
         temp = pd.read_csv(pos_file, header=None)
         pos = temp.as_matrix()
-    except FileNotFoundError:  # look in base directory if above is missing
+    except IOError:  # look in base directory if above is missing # FileNotFoundError is IOError in earlier versions
         pos_file = path.join(dir_use, 'pos.csv')
         temp = pd.read_csv(pos_file, header=None)
         pos = temp.as_matrix()
@@ -323,7 +323,7 @@ def get_timestamps(dir_use):
     try:
         time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index*.csv'))
         temp = pd.read_csv(time_file[0], header=None)
-    except FileNotFoundError:
+    except IOError:  # FileNotFoundError is IOError in earlier versions
         time_file = glob(path.join(dir_use, '*Index*.csv'))
         temp = pd.read_csv(time_file[0], header=None)
 
@@ -379,7 +379,7 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
                                            min_freeze_duration=min_freeze_duration,
                                            arena=arena, pix2cm=pix2cm)[0]
                 fratios[ida, idd] = freezing.sum()/freezing.__len__()
-            except (FileNotFoundError, IndexError, TypeError):
+            except (IOError, IndexError, TypeError):  # FileNotFoundError is IOError in earlier versions
                 # print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
                 print(['Unknown file missing and/or IndexError for ' + mouse + ' ' + arena + ' ' + str(day)])
                 print('Freezing left as NaN for this session')
