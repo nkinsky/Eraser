@@ -9,7 +9,7 @@ import numpy as np
 
 def find_epochs(timeseries, thresh=np.finfo(float).eps, omitends=False):
     """
-    Get continuous epochs in timeseries that are above thresh
+    Get continuous epochs in timeseries that are above a threshold
     :param timeseries: numpy array of values
     :param thresh: value to threshold timeseriew at (default = epsilon)
     :param omitends: include epochs at beginning or end of timeseries
@@ -23,7 +23,7 @@ def find_epochs(timeseries, thresh=np.finfo(float).eps, omitends=False):
     offsets = np.where(np.bitwise_not(delta_overthresh)) - 1
     nepochs = onsets.shape[0]
 
-    threshepochs = np.zeros((onsets.shape[0],1))
+    threshepochs = np.zeros((onsets.shape[0], 1))
     if nepochs > 1:
         threshepochs[:, 0] = onsets
         if offsets.shape[1] == nepochs:
@@ -31,7 +31,6 @@ def find_epochs(timeseries, thresh=np.finfo(float).eps, omitends=False):
         elif offsets.shape[1] == nepochs - 1:
             threshepochs[0:-1, 2] = offsets
             threshepochs[:, -1] = timeseries.shape[0]
-
 
     if omitends:
         if overthresh(-1):
