@@ -16,31 +16,68 @@ def find_epochs(timeseries, thresh=np.finfo(float).eps, omitends=False):
     :return: epochs: nepochs x 2 ndarray with start and end indices of each epoch above thresh
     """
 
-    overthresh = np.greater_equal(timeseries, thresh)  # what is this?
+    overthresh = np.greater_equal(timeseries, thresh)  # takes a timeseries containing zeros and ones that indicate when a cell is firing and returns a boolean value corresponding to whether that cell was active or not?
 
-    delta_overthresh = np.diff(np.concatenate(timeseries, np.zeros(1)))
-    onsets = np.where(delta_overthresh)
-    offsets = np.where(np.bitwise_not(delta_overthresh)) - 1
-    nepochs = onsets.shape[0]
+    delta_overthresh = np.diff(np.concatenate((np.zeros(1), overthresh))) # creates an array that uses a 1 to delineate when cells come online; a -1 for when cells go offline; and a 0 when cells are not changing their state
+    onsets = np.where(delta_overthresh == 1)[0] # creates an array containing the time points during which a cell is coming online
+    offsets = np.where(delta_overthresh == - 1)[0] - 1 # creates an array containing the time points during which a cell goes offline
+    nepochs = onsets.shape[0] # calculates the number of onsets there are and returns an integer that represents the total number of calcium events that occured
 
-    threshepochs = np.zeros((onsets.shape[0], 1))
+    threshepochs = np.zeros((onsets.shape[0], 2)) # creates an array with two columns and as many rows as there are epochs
+    # makes sure onsets == offsets i.e if you end in an offset make sure that you have the same numbers of corresponding onsets
     if nepochs > 1:
         threshepochs[:, 0] = onsets
-        if offsets.shape[1] == nepochs:
+        if offsets.shape[0] == nepochs:
             threshepochs[:, 1] = offsets
-        elif offsets.shape[1] == nepochs - 1:
-            threshepochs[0:-1, 2] = offsets
-            threshepochs[:, -1] = timeseries.shape[0]
+        elif offsets.shape[0] == nepochs - 1: #if there is an overthreshold at the end of the video add an offset corresponding to the end of the timeseries
+            threshepochs[0:-1, 1] = offsets
+            threshepochs[-1, 1] = timeseries.shape[0]
 
     if omitends:
-        if overthresh(-1):
-            nepochs = nepochs -1
+        if overthresh[-1]: #if overthresh at the end of the video
+            nepochs = nepochs - 1 #delete the last epoch
             threshepochs = threshepochs[0:-1, :]
 
-        if overthresh(0):
-            nepochs = nepochs - 1
+        if overthresh[0]: #if overthresh at the beginning of the video
+            nepochs = nepochs - 1 #delete the first epoch
             threshepochs = threshepochs[1:, :]
 
     epochs = threshepochs
 
     return epochs
+
+
+def get_sampling_rate(PF):
+    try:
+        sr_image = PF.sr_image
+    except(AttributeError):
+        diff_1 = len(PF.PSAbool_align[0]) - 6000
+        diff_2 = len(PF.PSAbool_align[0]) - 12000
+        if abs(diff_1) > abs(diff_2):
+            sr_image = 20
+        if abs(diff_2) > abs(diff_1):
+            sr_image = 10
+    # If sr_image is not found in PF print out a warning to the screen
+        print("sample rate could not be located in PF")
+    return sr_image
+
+#def get_event_rate( )
+
+
+
+if __name__ == '__main__':
+    from Placefields import load_pf
+    PF = load_pf("Marble24", "Shock", "-1", pf_file='placefields_cm1_manlims.pkl')
+    ans = get_sampling_rate(PF)
+    #find_epochs(PF.PSAbool_align[0,:])
+    # test comment by evan
+    pass
+
+# import session_directory as sd
+# import os
+# import pickle
+# dir_use = sd.find_eraser_directory('Marble24','Shock','-1')
+# os.path.join(dir_use,'placefields_cml_manlims.pkl')
+# pf_file = os.path.join(dir_use, 'placefields_cm1_manlims.pkl')
+# with open(pf_file, 'rb') as file:
+#     PF = pickle.load(file)

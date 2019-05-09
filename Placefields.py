@@ -151,7 +151,7 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5,
     # save variables to working dirs as .pkl files in PFobject
     PFobj = PlaceFieldObject(tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
                  xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
-                 speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, list_dir, nshuf)
+                 speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, list_dir, nshuf, sr_image)
     PFobj.save_data(filename=save_file)
 
     return occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, tcounts, xrun, yrun, PSAboolrun, pval
@@ -392,7 +392,7 @@ class PlaceFieldObject:
     def __init__(self, tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
                  xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
                  speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day,
-                 list_dir, nshuf):
+                 list_dir, nshuf, sr_image):
         self.tmap_us = tmap_us
         self.tmap_sm = tmap_gauss
         self.xrun = xrun
@@ -419,6 +419,7 @@ class PlaceFieldObject:
         self.day = day
         self.list_dir = list_dir
         self.nshuf = nshuf
+        self.sr_image = sr_image
 
     def save_data(self, filename='placefields_cm1.pkl'):
         dir_use = get_dir(self.mouse, self.arena, self.day, self.list_dir)

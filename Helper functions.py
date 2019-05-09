@@ -6,6 +6,6 @@ os.path.join(dir_use,'placefields_cml_manlims.pkl')
 pf_file = os.path.join(dir_use, 'placefields_cm1_manlims.pkl')
 with open(pf_file, 'rb') as file:
     PF = pickle.load(file)
-CA = PF.PSAbool
+
 
 
