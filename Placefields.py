@@ -454,5 +454,5 @@ if __name__ == '__main__':
     # tcounts, xrun, yrun, PSAbool = placefields(
     #     'Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories', nshuf=10)
     # PFo.pfscroll()
-    PF = load_pf('Marble07', 'Open', -2)
+    PF = load_pf('Marble24', 'Shock', -1)
     pass
