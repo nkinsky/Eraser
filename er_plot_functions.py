@@ -19,7 +19,7 @@ import eraser_reference as err
 import scipy as sp
 sd.make_session_list()  # update session list
 plt.rcParams['pdf.fonttype'] = 42
-
+import helpers as hp
 
 def display_frame(ax, vidfile):
 
