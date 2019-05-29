@@ -33,8 +33,9 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2):
     :param day1:
     :param arena2: session 2 day/arena
     :param day2:
-    :return: neuron_map: an array the length of the number of neurons in session1. zeros indicate
-    that neuron has no matched counterpart in session2.
+    :return: neuron_map: an array the length of the number of neurons in session1. NaNs indicate
+    that neuron has no matched counterpart in session2. numbers indicate index of neuron in session2
+    that matches session1 neuron.
     """
 
     make_session_list()  # Initialize session list
@@ -109,7 +110,7 @@ def get_overlap(mouse, arena1, day1, arena2, day2):
             overlap_ratio_max/min: same as above but divided by max/min number
             of cells active in either session
     """
-    neuron_map  = get_neuronmap(mouse, arena1, day1, arena2, day2)
+    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2)
     reg_session = sd.find_eraser_session(mouse, arena2, day2)
     good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
 
