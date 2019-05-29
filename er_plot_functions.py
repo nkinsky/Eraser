@@ -34,15 +34,23 @@ def display_frame(ax, vidfile):
     ax.imshow(vid[0])
 
 
-def plot_trajectory(ax, posfile):
+def plot_trajectory(ax, posfile, xcorr=0, ycorr=0):
     """
     For plotting mouse trajectories.
     :param
-        pos: nparray of x/y mouse location values
+        ax: axes to plot into
+        posfile: location of mouse's csv position file
+        xcorr, ycorr: x and y values to subtract from all values before plotting
     :return:
         ax: numpy axes!
     """
     pos = pd.read_csv(posfile, header=None)
+
+    # adjust data if specified
+    if xcorr != 0:
+        pos.iloc[0, :] = pos.iloc[0, :] - xcorr
+    if ycorr != 0:
+        pos.iloc[1, :] = pos.iloc[1, :] - ycorr
     ax = pos.T.plot(0, 1, ax=ax, legend=False)
 
     return ax
@@ -74,30 +82,34 @@ def get_bad_epochs(mouse, arena, day):
     return bad_epochs
 
 
-def plot_frame_and_traj(ax, dir_use):
+def plot_frame_and_traj(ax, dir_use, plot_frame=True, xcorr=0, ycorr=0):
 
     """
     Plot mouse trajectory on top of the video frame
     :param
+        ax: axes to plot into
         dir: directory housing the pos.csv and video tif file
+        plot_frams: True = plot AVI frame, False = plot trajectory only
     :return:
     """
     pos_location = glob(path.join(dir_use + '\FreezeFrame', 'pos.csv'))
     avi_location = glob(path.join(dir_use + '\FreezeFrame', '*.avi'))
 
     try:
-        display_frame(ax, avi_location[0])
-        xlims = ax.get_xlim()
-        ylims = ax.get_ylim()
-        plot_trajectory(ax, pos_location[0])
-        ax.set_xlim(xlims)
-        ax.set_ylim(ylims)
-    except IndexError:
-        plot_trajectory(ax, pos_location[0])
+        if plot_frame:
+            display_frame(ax, avi_location[0])
+            xlims = ax.get_xlim()
+            ylims = ax.get_ylim()
+        plot_trajectory(ax, pos_location[0], xcorr=xcorr, ycorr=ycorr)
+        if plot_frame:
+            ax.set_xlim(xlims)
+            ax.set_ylim(ylims)
+    except IndexError:  # plot just the trajectory if the avi file is missing
+        plot_trajectory(ax, pos_location[0], xcorr=xcorr, ycorr=ycorr)
 
 
 def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
-                         list_dir='E:\Eraser\SessionDirectories', disp_fratio=False):
+                         disp_fratio=False):
     """
     Plot mouse trajectory for each session
     :param
@@ -109,7 +121,7 @@ def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'S
     """
     nsesh = len(day_des)
     narena = len(arenas)
-    fig, ax = plt.subplots(narena, nsesh, figsize=(12.7, 4.8))
+    fig, ax = plt.subplots(narena, nsesh, figsize=(12.7, 4.8), squeeze=False)
 
     # Iterate through all sessions and plot stuff
     for idd, day in enumerate(day_des):
@@ -119,6 +131,7 @@ def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'S
 
                 # Label stuff
                 ax[ida, idd].set_xlabel(str(day))
+
                 if idd == 0:
                     ax[ida, idd].set_ylabel(arena)
                 if ida == 0 and idd == 0:
@@ -163,9 +176,54 @@ def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'S
     return fig, ax
 
 
+def plot_trajectory_overlay(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
+                         xmin=False, ymin=False, xlim=False, ylim=False):
+    """
+    Plot mouse trajectory for each session
+    :param
+        mouse: name of mouse
+        day_des: days to plot (day 0 = shock day, day -2 = 2 days before shock, 4 = 4 hr after shock (special case))
+        arenas: 'Open' and/or 'Shock'
+        xmin, ymin: #arenas by #days arrays or lists of minimum x/y values. False = don't adjust
+        xlim, ylim: limits of x and y data you want to set as plotted. False = don't adjust.
+    :return: h: figure handle
+    """
+    nsesh = len(day_des)
+    narena = len(arenas)
+
+    # Allocate xmin and ymin to zero if not designated
+    if not xmin:
+        xmin = np.zeros((narena, nsesh))
+    if not ymin:
+        ymin = np.zeros((narena, nsesh))
+
+    # Cast xmin and ymin as 2d ndarrays for later
+    xmin = np.reshape(xmin, (1, -1))
+    ymin = np.reshape(ymin, (1, -1))
+
+    fig, ax = plt.subplots(1, narena, figsize=(2.3, narena*2.3), squeeze=False)
+
+    # Iterate through all sessions and plot stuff
+    for ida, arena in enumerate(arenas):
+        for idd, day in enumerate(day_des):
+            dir_use = get_dir(mouse, arena, day)
+            plot_frame_and_traj(ax[0, ida], dir_use, plot_frame=False, xcorr=xmin[ida, idd],
+                                ycorr=ymin[ida, idd])
+        # set x and y limits
+        if xlim is not False:
+            ax[0, ida].set_xlim(xlim)
+        if ylim is not False:
+            ax[0, ida].set_ylim(ylim)
+
+    # resize figure
+    fig.set_size_inches(6.2, 5.7)
+
+    return fig, ax
+
+
 def axis_off(ax):
     """
-    Turn off x and y axes and tickmarks
+    Turn off all x and y axes and all tickmarks. Same as axis off command in MATLAB
     :param ax: axes handle
     :return:
     """
@@ -836,12 +894,12 @@ def sanitycheck(file):
     #hist = hlp.plot_prob_hist(im_data['ans'])
 
 
-
 if __name__ == '__main__':
     import eraser_reference as err
     DI_CC_scatter_2(err.ani_mice_good_2, err.ani_mice_good_2)
     #on_or_off_single("Marble24")
     # test comment by evan
     #disc = sanitycheck("disc_score_raw.mat")
+
 
     pass

@@ -91,7 +91,7 @@ def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     nneurons2 = ct.get_num_neurons(reg_session['Animal'], reg_session['Date'],
                                    reg_session['Session'])
 
-    new_ind = np.where(np.isin(np.arange(0,nneurons2), neuron_map) == False)[0]
+    new_ind = np.where(np.isin(np.arange(0,nneurons2), neuron_map) is False)[0]
 
     return good_map_bool, silent_ind, new_ind
 

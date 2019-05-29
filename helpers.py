@@ -7,6 +7,7 @@ General helper functions
 import numpy as np
 import matplotlib.pyplot as plt
 
+
 def find_epochs(timeseries, thresh=np.finfo(float).eps, omitends=False):
     """
     Get continuous epochs in timeseries that are above a threshold
@@ -45,6 +46,32 @@ def find_epochs(timeseries, thresh=np.finfo(float).eps, omitends=False):
     epochs = threshepochs
 
     return epochs
+
+
+def set_all_lims(ax, xlims, ylims):
+    """
+    Sets all axes to the same limits
+    :param ax: matplot.pyplot axes
+    :param xlims: 1 x 2 array.
+    :param ylims: 1 x 2 array
+    :return:
+    """
+    for a in ax.reshape(-1):
+        a.set_xlim(xlims)
+        a.set_ylim(ylims)
+
+
+def set_all_lim_range(ax, range, xmin, ymin):
+    """
+    Sets all axes to have the same range of values in x and y directions but with different start and ends points.
+    :param ax: matplot.pyplot axes
+    :param range: 1 x 2 array with x, y range
+    :param xmin/ymin: #axes array with x and y min values
+    :return:
+    """
+    for ida, a in enumerate(ax.reshape(-1)):
+        a.set_xlim([xmin[ida], range[0] + xmin[ida]])
+        a.set_ylim([ymin[ida], range[1] + ymin[ida]])
 
 
 def get_sampling_rate(PF):
@@ -118,3 +145,4 @@ if __name__ == '__main__':
 # pf_file = os.path.join(dir_use, 'placefields_cm1_manlims.pkl')
 # with open(pf_file, 'rb') as file:
 #     PF = pickle.load(file)
+
