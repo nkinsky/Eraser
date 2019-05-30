@@ -381,7 +381,7 @@ def get_timestamps(dir_use):
     try:
         time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index*.csv'))
         temp = pd.read_csv(time_file[0], header=None)
-    except IOError:  # FileNotFoundError is IOError in earlier versions
+    except (IndexError, FileNotFoundError, IOError):  # FileNotFoundError is IOError in earlier versions
         time_file = glob(path.join(dir_use, '*Index*.csv'))
         temp = pd.read_csv(time_file[0], header=None)
 
@@ -884,6 +884,6 @@ def DI_CC_scatter_2(mice1,mice2):
 
 if __name__ == '__main__':
     import eraser_reference as err
-    plot_traj_overlay('Marble24', arenas=['Open'], day_des=['-2'], xmin=18)
+    # plot_traj_overlay('Marble24', arenas=['Open'], day_des=['-2'], xmin=18)
 
     pass
