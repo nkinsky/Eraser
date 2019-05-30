@@ -19,7 +19,7 @@ import eraser_reference as err
 import scipy as sp
 sd.make_session_list()  # update session list
 plt.rcParams['pdf.fonttype'] = 42
-import helpers as hp
+import helpers as hlp
 
 def display_frame(ax, vidfile):
 
@@ -790,20 +790,20 @@ def on_or_off_single(mouse):
     cc_turn_on_total = 0
     cc_turn_off_total = 0
     cc_turn_both_total = 0
-    for idx, x in enumerate(list(range(3, 6))):
+    for idx, x in enumerate(list(range(-2, 6))):
         cc_turn_on = 0
         cc_turn_off = 0
         cc_turn_both = 0
-        for c in list(range(len(im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][x][:,0]))):
-            if im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][x][c, 0] > 0 and im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][x][c, 1] == 0:
+        for c in list(range(len(im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][idx][:,0]))):
+            if im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][idx][c, 0] > 0 and im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][idx][c, 1] == 0:
                 cc_turn_off += 1
                 cc_turn_off_total += 1
-            if im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][x][c, 0] == 0 and im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][x][c, 1] > 0:
+            if im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][idx][c, 0] == 0 and im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][idx][c, 1] > 0:
                 cc_turn_on += 1
                 cc_turn_on_total += 1
-            if im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][x][c, 0] > 0 and im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][x][c, 1] > 0:
-                    cc_turn_both += 1
-                    cc_turn_both_total += 1
+            if im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][idx][c, 0] > 0 and im_data['maprate'][im_data['maprate']['animal'] == mouse]['difrate'][idx][c, 1] > 0:
+                cc_turn_both += 1
+                cc_turn_both_total += 1
         values_off[0, idx] = cc_turn_off
         values_on[0, idx] = cc_turn_on
         values_both[0, idx] = cc_turn_both
@@ -881,9 +881,22 @@ def DI_CC_scatter_2(mice1,mice2):
     plt.show()
     return Corrcoef
 
+def sanitycheck(file):
+ # Importing files from matlab - look in placefields function in Placefields file, snippets here
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import scipy.io as sio
+    from os import path
+    dir_use = "E:\Evan\Figures\DI_Scatter"
+    im_data_file = path.join(dir_use, file)
+    im_data = sio.loadmat(im_data_file)  # This imports AL
+    return im_data['ans']
+    #hist = hlp.plot_prob_hist(im_data['ans'])
+
 
 if __name__ == '__main__':
     import eraser_reference as err
-    # plot_traj_overlay('Marble24', arenas=['Open'], day_des=['-2'], xmin=18)
+    DI_CC_scatter_2(err.ani_mice_good_2, err.ani_mice_good_2)
+
 
     pass

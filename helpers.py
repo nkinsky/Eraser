@@ -88,15 +88,52 @@ def get_sampling_rate(PF):
         print("sample rate could not be located in PF")
     return sr_image
 
-#def get_event_rate( )
+def get_eventrate(PSAbool_align,fps):
+    """
+    gets event rate and event probability for calcium rasters
+    :param timeseries: boolean
+    :return:
+    """
+    event_rate = []
+    event_prob = []
+    for x in list(range(len(PSAbool_align))):
+        epochs = find_epochs(PSAbool_align[x,:])
+        active_frames = 0
+        total_frames = len(PSAbool_align[x,:])
+        transients = len(epochs)
+        for x in range(len(epochs)):
+            active_frames += epochs[x,1] - epochs[x,0]
+        event_rate += [transients/(total_frames/(60*fps))] # transients per minute
+        event_prob += [(active_frames/total_frames)*100]
+    event_rate = np.array(event_rate)
+    event_prob = np.array(event_prob)
+    return event_rate, event_prob
 
-
+def plot_prob_hist(array):
+    weights = np.ones_like(array) / float(len(array))
+    n, bins, patches = plt.hist(abs(array), bins=10, range=(0, 1), weights=weights)
+    plt.show()
+    return n, bins, patches
+# def plot_ERvsEP(ER,EP):
+#
+#     PF = load_pf(str(mouse), "Shock", str(x), pf_file='placefields_cm1_manlims.pkl')
+#     data += [gen_ERvsRP(PF.PSAbool_align[0,:])]
+#     fig = plt.figure()
+#     ax = fig.add_subplot(1, 1, 1, facecolor="1.0")
+#     x, y = data
+#     ax.scatter(x, y)
+#     plt.show()
 
 if __name__ == '__main__':
+    import matplotlib.pyplot as plt
     from Placefields import load_pf
     PF = load_pf("Marble24", "Shock", "-1", pf_file='placefields_cm1_manlims.pkl')
     ans = get_sampling_rate(PF)
-    #find_epochs(PF.PSAbool_align[0,:])
+    x , y = get_eventrate(PF.PSAbool_align, ans)
+    fig = plt.figure()
+    ax = fig.add_subplot(1, 1, 1, facecolor="1.0")
+    ax.scatter(x, y)
+    plt.show()
     # test comment by evan
     pass
 
