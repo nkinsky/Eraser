@@ -6,7 +6,7 @@ import helpers as hlp
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import er_plot_functions as er
-
+import scipy as sp
 
 def get_DI_scores(mouse, arena1, day1, arena2, day2):
     """
@@ -52,9 +52,9 @@ def get_on_off_cells(mouse, arena1, day1, arena2, day2):
      reg_session = sd.find_eraser_session(mouse, arena2, day2)
      good_map_bool, silent_ind, new_ind = pfs.classify_cells(neuron_map, reg_session)
 
-     both_cells = int(sum(good_map_bool == True))  #good_map_bool == true sum will yield total number of neurons that stayed on in both sessions
-     on_cells = len(new_ind)  #len of new_ind corresponds to the number of new neurons appearing in session 2
-     off_cells = len(silent_ind)  #len of silent_ind corresponds to the number of new neurons appearing in session 2
+     both_cells = int(sum(good_map_bool == True))  # good_map_bool == true sum will yield total number of neurons that stayed on in both sessions
+     on_cells = len(new_ind)  # len of new_ind corresponds to the number of new neurons appearing in session 2
+     off_cells = len(silent_ind)  # len of silent_ind corresponds to the number of new neurons appearing in session 2
 
      return both_cells, on_cells, off_cells
 
@@ -64,24 +64,27 @@ def DI_CC_scatter(mice):
     ax = fig.add_subplot(1, 1, 1, facecolor="1.0")
     DIarray_total = []
     on_off_norm_total = np.empty((nmice, 3))
-    id = 0
+    idc = 0
+    idr = 0
     days = [1, 2, 7]
     for mouse in mice:
         for day in days:
-        DIarray =[]
-         #this should spit out the mouse with issues, then you can zero in after that via debugging
-         #(make sure to comment out try/except statement first)
-        try:
-            DIval = DIFreeze(mouse, day)
+            DIarray =[]
+            # this should spit out the mouse with issues, then you can zero in after that via debugging
+            # (make sure to comment out try/except statement first)
+            #try:
+            DIval = er.DIFreeze(mouse, [day])
             DIarray += DIval
             DIarray_total += DIval
             cc_both, cc_on, cc_off = get_on_off_cells(mouse, "Open", day, "Shock", day)
             on_off_norm = np.divide((cc_on + cc_off), (cc_on + cc_off + cc_both))
-            on_off_norm_total[id, :] = on_off_norm
+            on_off_norm_total[idr, idc] = on_off_norm
             ax.scatter(DIarray, on_off_norm)
-        except ValueError:
-            print('Error in ' + mouse1)
-        id += 1
+            #except ValueError:
+                #print('Error in ' + mouse)
+            idc += 1
+        idc = 0
+        idr += 1
     title = input("What is your title?")
     plt.title(title)
     plt.xlabel("DI_Freeze")
@@ -103,12 +106,12 @@ def DI_CC_scatter(mice):
 
 if __name__ == '__main__':
     #DIscores = get_DI_scores('Marble24', 'Shock', -2, 'Shock', -1)
-    cell_types = get_on_off_cells('Marble24', 'Open', -1, 'Shock', -1)
+    #cell_types = get_on_off_cells('Marble24', 'Open', 7, 'Shock', 7)
     #hlp.plot_prob_hist(abs(DIscores))
     #plt.hist(abs(DIscores), bins = 10, range=(0,1), density = True)
     # disc = er.sanitycheck("disc_score_raw.mat")
     # fig = plt.scatter(DIscores, disc)
     # plt.show()
-
+    DI_CC_scatter(["Marble12", "Marble24", "Marble27", "Marble07"])
 
 pass
