@@ -790,7 +790,7 @@ def on_or_off_single(mouse):
     cc_turn_on_total = 0
     cc_turn_off_total = 0
     cc_turn_both_total = 0
-    for idx, x in enumerate(list(range(-2, 6))):
+    for idx, x in enumerate([1, 2, 7]):
         cc_turn_on = 0
         cc_turn_off = 0
         cc_turn_both = 0
@@ -896,7 +896,7 @@ def sanitycheck(file):
 
 if __name__ == '__main__':
     import eraser_reference as err
-    DI_CC_scatter_2(err.ani_mice_good_2, err.ani_mice_good_2)
+    DI_CC_scatter_2(err.discriminators, err.discriminators_dan)
     #on_or_off_single("Marble24")
     # test comment by evan
     #disc = sanitycheck("disc_score_raw.mat")
