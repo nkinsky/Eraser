@@ -381,7 +381,7 @@ def get_timestamps(dir_use):
     try:
         time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index*.csv'))
         temp = pd.read_csv(time_file[0], header=None)
-    except IOError:  # FileNotFoundError is IOError in earlier versions
+    except (IndexError, FileNotFoundError, IOError):  # FileNotFoundError is IOError in earlier versions
         time_file = glob(path.join(dir_use, '*Index*.csv'))
         temp = pd.read_csv(time_file[0], header=None)
 
@@ -900,6 +900,7 @@ if __name__ == '__main__':
     #on_or_off_single("Marble24")
     # test comment by evan
     #disc = sanitycheck("disc_score_raw.mat")
+    DI_CC_scatter_2(err.ani_mice_good_2, err.ani_mice_good_2)
 
 
     pass

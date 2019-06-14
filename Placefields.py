@@ -450,10 +450,6 @@ class PlaceFieldObject:
 
 
 if __name__ == '__main__':
-    # placefields('Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories')
-    # occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, \
-    # tcounts, xrun, yrun, PSAbool = placefields(
-    #     'Marble07', 'Open', -2, list_dir=r'C:\Eraser\SessionDirectories', nshuf=10)
-    # PFo.pfscroll()
-    PF = load_pf('Marble24', 'Shock', -1)
+    placefields('Marble21', 'Open', 1, cmperbin=1, save_file='placefields_cm1_autolims.pkl',
+                 nshuf=1)
     pass

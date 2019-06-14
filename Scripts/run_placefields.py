@@ -1,10 +1,39 @@
 """Scripts to run placefields on all sessions, making sure they are aligned between sessions within an arena
 """
+
+##
 import er_plot_functions as erp
 import helpers as hp
 import matplotlib.pyplot as plt
 import Placefields as pf
 import numpy as np
+import eraser_reference as err
+
+## Here is simple code to run placefields without aligning between sessions for a given mouse
+# See cells below for code to align open field data (trickier than shock due to small movements
+# of arena between days)
+arena_use = 'Shock'
+mice_use = err.ani_mice
+open_day_des = [-2, -1, 4, 0, 1, 2, 7]
+nshuf = 1
+pix2cm = erp.get_conv_factors(arena_use)
+good_bool = np.ones((len(mice_use), len(open_day_des))) == 0  # pre-allocate tracking boolean
+for idm, mouse_use in enumerate(mice_use):
+    print('Running un-aligned ' + arena_use + ' PFs for ' + mouse_use)
+    for idd, day in enumerate(open_day_des):
+
+        try:
+            pf.placefields(mouse_use, arena_use, day, cmperbin=1, save_file='placefields_cm1_autolims.pkl',
+                           nshuf=nshuf)
+            good_bool[idm, idd] = True
+        except:
+            good_bool[idm, idd] = False
+            print('Error for ' + mouse_use + ' day ' + str(day))
+
+
+## Shock arena PFs and alignment
+# Step one is to erp.plot_experiment_traj, ideally with a background image and make the limits the extent
+# of the arena (top of the walls). Once done, enter those coordinates into man_lims and run pf.placefields.
 
 ## Open field: 1st plot all trajectories for a mouse and then manually align them with the same range of x/y values
 mouse_use = 'Marble24'
