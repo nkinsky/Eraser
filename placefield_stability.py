@@ -77,10 +77,14 @@ def fix_neuronmap(map_import):
 
 def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     """
-    Classifies cells as good, silent, and new.
-    :param neuron_map:
-    :param overlap_thresh: not functional yet. default (eventually) = consider new/silent if 0.5 overlap or less
-    :return: good_map_bool, silent_ind, new_ind
+    Classifies cells as good, silent, and new based on the input mapping from session 1 to session 2 in neuron_map.
+    :param neuron_map: an ndarray (#neurons in session 1 x 1) with the neuron index in session 2 that maps to the
+                       index in session 1. NaN = no mapping/silent cell in session 2.
+    :param overlap_thresh: not functional yet. default (eventually) = consider new/silent if ROIs overlap less than
+                            overlap_thresh
+    :return: good_map_bool: boolean of the size of neuron_map for neurons validly mapped between sessions
+                silent_ind: indices of session 1 neurons that are not active/do not have a valid map in session 2.
+                new_ind: indices of session 2 neurons that do not appear in session 1.
     """
 
     # Get silent neurons
@@ -91,7 +95,7 @@ def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     nneurons2 = ct.get_num_neurons(reg_session['Animal'], reg_session['Date'],
                                    reg_session['Session'])
 
-    new_ind = np.where(np.isin(np.arange(0,nneurons2), neuron_map) is False)[0]
+    new_ind = np.where(np.invert(np.isin(np.arange(0, nneurons2), neuron_map)))[0]
 
     return good_map_bool, silent_ind, new_ind
 
