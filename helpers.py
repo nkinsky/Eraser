@@ -88,6 +88,7 @@ def get_sampling_rate(PF):
         print("sample rate could not be located in PF")
     return sr_image
 
+
 def get_eventrate(PSAbool_align,fps):
     """
     gets event rate and event probability for calcium rasters
@@ -109,6 +110,7 @@ def get_eventrate(PSAbool_align,fps):
     event_prob = np.array(event_prob)
     return event_rate, event_prob
 
+
 def plot_prob_hist(array):
     weights = np.ones_like(array) / float(len(array))
     n, bins, patches = plt.hist(abs(array), bins=10, range=(0, 1), weights=weights)
@@ -124,17 +126,48 @@ def plot_prob_hist(array):
 #     ax.scatter(x, y)
 #     plt.show()
 
+
+def sortPSA(PSAbool):
+
+    nneurons,_ = PSAbool.shape
+
+    # First identify active and inactive (perhaps not active after speed thresholding) neurons
+    inactive_neurons = np.where(np.invert(np.any(PSAbool, 1)))
+    active_neurons = np.where(np.any(PSAbool, 1))[0]
+
+    n_events = np.nonzero(PSAbool)  # get indices of all calcium events (1 = neuron#, 2 = frame#)
+
+    # Get time of first calcium event and sort
+    onset_frame = np.asarray([np.min(n_events[1][n_events[0] == neuron])
+                              for neuron in active_neurons])
+    sort_ind_active = np.argsort(onset_frame)
+    sort_ind = np.append(active_neurons[sort_ind_active], inactive_neurons)
+
+    PSAsort = PSAbool[sort_ind, :]
+
+    return PSAsort
+
+    return
+
 if __name__ == '__main__':
     import matplotlib.pyplot as plt
-    from Placefields import load_pf
-    PF = load_pf("Marble24", "Shock", "-1", pf_file='placefields_cm1_manlims.pkl')
-    ans = get_sampling_rate(PF)
-    x , y = get_eventrate(PF.PSAbool_align, ans)
-    fig = plt.figure()
-    ax = fig.add_subplot(1, 1, 1, facecolor="1.0")
-    ax.scatter(x, y)
-    plt.show()
-    # test comment by evan
+    import Placefields as pf
+    PF = pf.load_pf('Marble14', 'Shock', 2)
+    PSAbool2 = PF.PSAbool_align.copy()
+    PSAbool2[0:30, :] = False
+    fig, ax = plt.subplots(1, 2)
+    ax[0].imshow(sortPSA(PF.PSAbool_align), aspect='auto')
+    ax[1].imshow(sortPSA(PSAbool2), aspect='auto')
+
+    # from Placefields import load_pf
+    # PF = load_pf("Marble24", "Shock", "-1", pf_file='placefields_cm1_manlims.pkl')
+    # ans = get_sampling_rate(PF)
+    # x , y = get_eventrate(PF.PSAbool_align, ans)
+    # fig = plt.figure()
+    # ax = fig.add_subplot(1, 1, 1, facecolor="1.0")
+    # ax.scatter(x, y)
+    # plt.show()
+    # # test comment by evan
     pass
 
 # import session_directory as sd
