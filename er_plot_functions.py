@@ -21,6 +21,7 @@ sd.make_session_list()  # update session list
 plt.rcParams['pdf.fonttype'] = 42
 import helpers as hlp
 
+
 def display_frame(ax, vidfile):
 
     """
@@ -540,6 +541,9 @@ def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
         # min_freeze_duration = 10  # 2.67 sec at SR = 3.75
         pix2cm = 0.0969  # convert pixels to cm
         # SR = 3.75  # frames/sec
+
+    elif arena == 'Kelton':
+        pix2cm=0.13
 
     # velocity_threshold = vthresh/pix2cm  # in pixels/sec
     # velocity_threshold = 1.5  # cm/sec
