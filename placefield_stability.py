@@ -48,7 +48,10 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2):
     map_file = path.join(dir_use, reg_filename)
 
     # Load file in
-    map_data = sio.loadmat(map_file)
+    try:
+        map_data = sio.loadmat(map_file)
+    except TypeError:
+        map_data = sio.loadmat(map_file)
     map_import = map_data['neuron_map']['neuron_id'][0][0]  # Grab terribly formatted neuron map from matlab
 
     # Fix the map - spit out an array!

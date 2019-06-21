@@ -653,7 +653,7 @@ def DIhist(mice):
 
 if __name__ == '__main__':
     import eraser_reference as err
-    
+    get_all_freezing("Marble24", day_des=[1,2,7], arenas=['Shock'])
 
 
     pass
