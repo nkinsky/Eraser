@@ -440,16 +440,17 @@ class PlaceFieldObject:
         titles = ["Neuron " + str(n) for n in range(self.nneurons)]  # set up array of neuron numbers
 
         # Hijack Will's ScrollPlot function to make it through
+        lims = [[self.xEdges.min(), self.xEdges.max()], [self.yEdges.min(), self.yEdges.max()]]
         self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm),
                             current_position=current_position, n_frames=self.nneurons,
                             n_rows=1, n_cols=3, figsize=(17.2, 5.3), titles=titles,
                             x=self.pos_align[0, self.isrunning], y=self.pos_align[1, self.isrunning],
-                            PSAbool=self.PSAboolrun,
+                            traj_lims=lims, PSAbool=self.PSAboolrun,
                             tmap_us=self.tmap_us, tmap_sm=self.tmap_sm, mouse=self.mouse,
                             arena=self.arena, day=self.day)
 
 
 if __name__ == '__main__':
     placefields('Marble21', 'Open', 1, cmperbin=1, save_file='placefields_cm1_autolims.pkl',
-                 nshuf=1)
+                nshuf=1)
     pass

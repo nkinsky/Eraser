@@ -9,6 +9,9 @@ import matplotlib.pyplot as plt
 import csv
 import pandas as pd
 from os import path
+# # May need to add in the following code to make skvideo import properly
+# import skvideo
+# skvideo.setFFmpegPath(r'C:\Anaconda\envs\eraser\Lib\site-packages\skvideo\io')
 import skvideo.io
 from glob import glob
 from session_directory import find_eraser_directory as get_dir
@@ -106,11 +109,16 @@ def plot_frame_and_traj(ax, dir_use, plot_frame=True, xcorr=0, ycorr=0):
             ax.set_xlim(xlims)
             ax.set_ylim(ylims)
     except IndexError:  # plot just the trajectory if the avi file is missing
-        plot_trajectory(ax, pos_location[0], xcorr=xcorr, ycorr=ycorr)
+        try:
+            plot_trajectory(ax, pos_location[0], xcorr=xcorr, ycorr=ycorr)
+        except IndexError:
+            print('No position file present in ' + dir_use)
+
+    return
 
 
 def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
-                         disp_fratio=False):
+                         disp_fratio=False, plot_frame=False):
     """
     Plot mouse trajectory for each session
     :param
@@ -139,7 +147,7 @@ def plot_experiment_traj(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'S
                     ax[ida, idd].set_title(mouse)
 
                 axis_off(ax[ida, idd])
-                plot_frame_and_traj(ax[ida, idd], dir_use)
+                plot_frame_and_traj(ax[ida, idd], dir_use, plot_frame=plot_frame)
 
                 if disp_fratio:
 
@@ -237,6 +245,23 @@ def axis_off(ax):
         right='off',
         left='off',
         labelleft='off')
+
+
+def axis_on(ax):
+    """
+        Turn on all x and y axes and all tickmarks. Same as axis off command in MATLAB
+        :param ax: axes handle
+        :return:
+        """
+    ax.tick_params(
+        axis='both',  # changes apply to the x-axis
+        which='both',  # both major and minor ticks are affected
+        bottom='on',  # ticks along the bottom edge are off
+        top='on',  # ticks along the top edge are off
+        labelbottom='on',  # labels along the bottom edge are off
+        right='on',
+        left='on',
+        labelleft='on')
 
 
 def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, arena='Shock',
@@ -656,8 +681,8 @@ def DIhist(mice):
 
 
 if __name__ == '__main__':
-    import eraser_reference as err
-    
+    fig, ax = plt.subplots()
+    plot_frame_and_traj(ax, 'E:\\Eraser\\Control Group\\Marble6\\20180426_1_openfield\\FreezeFrame\\')
 
 
     pass
