@@ -685,4 +685,5 @@ if __name__ == '__main__':
     plot_frame_and_traj(ax, 'E:\\Eraser\\Control Group\\Marble6\\20180426_1_openfield\\FreezeFrame\\')
 
 
+
     pass
