@@ -31,8 +31,8 @@ import eraser_reference as err
 #             print('Error for ' + mouse_use + ' day ' + str(day))
 
 # 1st plot all trajectories for a mouse and then manually align them with the same range of x/y values
-mouse_use = 'Marble11'
-day_des = [-2, -1, 4, 0, 1, 2, 7]  # keep this as-is or lots of code will break
+mouse_use = 'Marble25'
+day_des = [-2, -1, 0, 4, 1, 2, 7]  # keep this as-is or lots of code will break
 arenas_use = ['Open', 'Shock']
 
 # 1) Plot all trajectories
@@ -40,33 +40,14 @@ fig, ax = erp.plot_experiment_traj(mouse_use, arenas=arenas_use, day_des=day_des
 fig.set_size_inches(17.5, 2.3*len(arenas_use))
 [erp.axis_on(a) for a in ax.reshape(-1)]
 
-# 2) Specify range of x/y values (same for all session) and xmin, ymin for each open session
-# Move around by hand to make occupancy match for each session
+# 2) Specify range of x/y values (same for all session)  for each open session
+# Guess at starting values here
 o_range = [105, 100]  # adjust to make maze cover middle 90% of limits
 o_xmin = [22, 15, 20, 16, 17, 18, 20]  # leave these alone
 o_ymin = [10, 13, 10, 10, 10, 8, 8]  # leave these alone
-hp.set_all_lim_range(ax[0], o_range, o_xmin, o_ymin)
+# hp.set_all_lim_range(ax[0], o_range, o_xmin, o_ymin)
 
-## 2.5) Set xmin, ymin, and range for shock session
-# IMPORTANT NOTE: these should all be the same for all sessions! Camera is in the exact same place!
-s_range = [225, 225]
-s_xmin_use = 50
-s_ymin_use = 10
-s_xmin = np.ones(len(day_des))*s_xmin_use
-s_ymin = np.ones(len(day_des))*s_ymin_use
-hp.set_all_lim_range(ax[1], s_range, s_xmin, s_ymin)
-
-## 2.3) After adjusting/aligning by hand, run function to pull-out o_xmin and o_ymin
-xmin, ymin, _, _ = err.grab_ax_lims(ax[0])
-o_xmin = np.round(xmin)
-o_ymin = np.round(ymin)
-hp.set_all_lim_range(ax[0], o_range, o_xmin, o_ymin)
-
-# Print out for easy copying
-[int(x) for x in np.round(o_xmin)]
-[int(x) for x in np.round(o_ymin)]
-
-## Check your work if already ran
+# Check your work if already ran
 try:
     o_range, o_xmin, o_ymin, s_range, s_xmin, s_ymin = err.get_arena_lims(mouse_use)
 except:
@@ -74,6 +55,25 @@ except:
 
 hp.set_all_lim_range(ax[0], o_range, o_xmin, o_ymin)
 hp.set_all_lim_range(ax[1], s_range, s_xmin, s_ymin)
+
+## 2) Set xmin, ymin, and range for shock session
+# IMPORTANT NOTE: these should all be the same for all sessions! Camera is in the exact same place!
+s_range = [200, 200]
+s_xmin_use = 60
+s_ymin_use = 8
+s_xmin = np.ones(len(day_des))*s_xmin_use
+s_ymin = np.ones(len(day_des))*s_ymin_use
+hp.set_all_lim_range(ax[1], s_range, s_xmin, s_ymin)
+
+## 2.3) After adjusting/aligning neutral arena by hand, run function to pull-out o_xmin and o_ymin
+xmin, ymin, _, _ = err.grab_ax_lims(ax[0])
+o_xmin = np.round(xmin)
+o_ymin = np.round(ymin)
+hp.set_all_lim_range(ax[0], o_range, o_xmin, o_ymin)
+
+# Print out for easy copying
+print([int(x) for x in np.round(o_xmin)])
+print([int(y) for y in np.round(o_ymin)])
 
 ## Run checks on above work here
 # 3) Plot out data and check that it is well aligned by eye
@@ -91,40 +91,47 @@ for idd, day in enumerate(day_des[1:]):
 # 5) When done save at bottom of this file for each mouse in commented code - will need to input
 # when running Placefields.placefields to manually align data
 
-## Run placefields on all open field data!
-nshuf = 1
-o_pix2cm = erp.get_conv_factors('Open')
-o_range, o_xmin, o_ymin, _, _, _ = err.get_arena_lims(mouse_use)
-good_bool = np.ones(len(day_des)) == 0  # pre-allocate tracking boolean
-for idd, day in enumerate(day_des):
-    xlims_use = np.asarray([o_xmin[idd], o_xmin[idd] + o_range[0]])*o_pix2cm
-    ylims_use = np.asarray([o_ymin[idd], o_ymin[idd] + o_range[1]])*o_pix2cm
-    try:
-        pf.placefields(mouse_use, 'Open', day, cmperbin=1, lims_method=[[xlims_use[0], ylims_use[0]],
-                       [xlims_use[1], ylims_use[1]]], save_file='placefields_cm1_manlims_1shuf.pkl',
-                       nshuf=nshuf)
-        good_bool[idd] = True
-    except:
-        print('Error for ' + mouse_use + ' day ' + str(day))
-        good_bool[idd] = False
+## Run placefields on all sessions
 
-## Now run for all shock data!
-nshuf = 1
-o_pix2cm = erp.get_conv_factors('Open')
-s_pix2cm = erp.get_conv_factors('Shock')
-_, _, _, s_range, s_xmin, s_ymin = err.get_arena_lims(mouse_use)
-good_bool = np.ones(len(day_des)) == 0  # pre-allocate tracking boolean
-for idd, day in enumerate(day_des):
-    xlims_use = np.asarray([s_xmin[idd], s_xmin[idd] + s_range[0]])*s_pix2cm
-    ylims_use = np.asarray([s_ymin[idd], s_ymin[idd] + s_range[1]])*s_pix2cm
-    try:
-        pf.placefields(mouse_use, 'Shock', day, cmperbin=1, lims_method=[[xlims_use[0], ylims_use[0]],
-                       [xlims_use[1], ylims_use[1]]], save_file='placefields_cm1_manlims_1shuf.pkl',
-                       nshuf=nshuf)
-        good_bool[idd] = True
-    except:
-        print('Error for ' + mouse_use + ' day ' + str(day))
-        good_bool[idd] = False
+mice_use = err.all_mice_good
+nshuf = 1000
+
+nmice = mice_use.__len__()
+good_bool = np.zeros((nmice, 2, len(day_des)))
+
+for idm, mouse_use in enumerate(mice_use):
+    print('Running PFs for ' + mouse_use + ' with ' + str(nshuf) + ' shuffles')
+    # open field data first
+    # o_pix2cm = erp.get_conv_factors('Open')
+    # o_range, o_xmin, o_ymin, _, _, _ = err.get_arena_lims(mouse_use)
+    # good_bool = np.ones(len(day_des)) == 0  # pre-allocate tracking boolean
+    # for idd, day in enumerate(day_des):
+    #     xlims_use = np.asarray([o_xmin[idd], o_xmin[idd] + o_range[0]])*(o_pix2cm + 0.00001)  # 0.0001 ensures you don't end up with an integer value that could get rounded up or down to have different bins...
+    #     ylims_use = np.asarray([o_ymin[idd], o_ymin[idd] + o_range[1]])*(o_pix2cm + 0.00001)
+    #     try:
+    #         savename = 'placefields_cm1_manlims_' + str(nshuf) + 'shuf.pkl'
+    #         pf.placefields(mouse_use, 'Open', day, cmperbin=1, lims_method=[[xlims_use[0], ylims_use[0]],
+    #                        [xlims_use[1], ylims_use[1]]], save_file=savename, nshuf=nshuf)
+    #         good_bool[idm, 0, idd] = True
+    #     except:
+    #         print('Error for ' + mouse_use + ' day ' + str(day) + ': Neutral Arena')
+    #         good_bool[idm, 0, idd] = False
+
+    # Now run for all shock data!
+    s_pix2cm = erp.get_conv_factors('Shock')
+    _, _, _, s_range, s_xmin, s_ymin = err.get_arena_lims(mouse_use)
+    # good_bool = np.ones(len(day_des)) == 0  # pre-allocate tracking boolean
+    for idd, day in enumerate(day_des):
+        xlims_use = np.asarray([s_xmin[idd], s_xmin[idd] + s_range[0]])*s_pix2cm
+        ylims_use = np.asarray([s_ymin[idd], s_ymin[idd] + s_range[1]])*s_pix2cm
+        try:
+            savename = 'placefields_cm1_manlims_' + str(nshuf) + 'shuf.pkl'
+            pf.placefields(mouse_use, 'Shock', day, cmperbin=1, lims_method=[[xlims_use[0], ylims_use[0]],
+                           [xlims_use[1], ylims_use[1]]], save_file=savename, nshuf=nshuf)
+            good_bool[idm, 1, idd] = True
+        except:
+            print('Error for ' + mouse_use + ' day ' + str(day) + ': Shock Arena')
+            good_bool[idm, 1, idd] = False
 
 ## Check it on day -2 and day 2 sessions
 dayn2s = pf.load_pf(mouse_use, 'Shock', -2, pf_file='placefields_cm1_manlims_1shuf.pkl')

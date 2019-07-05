@@ -112,7 +112,11 @@ def plot_frame_and_traj(ax, dir_use, plot_frame=True, xcorr=0, ycorr=0):
         try:
             plot_trajectory(ax, pos_location[0], xcorr=xcorr, ycorr=ycorr)
         except IndexError:
-            print('No position file present in ' + dir_use)
+            try:
+                pos_location = glob(path.join(dir_use, 'pos.csv'))
+                plot_trajectory(ax, pos_location[0], xcorr=xcorr, ycorr=ycorr)
+            except IndexError:
+                print('No position file present in ' + dir_use)
 
     return
 
@@ -683,7 +687,5 @@ def DIhist(mice):
 if __name__ == '__main__':
     fig, ax = plt.subplots()
     plot_frame_and_traj(ax, 'E:\\Eraser\\Control Group\\Marble6\\20180426_1_openfield\\FreezeFrame\\')
-
-
 
     pass

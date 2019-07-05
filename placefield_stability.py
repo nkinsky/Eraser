@@ -112,8 +112,8 @@ def get_overlap(mouse, arena1, day1, arena2, day2):
     :param arena2:
     :param day2:
     :return: overlap_ratio1, overlap_ratio2, overlap_ratio_both:
-    #overlapping cells between sessions divided by the
-    the number of cells active in 1st/2nd/both sessions
+            # overlapping cells between sessions divided by the
+            the number of cells active in 1st/2nd/both sessions
             overlap_ratio_max/min: same as above but divided by max/min number
             of cells active in either session
     """
@@ -137,7 +137,7 @@ def get_overlap(mouse, arena1, day1, arena2, day2):
     return overlap_ratio1, overlap_ratio2, overlap_ratio_both, overlap_ratio_min, overlap_ratio_max
 
 
-def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2):
+def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
     """
     Gets placefield correlations between sessions. Note that
     :param mouse:
@@ -156,8 +156,8 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2):
     good_map = neuron_map[good_map_bool].astype(np.int64)
 
     # load in placefield objects between sessions
-    PF1 = pf.load_pf(mouse, arena1, day1, pf_file='placefields_cm1_manlims.pkl')
-    PF2 = pf.load_pf(mouse, arena2, day2, pf_file='placefields_cm1_manlims.pkl')
+    PF1 = pf.load_pf(mouse, arena1, day1, pf_file=pf_file)
+    PF2 = pf.load_pf(mouse, arena2, day2, pf_file=pf_file)
 
     # Identify neurons with proper mapping between sessions
     good_map_ind, _ = np.where(good_map_bool)
@@ -180,13 +180,16 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2):
     return corrs_us, corrs_sm
 
 
-def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7]):
+def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7],
+                 pf_file='placefields_cm1_manlims_1000shuf.pkl'):
     """
-    Get mean placefield correlations between all sessions
-    :param mouse:
-    :param arena1:
-    :param arena2:
-    :param days:
+    Get mean placefield correlations between all sessions. Note that arena1 and arena2 must have the same size occpupancy
+    maps already ran for each arena (tmap_us and tmap_sm arrays in Placefield object defined in Placefields.py)
+    :param mouse: str of mousename
+    :param arena1: str of arena1
+    :param arena2: str of arena2
+    :param days: list of ints of day. Valid options = [-2,-1, 0, 4, 1, 2, 7]
+    :param pf_file: filename for PF file to use. default = 'placefields_cm1_manlims_1000shuf.pkl'
     :return: corr_mean_us/sm: mean spearman correlation for placefields between sessions.
     ndays x ndays ndarray. rows = arena1, columns = arena2.
     """
@@ -199,11 +202,17 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
     # loop through each pair of sessions and get the mean correlation for each session
     for id1, day1 in enumerate(days):
         for id2, day2 in enumerate(days):
-            if id1 <= id2:  # Don't loop through things you don't have reg files for
+            if id1 < id2:  # Don't loop through things you don't have reg files for
                 try:
-                    corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2)
+                    corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file)
                     corr_mean_us[id1, id2] = corrs_us.mean(axis=0)
                     corr_mean_sm[id1, id2] = corrs_sm.mean(axis=0)
+                    if np.isnan(corrs_us.mean(axis=0)):
+                        print('NaN corrs in ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' vs. '
+                              + arena2 + ' day ' + str(day2) + ': INVESTIGATE!!!')
+                        print('Running with np.nan for now!')
+                        corr_mean_us[id1, id2] = np.nanmean(corrs_us, axis=0)
+                        corr_mean_sm[id1, id2] = np.nanmean(corrs_sm, axis=0)
                 except FileNotFoundError:
                     print('Missing pf files for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) +
                           ' to ' + arena2 + ' Day ' + str(day2))
@@ -315,7 +324,7 @@ def plot_confmat(corr_mean_mat, arena1, arena2, group_type, ndays=7, ax_use=None
 
 
 class PFCombineObject:
-    def __init__(self, mouse, arena1, day1, arena2, day2):
+    def __init__(self, mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
         self.mouse = mouse
         self.arena1 = arena1
         self.day1 = day1
@@ -323,8 +332,8 @@ class PFCombineObject:
         self.day2 = day2
 
         # load in place-field object information
-        self.PF1 = pf.load_pf(mouse, arena1, day1, pf_file='placefields_cm1_manlims.pkl')
-        self.PF2 = pf.load_pf(mouse, arena2, day2, pf_file='placefields_cm1_manlims.pkl')
+        self.PF1 = pf.load_pf(mouse, arena1, day1, pf_file=pf_file)
+        self.PF2 = pf.load_pf(mouse, arena2, day2, pf_file=pf_file)
 
         # Get mapping between arenas
         neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2)
@@ -351,11 +360,12 @@ class PFCombineObject:
         self.PSAalign2 = self.PF2.PSAbool_align[good_map, :]
 
         # Get correlations between sessions!
-        self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2)
+        self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
+                                                       pf_file=pf_file)
 
     def pfscroll(self, current_position=0):
         """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
-        and unsmoothed tmaps in another
+        and unsmoothed tmaps in another.
 
         :param current_position:
         :return:
@@ -365,6 +375,8 @@ class PFCombineObject:
         titles = ["Neuron " + str(n) for n in range(self.nneurons)]  # set up array of neuron numbers
 
         # Hijack Will's ScrollPlot function to make it through
+        lims1 = [[self.PF1.xEdges.min(), self.PF1.xEdges.max()], [self.PF1.yEdges.min(), self.PF1.yEdges.max()]]
+        lims2 = [[self.PF2.xEdges.min(), self.PF2.xEdges.max()], [self.PF2.yEdges.min(), self.PF2.yEdges.max()]]
         self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm,
                              plot_events_over_pos2, plot_tmap_us2, plot_tmap_sm2),
                             current_position=current_position, n_frames=self.nneurons,
@@ -378,21 +390,16 @@ class PFCombineObject:
                             tmap_us2=self.tmap2_us_reg, tmap_sm2=self.tmap2_sm_reg,
                             arena=self.PF1.arena, day=self.PF1.day, arena2=self.PF2.arena,
                             day2=self.PF2.day, mouse=self.PF1.mouse,
-                            corrs_us=self.corrs_us, corrs_sm=self.corrs_sm)
+                            corrs_us=self.corrs_us, corrs_sm=self.corrs_sm,
+                            traj_lims=lims1, traj_lims2=lims2)
 
 
 if __name__ == '__main__':
-
-    # neuron_map = get_neuronmap('Marble11', 'Shock', -2, 'Shock', -1)
-    # classify_cells(neuron_map)
-    # oratio1, oratio2, oratioboth = get_overlap('Marble11', 'Shock', -2, 'Shock', -1)
-
-    # NRK - need to compare the below to MATLAB!!! Also need to plot sessions side-by-side
-    # corrs_us, corrs_sm = pf_corr_bw_sesh('Marble11', 'Shock', -2, 'Shock', -1)
-    # t = np.mean(corrs_us)
-
-    # PFcomb = PFCombineObject('Marble11', 'Shock', -2, 'Shock', -1)
-    # PFcomb.pfscroll()
-    pf_corr_mean('Marble11', 'Shock', 'Shock', [-2, -1, 0, 4, 1, 2, 7])
+    # Marble07 -2 to -1 and 7 comes out as nan. -1 to 7 is one of only a few sessions pairs that don't turn out
+    # as nan. So, figure out what's happening!
+    # day -2 to -1: cell index 320 is nan - why?
+    # pf_corr_mean('Marble07', 'Shock', 'Shock', [-2, -1, 7])
+    pfcomb = PFCombineObject('Marble07', 'Shock', -2, 'Shock', -1)
+    pfcomb.pfscroll()
 
     pass

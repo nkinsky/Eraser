@@ -85,6 +85,8 @@ def plot_events_over_pos2(obj, ax_ind):
     psa_use = obj.PSAbool2[obj.current_position, :]
     obj.ax[ax_ind].plot(obj.x2, obj.y2, 'k-')
     obj.ax[ax_ind].plot(obj.x2[psa_use == 1], obj.y2[psa_use == 1], 'r*')
+    obj.ax[ax_ind].set_xlim(obj.traj_lims2[0])
+    obj.ax[ax_ind].set_ylim(obj.traj_lims2[1])
     obj.last_position = obj.n_frames - 1
     obj.ax[ax_ind].set_title(obj.arena2 + ' Day ' + str(obj.day2))
     # plt.axis('off')

@@ -1,18 +1,20 @@
 ## Placefield correlation figures/analysis
 
-
-## Step through each mouse/day and construct confusion matrices
 import eraser_reference as err
 import placefield_stability as pfs
 import numpy as np
 import matplotlib.pyplot as plt
 import os
 
+## Step through each mouse/day and construct confusion matrices
+
 # Variables to specify!
 # group_type = 'Control'  # 'Control'
 # mice = err.control_mice_good  # err.control_mice_good
-arena1 = 'Shock'
-arena2 = 'Shock'
+# arena1 = 'Shock'
+# arena2 = 'Shock'
+arena1 = 'Open'
+arena2 = 'Open'
 cmice = err.control_mice_good
 amice = err.ani_mice_good
 days = [-2, -1, 0, 4, 1, 2, 7]
@@ -32,7 +34,7 @@ for idm, mouse in enumerate(cmice):
 for idm, mouse in enumerate(amice):
     _, ani_corr_sm_mean_all[idm, :, :] = pfs.pf_corr_mean(mouse, arena1, arena2, days)
 
-# Scatterplot for each group independently
+## Scatterplot for each group independently
 pfs.plot_pfcorr_bygroup(cont_corr_sm_mean_all, arena1, arena2, 'Control', color='k',
                         group_desig=group_desig)
 pfs.plot_pfcorr_bygroup(ani_corr_sm_mean_all, arena1, arena2, 'Anisomycin', color='g',
@@ -50,6 +52,7 @@ pfs.plot_confmat(np.nanmean(cont_corr_sm_mean_all, axis=0), arena1, arena2, 'Con
 pfs.plot_confmat(np.nanmean(ani_corr_sm_mean_all, axis=0), arena1, arena2, 'Anisomycin',
                  ndays=ndays)
 
+##
 # Define groups for scatter plots
 # groups = np.ones_like(corr_sm_mean_all)*np.nan
 # groups[:, 0:2, 0:2] = 1  # 1 = before shock
