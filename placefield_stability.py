@@ -26,6 +26,7 @@ import eraser_reference as err
 import skimage as ski
 from skimage.transform import resize as sk_resize
 
+
 def get_neuronmap(mouse, arena1, day1, arena2, day2):
     """
     Get mapping between registered neurons from arena1/day1 to arena2/day2
@@ -177,8 +178,6 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
     # Step through each mapped neuron and get corrs between each
     rot = int(rot_deg/90)
 
-    if ski.__version__ < '0.16.0':
-        print('WARNING - using an old version of scikit-image - update to 0.16!')
     for idn, neuron in enumerate(good_map_ind):
         reg_neuron = good_map[idn]
         if rot == 0:  # Do correlations directly if possible
@@ -189,6 +188,8 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
                                          np.reshape(PF2.tmap_sm[reg_neuron], -1),
                                          nan_policy='omit')
         else:  # rotate and resize PF2 before doing corrs if rotations are specified
+            if ski.__version__ < '0.15.0':
+                print('WARNING - using an old version of scikit-image - update to 0.15!')
             PF1_size = PF1.tmap_us[0].shape
             try:  # this shouldn't be necessary once scikit-image is updated to 0.16
                 corr_us, p_us = sstats.spearmanr(np.reshape(PF1.tmap_us[neuron], -1),
@@ -200,7 +201,8 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
                                              PF1_size, anti_aliasing=True), -1),
                                              nan_policy='omit')
 
-            except TypeError:  # display warning if you have an older scikit-image package. anti_aliasing only exists in  0.16
+            except TypeError:  # display warning if you have an older scikit-image package.
+                # anti_aliasing doesn't exist in 0.13 or lower
                 corr_us, p_us = sstats.spearmanr(np.reshape(PF1.tmap_us[neuron], -1),
                                                  np.reshape(sk_resize(np.rot90(PF2.tmap_us[reg_neuron], rot),
                                                  PF1_size), -1), nan_policy='omit')
@@ -215,7 +217,7 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
 
 
 def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7],
-                 pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+                 pf_file='placefields_cm1_manlims_1000shuf.pkl', shuf_map=False):
     """
     Get mean placefield correlations between all sessions. Note that arena1 and arena2 must have the same size occpupancy
     maps already ran for each arena (tmap_us and tmap_sm arrays in Placefield object defined in Placefields.py)
@@ -238,7 +240,8 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
         for id2, day2 in enumerate(days):
             if id1 < id2:  # Don't loop through things you don't have reg files for
                 try:
-                    corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file)
+                    corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file,
+                                                         shuf_map=shuf_map)
                     corr_mean_us[id1, id2] = corrs_us.mean(axis=0)
                     corr_mean_sm[id1, id2] = corrs_sm.mean(axis=0)
                     if np.isnan(corrs_us.mean(axis=0)):
@@ -255,6 +258,33 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
                           ' to ' + arena2 + ' Day ' + str(day2))
 
     return corr_mean_us, corr_mean_sm
+
+
+def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+    """
+    Gets the rotation of the arena in day2 that produces the best correlation.
+    :param mouse:
+    :param arena1:
+    :param day1:
+    :param arena2:
+    :param day2:
+    :param pf_file:
+    :return: best_corr_mean: best mean correlation (un-smoothed, smoothed)
+             best_rot: rotation that produces the best mean correlation (un-smoothed, smoothed)
+             corr_mean_all: mean correlations at 0, 90, 180, and 270 rotation (row 1 = un-smoothed, row 2 = smoothed)
+    """
+    rots = [0, 90, 180, 270]
+    corr_mean_all = np.empty((2, 4))
+    for idr, rot in enumerate(rots):
+        corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
+                                           pf_file=pf_file, rot_deg=rot, shuf_map=False)
+        corr_mean_all[0, idr] = corrs_us.mean(axis=0)
+        corr_mean_all[1, idr] = corrs_sm.mean(axis=0)
+
+    best_rot = np.array(rots)[corr_mean_all.argmax(axis=1)]
+    best_corr_mean = corr_mean_all.max(axis=1)
+
+    return best_corr_mean, best_rot, corr_mean_all
 
 
 def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True,

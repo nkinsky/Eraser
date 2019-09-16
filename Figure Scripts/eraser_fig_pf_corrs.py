@@ -52,6 +52,8 @@ pfs.plot_confmat(np.nanmean(cont_corr_sm_mean_all, axis=0), arena1, arena2, 'Con
 pfs.plot_confmat(np.nanmean(ani_corr_sm_mean_all, axis=0), arena1, arena2, 'Anisomycin',
                  ndays=ndays)
 
+## Identify the best rotation for each correlation betweeen mice
+
 ##
 # Define groups for scatter plots
 # groups = np.ones_like(corr_sm_mean_all)*np.nan
