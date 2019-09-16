@@ -23,7 +23,8 @@ import cell_tracking as ct
 from plot_helper import ScrollPlot
 from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos, plot_tmap_us2, plot_tmap_sm2, plot_events_over_pos2
 import eraser_reference as err
-
+import skimage as ski
+from skimage.transform import resize as sk_resize
 
 def get_neuronmap(mouse, arena1, day1, arena2, day2):
     """
@@ -137,7 +138,8 @@ def get_overlap(mouse, arena1, day1, arena2, day2):
     return overlap_ratio1, overlap_ratio2, overlap_ratio_both, overlap_ratio_min, overlap_ratio_max
 
 
-def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
+                    pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=0, shuf_map=False):
     """
     Gets placefield correlations between sessions. Note that
     :param mouse:
@@ -145,6 +147,9 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     :param day1:
     :param arena2:
     :param day2:
+    :param pf_file: string. Defauls = 'placefields_cm1_manlims_1000shuf.pkl'
+    :param rot_deg: indicates how much to rotate day2 tmaps before calculating corrs. 0=default, 0/90/180/270 = options
+    :param shuf_map: randomly shuffle neuron_map to get shuffled correlations
     :return: corrs_us, corrs_sm: spearman rho values between all cells that are active
     in both sessions. us = unsmoothed, sm = smoothed
     """
@@ -154,6 +159,10 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     reg_session = sd.find_eraser_session(mouse, arena2, day2)
     good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
     good_map = neuron_map[good_map_bool].astype(np.int64)
+
+    # Shuffle neuron_map if specified
+    if shuf_map:
+        good_map = np.random.permutation(good_map)
 
     # load in placefield objects between sessions
     PF1 = pf.load_pf(mouse, arena1, day1, pf_file=pf_file)
@@ -166,14 +175,39 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     corrs_us = np.ndarray(ngood)  # Initialize correlation arrays
     corrs_sm = np.ndarray(ngood)
     # Step through each mapped neuron and get corrs between each
+    rot = int(rot_deg/90)
+
+    if ski.__version__ < '0.16.0':
+        print('WARNING - using an old version of scikit-image - update to 0.16!')
     for idn, neuron in enumerate(good_map_ind):
         reg_neuron = good_map[idn]
-        corr_us, p_us = sstats.spearmanr(np.reshape(PF1.tmap_us[neuron], -1),
+        if rot == 0:  # Do correlations directly if possible
+            corr_us, p_us = sstats.spearmanr(np.reshape(PF1.tmap_us[neuron], -1),
                                          np.reshape(PF2.tmap_us[reg_neuron], -1),
                                          nan_policy='omit')
-        corr_sm, p_sm = sstats.spearmanr(np.reshape(PF1.tmap_sm[neuron], -1),
+            corr_sm, p_sm = sstats.spearmanr(np.reshape(PF1.tmap_sm[neuron], -1),
                                          np.reshape(PF2.tmap_sm[reg_neuron], -1),
                                          nan_policy='omit')
+        else:  # rotate and resize PF2 before doing corrs if rotations are specified
+            PF1_size = PF1.tmap_us[0].shape
+            try:  # this shouldn't be necessary once scikit-image is updated to 0.16
+                corr_us, p_us = sstats.spearmanr(np.reshape(PF1.tmap_us[neuron], -1),
+                                             np.reshape(sk_resize(np.rot90(PF2.tmap_us[reg_neuron], rot),
+                                             PF1_size, anti_aliasing=True), -1),
+                                             nan_policy='omit')
+                corr_sm, p_sm = sstats.spearmanr(np.reshape(PF1.tmap_sm[neuron], -1),
+                                             np.reshape(sk_resize(np.rot90(PF2.tmap_sm[reg_neuron], rot),
+                                             PF1_size, anti_aliasing=True), -1),
+                                             nan_policy='omit')
+
+            except TypeError:  # display warning if you have an older scikit-image package. anti_aliasing only exists in  0.16
+                corr_us, p_us = sstats.spearmanr(np.reshape(PF1.tmap_us[neuron], -1),
+                                                 np.reshape(sk_resize(np.rot90(PF2.tmap_us[reg_neuron], rot),
+                                                 PF1_size), -1), nan_policy='omit')
+                corr_sm, p_sm = sstats.spearmanr(np.reshape(PF1.tmap_sm[neuron], -1),
+                                                 np.reshape(sk_resize(np.rot90(PF2.tmap_sm[reg_neuron], rot),
+                                                 PF1_size), -1), nan_policy='omit')
+
         corrs_us[idn] = corr_us
         corrs_sm[idn] = corr_sm
 
@@ -395,11 +429,6 @@ class PFCombineObject:
 
 
 if __name__ == '__main__':
-    # Marble07 -2 to -1 and 7 comes out as nan. -1 to 7 is one of only a few sessions pairs that don't turn out
-    # as nan. So, figure out what's happening!
-    # day -2 to -1: cell index 320 is nan - why?
-    # pf_corr_mean('Marble07', 'Shock', 'Shock', [-2, -1, 7])
-    pfcomb = PFCombineObject('Marble07', 'Shock', -2, 'Shock', -1)
-    pfcomb.pfscroll()
+    pf_corr_bw_sesh('Marble24', 'Shock', -2, 'Shock', -1, rot_deg=90)
 
     pass
