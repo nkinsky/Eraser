@@ -25,6 +25,8 @@ from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos, p
 import eraser_reference as err
 import skimage as ski
 from skimage.transform import resize as sk_resize
+from pickle import load, dump
+from tqdm import tqdm
 
 
 def get_neuronmap(mouse, arena1, day1, arena2, day2):
@@ -217,7 +219,7 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
 
 
 def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7],
-                 pf_file='placefields_cm1_manlims_1000shuf.pkl', shuf_map=False):
+                 pf_file='placefields_cm1_manlims_1000shuf.pkl', shuf_map=False, best_rot=False):
     """
     Get mean placefield correlations between all sessions. Note that arena1 and arena2 must have the same size occpupancy
     maps already ran for each arena (tmap_us and tmap_sm arrays in Placefield object defined in Placefields.py)
@@ -307,7 +309,7 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
         groups[:, 4:7, 4:7] = 2  # 2 = after shock days 1,2,7
         groups[:, 0:2, 4:7] = 3  # 3 = before-v-after shock
         groups[:, 0:2, 3] = 4  # 4 = before-v-STM
-        groups[:, 3, 4:7] = 5  # 5 = STM-v-LTM
+        groups[:, 3, 4:7] = 5  # 5 = STM-v-LTM (4hr to 1,2,7)
     elif group_desig == 2:
         groups = np.ones_like(corr_mean_mat) * np.nan
         groups[:, 0:2, 0:2] = 1  # 1 = before shock
@@ -387,6 +389,7 @@ def plot_confmat(corr_mean_mat, arena1, arena2, group_type, ndays=7, ax_use=None
                               + arena2 + ' ' + group_type + '.pdf'))
 
 
+# Object to map and view placefields for same neuron mapped between different sessions
 class PFCombineObject:
     def __init__(self, mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
         self.mouse = mouse
@@ -458,7 +461,55 @@ class PFCombineObject:
                             traj_lims=lims1, traj_lims2=lims2)
 
 
+# Create class to calculate and save correlations between sessions with neuron_map shuffled
+class ShufMap:
+    def __init__(self, mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, nshuf=100):
+        self.mouse = mouse
+        self.arena1 = arena1
+        self.arena2 = arena2
+        self.day1 = day1
+        self.day2 = day2
+        self.nshuf = nshuf
+        self.shuf_corrs_us_mean = []
+        self.shuf_corrs_sm_mean = []
+
+    def get_shuffled_corrs(self):  # Get tmap correlations after shuffling neuron_map
+        shuf_corrs_us_mean = []
+        shuf_corrs_sm_mean = []
+        for n in tqdm(np.arange(self.nshuf)):
+            print('Running Shuffled Map Corrs for ' + self.mouse + ' ' + self.arena1 + ' day ' + str(self.day1) + ' to ' +
+                  self.arena2 + ' day ' + str(self.day2))
+            shuf_corrs_us, shuf_corrs_sm = pf_corr_bw_sesh(self.mouse, self.arena1, self.day1, self.arena2, self.day2,
+                                                           shuf_map=True)
+            shuf_corrs_us_mean.append(shuf_corrs_us.mean(axis=0))
+            shuf_corrs_sm_mean.append(shuf_corrs_sm.mean(axis=0))
+
+        self.shuf_corrs_us_mean = shuf_corrs_us_mean
+        self.shuf_corrs_sm_mean = shuf_corrs_sm_mean
+
+    def save_data(self):  # Save data to pickle file
+        # dump into pickle file with name
+        dir_use = get_dir(self.mouse, self.arena1, self.day1)
+        file_name = 'shuffle_map_mean_corrs_' + self.arena1 + 'day' + str(self.day1) + '_' + self.arena2 + 'day' + \
+                    str(self.day2) + '_nshuf' + str(self.nshuf) + '.pkl'
+        save_file = path.join(dir_use, file_name)
+        with open(save_file, 'wb') as output:
+            dump(self, output)
+
+
+# class PFrotObj:
+#     def __init__(self, mouse, arena1, day1, arena2, day2):
+#         self.mouse = mouse
+#         self.arena1 = arena1
+#         self.arena2 = arena2
+#         self.day1 = day1
+#         self.day2 = day2
+#
+#         best_corr_mean, best_rot, corr_mean_all = get_best_rot(self.mouse, self.arena1, self.day1,
+#                                                                self.arena2, self.day2)
+
+
 if __name__ == '__main__':
-    pf_corr_bw_sesh('Marble24', 'Shock', -2, 'Shock', -1, rot_deg=90)
+    pf_corr_bw_sesh('Marble07', 'Open', -1, 'Open', 1)
 
     pass

@@ -3,6 +3,9 @@
 import eraser_reference as err
 import placefield_stability as pfs
 import numpy as np
+from pickle import dump, load
+from session_directory import find_eraser_directory as get_dir
+import os
 import matplotlib.pyplot as plt
 import os
 
@@ -52,7 +55,47 @@ pfs.plot_confmat(np.nanmean(cont_corr_sm_mean_all, axis=0), arena1, arena2, 'Con
 pfs.plot_confmat(np.nanmean(ani_corr_sm_mean_all, axis=0), arena1, arena2, 'Anisomycin',
                  ndays=ndays)
 
-## Identify the best rotation for each correlation betweeen mice
+## Workhorse code below - run before doing much of the above to save shuffled map corrs and
+# id best rotations
+## Identify the best rotation for each correlation between mice
+days = [-2, -1, 0, 4, 1, 2, 7]
+for mouse in ['Marble07']:  #err.all_mice_good:
+    for arena in ['Shock', 'Open']:
+        for id1, day1 in enumerate(days):
+            for id2, day2 in enumerate(days):
+                if id1 < id2:  # Only run for sessions forward in time
+                    print('Running best rot analysis for ' + mouse + ' ' + arena + ' day ' + str(day1) + ' to day ' +
+                          str(day2))
+                    best_corr_mean, best_rot, corr_mean_all = pfs.get_best_rot(mouse, arena, day1, arena, day2)
+                    save_file = 'best_rot_' + arena + 'day' + str(day1) + '_' + arena + 'day' + str(day2) + '.pkl'
+                    dump([['Mouse','Arena', 'day1', 'day2', 'best_corr_mean[un-smoothed, smoothed]', 'best_rot[un-smoothed, smoothed]',
+                           'corr_mean_all[un-smoothed, smoothed]'], [mouse, arena, day1, day2, best_corr_mean, best_rot, corr_mean_all]],
+                         open(save_file, "wb"))
+
+## Get correlations between shuffled maps within arenas for all mice
+days = [-2, -1, 0, 4, 1, 2, 7]
+nshuf = 100
+check = []
+# Add in something to not run if save_file already exists!
+for mouse in err.all_mice_good:
+    for arena in ['Shock', 'Open']:
+        for id1, day1 in enumerate(days):
+            for id2, day2 in enumerate(days):
+                dir_use = get_dir(mouse, arena, day1)
+                file_name = 'shuffle_map_mean_corrs_' + arena + 'day' + str(day1) + '_' + arena + 'day' + \
+                            str(day2) + '_nshuf' + str(nshuf) + '.pkl'
+                save_file = os.path.join(dir_use, file_name)
+                if os.path.exists(save_file):
+                    check = check + [mouse, arena, day1, day2, True]
+                if id1 < id2 and not os.path.exists(save_file):  # Only run for sessions forward in time
+                    try:
+                        ShufMap = pfs.ShufMap(mouse, arena1=arena, day1=day1, arena2=arena, day2=day2, nshuf=nshuf)
+                        ShufMap.get_shuffled_corrs()
+                        ShufMap.save_data()
+                        check = check + [mouse, arena, day1, day2, True]
+                    except:  # FileNotFoundError:
+                        print('Error in ' + mouse + ' ' + arena + ' day ' + str(day1) + ' to day ' + str(day2))
+                        check = check + [mouse, arena, day1, day2, False]
 
 ##
 # Define groups for scatter plots
