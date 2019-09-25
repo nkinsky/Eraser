@@ -18,6 +18,7 @@ from session_directory import find_eraser_directory as get_dir
 # import pickle
 from scipy.signal import decimate
 import session_directory as sd
+import placefield_stability as pfs
 import eraser_reference as err
 import scipy as sp
 sd.make_session_list()  # update session list
@@ -682,6 +683,51 @@ def DIhist(mice):
     ax.hist(DIgood)
     ax.set_xlabel('Discrim. Index')
     ax.set_ylabel('count')
+
+
+def pf_rot_plot(mouse, arena1, day1, arena2, day2, nshuf=100, plot_type='smoothed', ax=None):
+    """
+    Plots mean correlations for place maps between sessions specified by arena1/day1 and arena2/day2.
+    Plots with 2nd arena's place map rotated 0, 90, 180, and 270 degrees.
+    :param mouse: str
+    :param arena1: 'Open' or 'Shock'
+    :param arena2:
+    :param day1: -2,-1,0,4,1,2,7
+    :param day2:
+    :param nshuf: #shuffles to use to plot chance (default = 100)
+    :param plot_type: used 'smoothed'(Default) or 'unsmoothed' maps
+    :param ax: axes to plot into. Default=None-> new figure
+    :return:
+    """
+
+    rots = np.asarray([0, 90, 180, 270])
+
+    # Create figure and axes if not specified
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    best_corr_mean, best_rot, corr_mean_all = pfs.get_best_rot(mouse, arena1, day1, arena2, day2)
+    if plot_type is 'unsmoothed':
+        corrs_plot = corr_mean_all[0]
+    elif plot_type is 'smoothed':
+        corrs_plot = corr_mean_all[1]
+
+    ax.plot(rots, corrs_plot, 'b-')
+
+    # Try to plot shuffled mean
+    try:
+        shuf_us, shuf_sm = pfs.load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf)
+        if plot_type is 'unsmoothed':
+            shuf_mean = np.nanmean(shuf_us)
+        elif plot_type is 'smoothed':
+            shuf_mean = np.nanmean(shuf_sm)
+        ax.plot([0, 270], [shuf_mean, shuf_mean], 'k--')
+    except:
+        print('Shuffled data not available')
+
+    ax.title('M' + mouse[-2:] + ':' + arena1[0] + 'd' + str(day1) + '-' + arena2[0] + 'd' + str(day2))
+
+    return ax
 
 
 if __name__ == '__main__':

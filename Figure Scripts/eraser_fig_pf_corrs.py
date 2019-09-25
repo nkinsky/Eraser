@@ -7,7 +7,6 @@ from pickle import dump, load
 from session_directory import find_eraser_directory as get_dir
 import os
 import matplotlib.pyplot as plt
-import os
 
 ## Step through each mouse/day and construct confusion matrices
 
@@ -59,19 +58,36 @@ pfs.plot_confmat(np.nanmean(ani_corr_sm_mean_all, axis=0), arena1, arena2, 'Anis
 # id best rotations
 ## Identify the best rotation for each correlation between mice
 days = [-2, -1, 0, 4, 1, 2, 7]
-for mouse in ['Marble07']:  #err.all_mice_good:
+for mouse in err.all_mice_good:
     for arena in ['Shock', 'Open']:
         for id1, day1 in enumerate(days):
             for id2, day2 in enumerate(days):
                 if id1 < id2:  # Only run for sessions forward in time
-                    print('Running best rot analysis for ' + mouse + ' ' + arena + ' day ' + str(day1) + ' to day ' +
-                          str(day2))
-                    best_corr_mean, best_rot, corr_mean_all = pfs.get_best_rot(mouse, arena, day1, arena, day2)
-                    save_file = 'best_rot_' + arena + 'day' + str(day1) + '_' + arena + 'day' + str(day2) + '.pkl'
-                    dump([['Mouse','Arena', 'day1', 'day2', 'best_corr_mean[un-smoothed, smoothed]', 'best_rot[un-smoothed, smoothed]',
-                           'corr_mean_all[un-smoothed, smoothed]'], [mouse, arena, day1, day2, best_corr_mean, best_rot, corr_mean_all]],
-                         open(save_file, "wb"))
+                    try:
+                        # Construct unique file save name
+                        save_name = 'best_rot_' + arena + 'day' + str(day1) + '_' + arena + 'day' + str(day2) + '.pkl'
+                        dir_use = get_dir(mouse, arena, day1)
+                        save_file = os.path.join(dir_use, save_name)
 
+                        # Only run if file not already saved.
+                        if not os.path.exists(save_file):
+                            print('Running best rot analysis for ' + mouse + ' ' + arena + ' day ' + str(day1) +
+                                  ' to day ' + str(day2))
+                            best_corr_mean, best_rot, corr_mean_all = pfs.get_best_rot(mouse, arena, day1, arena, day2)
+
+                            dump([['Mouse', 'Arena', 'day1', 'day2', 'best_corr_mean[un-smoothed, smoothed]', 'best_rot[un-smoothed, smoothed]',
+                                   'corr_mean_all[un-smoothed, smoothed]'], [mouse, arena, day1, day2, best_corr_mean, best_rot, corr_mean_all]],
+                                 open(save_file, "wb"))
+                        else:
+                            print('Skipping: file already exists for ' + mouse + ' ' + arena + ' day ' + str(day1) +
+                                  ' to day ' + str(day2))
+                    except IndexError:  #(FileNotFoundError, IndexError, ValueError):
+                        print('IndexError for ' + mouse + ' ' + arena + ' day ' + str(day1) + ' to day ' + str(day2))
+                    except ValueError:
+                        print('ValueError for ' + mouse + ' ' + arena + ' day ' + str(day1) + ' to day ' + str(day2))
+                    except FileNotFoundError:
+                        print('FileNotFoundError for ' + mouse + ' ' + arena + ' day ' + str(day1) + ' to day ' +
+                              str(day2))
 ## Get correlations between shuffled maps within arenas for all mice
 days = [-2, -1, 0, 4, 1, 2, 7]
 nshuf = 100

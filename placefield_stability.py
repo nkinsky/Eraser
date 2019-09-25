@@ -183,34 +183,17 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
     for idn, neuron in enumerate(good_map_ind):
         reg_neuron = good_map[idn]
         if rot == 0:  # Do correlations directly if possible
-            corr_us, p_us = sstats.spearmanr(np.reshape(PF1.tmap_us[neuron], -1),
-                                         np.reshape(PF2.tmap_us[reg_neuron], -1),
-                                         nan_policy='omit')
-            corr_sm, p_sm = sstats.spearmanr(np.reshape(PF1.tmap_sm[neuron], -1),
-                                         np.reshape(PF2.tmap_sm[reg_neuron], -1),
-                                         nan_policy='omit')
-        else:  # rotate and resize PF2 before doing corrs if rotations are specified
-            if ski.__version__ < '0.15.0':
-                print('WARNING - using an old version of scikit-image - update to 0.15!')
-            PF1_size = PF1.tmap_us[0].shape
-            try:  # this shouldn't be necessary once scikit-image is updated to 0.16
-                corr_us, p_us = sstats.spearmanr(np.reshape(PF1.tmap_us[neuron], -1),
-                                             np.reshape(sk_resize(np.rot90(PF2.tmap_us[reg_neuron], rot),
-                                             PF1_size, anti_aliasing=True), -1),
-                                             nan_policy='omit')
-                corr_sm, p_sm = sstats.spearmanr(np.reshape(PF1.tmap_sm[neuron], -1),
-                                             np.reshape(sk_resize(np.rot90(PF2.tmap_sm[reg_neuron], rot),
-                                             PF1_size, anti_aliasing=True), -1),
-                                             nan_policy='omit')
+            corr_us, p_us = spearmanr_nan(np.reshape(PF1.tmap_us[neuron], -1), np.reshape(PF2.tmap_us[reg_neuron], -1))
 
-            except TypeError:  # display warning if you have an older scikit-image package.
-                # anti_aliasing doesn't exist in 0.13 or lower
-                corr_us, p_us = sstats.spearmanr(np.reshape(PF1.tmap_us[neuron], -1),
-                                                 np.reshape(sk_resize(np.rot90(PF2.tmap_us[reg_neuron], rot),
-                                                 PF1_size), -1), nan_policy='omit')
-                corr_sm, p_sm = sstats.spearmanr(np.reshape(PF1.tmap_sm[neuron], -1),
-                                                 np.reshape(sk_resize(np.rot90(PF2.tmap_sm[reg_neuron], rot),
-                                                 PF1_size), -1), nan_policy='omit')
+            corr_sm, p_sm = spearmanr_nan(np.reshape(PF1.tmap_sm[neuron], -1), np.reshape(PF2.tmap_sm[reg_neuron], -1))
+
+        else:  # rotate and resize PF2 before doing corrs if rotations are specified
+            PF1_size = PF1.tmap_us[0].shape
+            corr_us, p_us = spearmanr_nan(np.reshape(PF1.tmap_us[neuron], -1), np.reshape(sk_resize(np.rot90(
+                PF2.tmap_us[reg_neuron], rot), PF1_size, anti_aliasing=True), -1))
+
+            corr_sm, p_sm = spearmanr_nan(np.reshape(PF1.tmap_sm[neuron], -1), np.reshape(sk_resize(np.rot90(
+                PF2.tmap_sm[reg_neuron], rot), PF1_size, anti_aliasing=True), -1))
 
         corrs_us[idn] = corr_us
         corrs_sm[idn] = corr_sm
@@ -264,7 +247,8 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
 
 def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
     """
-    Gets the rotation of the arena in day2 that produces the best correlation.
+    Gets the rotation of the arena in day2 that produces the best correlation. Will load previous runs from file saved in
+    the appropriate directory by default
     :param mouse:
     :param arena1:
     :param day1:
@@ -275,16 +259,52 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_fil
              best_rot: rotation that produces the best mean correlation (un-smoothed, smoothed)
              corr_mean_all: mean correlations at 0, 90, 180, and 270 rotation (row 1 = un-smoothed, row 2 = smoothed)
     """
-    rots = [0, 90, 180, 270]
-    corr_mean_all = np.empty((2, 4))
-    for idr, rot in enumerate(rots):
-        corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
-                                           pf_file=pf_file, rot_deg=rot, shuf_map=False)
-        corr_mean_all[0, idr] = corrs_us.mean(axis=0)
-        corr_mean_all[1, idr] = corrs_sm.mean(axis=0)
 
-    best_rot = np.array(rots)[corr_mean_all.argmax(axis=1)]
-    best_corr_mean = corr_mean_all.max(axis=1)
+    # Construct unique file save name
+    save_name = 'best_rot_' + arena1 + 'day' + str(day1) + '_' + arena2 + 'day' + str(day2) + '.pkl'
+    dir_use = get_dir(mouse, arena1, day1)
+    save_file = path.join(dir_use, save_name)
+
+    # All the meaningful code is here - above and below just is for saving 1st run/loading previous runs
+    if not path.exists(save_file):  # only run if not already saved
+        rots = [0, 90, 180, 270]
+        corr_mean_all = np.empty((2, 4))
+        for idr, rot in enumerate(rots):
+            corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
+                                               pf_file=pf_file, rot_deg=rot, shuf_map=False)
+            corr_mean_all[0, idr] = corrs_us.mean(axis=0)
+            corr_mean_all[1, idr] = corrs_sm.mean(axis=0)
+
+        best_rot = np.array(rots)[corr_mean_all.argmax(axis=1)]
+        best_corr_mean = corr_mean_all.max(axis=1)
+
+        # Pickle results
+        dump([['Mouse', '[Arena1, Arena2]', 'day1', 'day2', 'best_corr_mean[un-smoothed, smoothed]',
+               'best_rot[un-smoothed, smoothed]',
+               'corr_mean_all[un-smoothed, smoothed]'],
+              [mouse, [arena1, arena2], day1, day2, best_corr_mean, best_rot, corr_mean_all]],
+             open(save_file, "wb"))
+    elif path.exists(save_file):  # Load previous run and let user know
+        print('Loading previous analysis for ' + mouse + ' ' + arena1 + ' day ' + str(day1) +
+              ' to ' + arena2 + ' day ' + str(day2))
+        temp = load(open(save_file, 'rb'))
+
+        # Check to make sure you have the right data
+        mousecheck = temp[1][0]
+        if type(temp[1][1]) is list:
+            a1check = temp[1][1]
+            a2check = temp[1][1]
+        else:
+            a1check = temp[1][1][0]
+            a2check = temp[1][1][1]
+        d1check = temp[1][2]
+        d2check = temp[1][3]
+        if mousecheck is mouse and a1check is arena1 and a2check is arena2 and d1check is day1 and d2check is day2:
+            best_corr_mean = temp[1][4]
+            best_rot = temp[1][5]
+            corr_mean_all = temp[1][6]
+        else:
+            raise Exception('Loaded data does not match input data - erase and rerun')
 
     return best_corr_mean, best_rot, corr_mean_all
 
@@ -389,7 +409,47 @@ def plot_confmat(corr_mean_mat, arena1, arena2, group_type, ndays=7, ax_use=None
                               + arena2 + ' ' + group_type + '.pdf'))
 
 
-# Object to map and view placefields for same neuron mapped between different sessions
+def spearmanr_nan(a, b):
+    """
+    Perform sstats.spearmanr with nan_policy='omit with error catching to return nan if every pair of bins has at
+    least one nan (i.e. the mouse never occupied any of the bins in the second session that it did in the first session)
+
+    :param a:
+    :param b:
+    :return: corr, pval
+    """
+    if not np.all(np.bitwise_or(np.isnan(a), np.isnan(b))):
+        corr, pval = sstats.spearmanr(a, b, nan_policy='omit')
+    elif np.all(np.bitwise_or(np.isnan(a), np.isnan(b))):
+        corr = np.nan
+        pval = np.nan
+
+    return corr, pval
+
+
+def load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf):
+    """
+    Loads place maps correlations between sessions specified by inputs with neuron map between session shuffled nshuf times.
+    :return: shuf_corrs_us_mean and shuf_corrs_sm_mean: un-smoothed and smoothed mean correlations for each shuffle
+    """
+    dir_use = get_dir(mouse, arena1, day1)
+    file_name = 'shuffle_map_mean_corrs_' + arena1 + 'day' + str(day1) + '_' + arena2 + 'day' + \
+                str(day2) + '_nshuf' + str(nshuf) + '.pkl'
+    save_file = path.join(dir_use, file_name)
+
+    if path.exists(save_file):
+        ShufMaptemp = load(open(save_file,'rb'))
+        shuf_corrs_us_mean = ShufMaptemp.shuf_corrs_us_mean
+        shuf_corrs_sm_mean = ShufMaptemp.shuf_corrs_sm_mean
+    else:
+        print('Shuffled correlations not yet run')
+        shuf_corrs_us_mean = np.nan()
+        shuf_corrs_sm_mean = np.nan()
+
+    return shuf_corrs_us_mean, shuf_corrs_sm_mean
+
+
+## Object to map and view placefields for same neuron mapped between different sessions
 class PFCombineObject:
     def __init__(self, mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
         self.mouse = mouse
@@ -510,6 +570,6 @@ class ShufMap:
 
 
 if __name__ == '__main__':
-    pf_corr_bw_sesh('Marble07', 'Open', -1, 'Open', 1)
+    pf_corr_bw_sesh('Marble29', 'Shock', 1, 'Shock', 2, pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=180, shuf_map=False)
 
     pass
