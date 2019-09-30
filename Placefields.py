@@ -41,6 +41,31 @@ def load_pf(mouse, arena, day, session_index=None, pf_file='placefields_cm1.pkl'
     return PF
 
 
+def get_PV1(mouse, arena, day, speed_thresh=1.5, session_index=None, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+    """
+    Gets PV for each session with no spatial bins
+    :param mouse:
+    :param arena:
+    :param day:
+    :param speed_thresh: exclude data points where mouse's smoothed speed is below this (1.5cm/s default)
+    :param session_index: not-used
+    :param pf_file: default = 'placefields_cm1_manlims_1000shuf.pkl'_
+    :return: PV1: nneurons long 1-d np array of event rates for each neuron across the whole session
+    """
+    PF = load_pf(mouse, arena, day, pf_file=pf_file)
+
+    # Speed threshold PSAbool
+    PFthresh = PF.PSAbool_align[:, PF.speed_sm > speed_thresh]
+
+    # Calculate PV
+    nframes = PFthresh.shape[1]
+    try:
+        PV1 = PFthresh.sum(axis=1)/nframes*PF.sr_image[0]
+    except TypeError:  # Catch a few errors for mice where sr_image is not properly formatted
+        PV1 = PFthresh.sum(axis=1) / nframes * PF.sr_image[0]
+    return PV1
+
+
 def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5,
                 lims_method='auto', save_file='placefields_cm1.pkl', list_dir=master_directory):
     """

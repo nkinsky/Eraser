@@ -87,9 +87,10 @@ def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     Classifies cells as good, silent, and new based on the input mapping from session 1 to session 2 in neuron_map.
     :param neuron_map: an ndarray (#neurons in session 1 x 1) with the neuron index in session 2 that maps to the
                        index in session 1. NaN = no mapping/silent cell in session 2.
+    :param reg_session: index to 2nd session in session_list. Get it using code in session_directory (e.g. find_eraser_session).
     :param overlap_thresh: not functional yet. default (eventually) = consider new/silent if ROIs overlap less than
                             overlap_thresh
-    :return: good_map_bool: boolean of the size of neuron_map for neurons validly mapped between sessions
+    :return: good_map_bool: boolean of the size of neuron_map for neurons validly mapped between sessions (e.g. not silent or new)
                 silent_ind: indices of session 1 neurons that are not active/do not have a valid map in session 2.
                 new_ind: indices of session 2 neurons that do not appear in session 1.
     """
@@ -141,6 +142,80 @@ def get_overlap(mouse, arena1, day1, arena2, day2):
     return overlap_ratio1, overlap_ratio2, overlap_ratio_both, overlap_ratio_min, overlap_ratio_max
 
 
+def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5,
+                    pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=0, shuf_map=False):
+    """
+    Gets 1-d population vector correlations between sessions.
+    :param mouse:
+    :param arena1:
+    :param day1:
+    :param arena2:
+    :param day2:
+    :param speed_thresh: speed threshold to use (default = 1.5cm/s). Not
+    :param pf_file: string. Defauls = 'placefields_cm1_manlims_1000shuf.pkl'
+    :param rot_deg: indicates how much to rotate day2 tmaps before calculating corrs. 0=default, 0/90/180/270 = options
+    :param shuf_map: randomly shuffle neuron_map to get shuffled correlations
+    :return: PVcorr_all, PVcorr_both: spearman correlation between PVs. Includes ALL neurons active in either session or
+    only neurons active in both sessions
+    """
+
+    # Get mapping between sessions
+    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2)
+    reg_session = sd.find_eraser_session(mouse, arena2, day2)
+
+    # Gets PVs
+    PV1 = pf.get_PV1(mouse, arena1, day1, speed_thresh=speed_thresh, pf_file=pf_file)
+    PV2 = pf.get_PV1(mouse, arena2, day2, speed_thresh=speed_thresh, pf_file=pf_file)
+
+    # Now register between sessions
+    PV1all, PV2all, PV1both, PV2both = registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=shuf_map)
+
+    # Now get ALL corrs and BOTH corrs
+    PVcorr_all = sstats.spearmanr(PV1all, PV2all, nan_policy='omit')
+    PVcorr_both = sstats.spearmanr(PV1both, PV2both, nan_policy='omit')
+
+    return PVcorr_all, PVcorr_both
+
+
+def registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=False):
+    """
+
+    :param PV1: 1-d population vector of event rates for all neurons in session 1
+    :param PV2: same as above for session 2
+    :param neuron_map: map between sessions obtained from SharpWave/Tenaspis github code
+    :param reg_session: 2nd session id in session_list
+    :return: PV1all, PV2allreg: PVs for ALL neurons active in EITHER session registered to each other -
+             includes silent/new cells
+             PV1both, PV2bothreg: PVs for neurons active in BOTH sessions registered to each other -
+             no silent/new cells
+    """
+
+    # Identify neurons with good map
+    good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
+    good_map = neuron_map[good_map_bool].astype(np.int64)
+
+    # Shuffle neuron_map if specified
+    if shuf_map:
+        good_map = np.random.permutation(good_map)
+
+    # Identify neurons with proper mapping between sessions
+    good_map_ind, _ = np.where(good_map_bool)
+    ngood = len(good_map_ind)
+    nnew = len(new_ind)
+
+    # Construct PVs with ALL neurons detected in EITHER session
+    PV1all = np.concatenate((PV1, np.zeros(nnew)))
+    PV2allreg = np.concatenate((np.zeros(PV1.shape), np.zeros(nnew)))
+    PV2allreg[good_map_ind] = PV2[good_map]
+    PV2allreg[len(PV1):] = PV2[new_ind]  # These needs checking!!!
+
+    # Construct PVs with ONLY neurons detected in BOTH sessions
+    PV1both = PV1[good_map_ind]
+    PV2bothreg = PV2[good_map]
+
+    return PV1all, PV2allreg, PV1both, PV2bothreg
+
+
 def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
                     pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=0, shuf_map=False):
     """
@@ -177,9 +252,9 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
 
     corrs_us = np.ndarray(ngood)  # Initialize correlation arrays
     corrs_sm = np.ndarray(ngood)
+
     # Step through each mapped neuron and get corrs between each
     rot = int(rot_deg/90)
-
     for idn, neuron in enumerate(good_map_ind):
         reg_neuron = good_map[idn]
         if rot == 0:  # Do correlations directly if possible
@@ -291,15 +366,15 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_fil
 
         # Check to make sure you have the right data
         mousecheck = temp[1][0]
-        if type(temp[1][1]) is list:
-            a1check = temp[1][1]
-            a2check = temp[1][1]
-        else:
+        if type(temp[1][1]) is list:  # Temp fix - get rid of once you save all the data with both arenas
             a1check = temp[1][1][0]
             a2check = temp[1][1][1]
+        else:
+            a1check = temp[1][1]
+            a2check = temp[1][1]
         d1check = temp[1][2]
         d2check = temp[1][3]
-        if mousecheck is mouse and a1check is arena1 and a2check is arena2 and d1check is day1 and d2check is day2:
+        if mousecheck == mouse and a1check == arena1 and a2check == arena2 and d1check == day1 and d2check == day2:
             best_corr_mean = temp[1][4]
             best_rot = temp[1][5]
             corr_mean_all = temp[1][6]
@@ -570,6 +645,7 @@ class ShufMap:
 
 
 if __name__ == '__main__':
-    pf_corr_bw_sesh('Marble29', 'Shock', 1, 'Shock', 2, pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=180, shuf_map=False)
+    # pf_corr_bw_sesh('Marble29', 'Shock', 1, 'Shock', 2, pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=180, shuf_map=False)
+    PV1_corr_bw_sesh('Marble06', 'Shock', -2, 'Shock', -1)
 
     pass

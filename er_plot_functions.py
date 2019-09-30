@@ -718,20 +718,26 @@ def pf_rot_plot(mouse, arena1, day1, arena2, day2, nshuf=100, plot_type='smoothe
     try:
         shuf_us, shuf_sm = pfs.load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf)
         if plot_type is 'unsmoothed':
-            shuf_mean = np.nanmean(shuf_us)
+            shuf_use = shuf_us
         elif plot_type is 'smoothed':
-            shuf_mean = np.nanmean(shuf_sm)
-        ax.plot([0, 270], [shuf_mean, shuf_mean], 'k--')
+            shuf_use = shuf_sm
+        shuf_mean = np.nanmean(shuf_use)
+        CIs = np.quantile(shuf_use, [0.025, 0.975])
+        ax.plot([0, 270], [shuf_mean, shuf_mean], 'k-')
+        ax.plot([0, 270], [CIs[0], CIs[0]], 'k--')
+        ax.plot([0, 270], [CIs[1], CIs[1]], 'k--')
     except:
         print('Shuffled data not available')
 
-    ax.title('M' + mouse[-2:] + ':' + arena1[0] + 'd' + str(day1) + '-' + arena2[0] + 'd' + str(day2))
+    ax.set_title('M' + mouse[-2:] + ':' + arena1[0] + 'd' + str(day1) + '-' + arena2[0] + 'd' + str(day2))
+    ax.set_xticks([0, 90, 180, 270])
+    ax.set_xlabel('PF rot (deg)')
+    ax.set_ylabel('Mean ' + plot_type[0:2] + ' PF corr')
 
     return ax
 
 
 if __name__ == '__main__':
-    fig, ax = plt.subplots()
-    plot_frame_and_traj(ax, 'E:\\Eraser\\Control Group\\Marble6\\20180426_1_openfield\\FreezeFrame\\')
+    pf_rot_plot('Marble06', 'Open', -2, 'Open', -1)
 
     pass
