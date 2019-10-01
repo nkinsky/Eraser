@@ -726,7 +726,7 @@ def pf_rot_plot(mouse, arena1, day1, arena2, day2, nshuf=100, plot_type='smoothe
         ax.plot([0, 270], [shuf_mean, shuf_mean], 'k-')
         ax.plot([0, 270], [CIs[0], CIs[0]], 'k--')
         ax.plot([0, 270], [CIs[1], CIs[1]], 'k--')
-    except:
+    except:  # This needs checking to make sure it is ONLY erroring if FileNotFound!!!
         print('Shuffled data not available')
 
     ax.set_title('M' + mouse[-2:] + ':' + arena1[0] + 'd' + str(day1) + '-' + arena2[0] + 'd' + str(day2))
@@ -736,6 +736,50 @@ def pf_rot_plot(mouse, arena1, day1, arena2, day2, nshuf=100, plot_type='smoothe
 
     return ax
 
+def plot_PV1_simple(mouse, nshuf=10, ax=None, PVtype='both'):
+    """
+    Simple 1-d PV correlations plots. Shock and Open day -2 and day 1 versus all other sessions afterward
+    :param mouse:
+    :param nshuf:
+    :param PVtype: 'all' or 'both'(default). See placefield_stability.PV1_corr_bw_sesh
+    :return: ax: axes to plot
+    """
+    if ax is None:
+        _, ax = plt.subplots()
+
+    # Get correlations
+    scorrs_all, scorrs_both, sshuf_all, sshuf_both = pfs.get_all_PV1corrs(mouse, 'Shock', 'Shock', nshuf=nshuf)
+    ocorrs_all, ocorrs_both, oshuf_all, oshuf_both = pfs.get_all_PV1corrs(mouse, 'Open', 'Open', nshuf=nshuf)
+
+    # Grab correct correlation type
+    if PVtype is 'both':
+        scorrs = scorrs_both
+        sshuf = sshuf_both
+        ocorrs = ocorrs_both
+        oshuf = oshuf_both
+    elif PVtype is 'all':
+        scorrs = scorrs_all
+        sshuf = sshuf_all
+        ocorrs = ocorrs_all
+        oshuf = oshuf_all
+
+    # Plot data
+    ax.plot(range(6), scorrs[0][1:], 'b-', label='Shock')
+    ax.plot(range(4, 6, 1), scorrs[4][5:7], 'b--')
+    ax.plot(range(6), ocorrs[0][1:], 'r-', label='Open')
+    ax.plot(range(4, 6, 1), scorrs[4[5:7], 'r--'])
+
+    # Pool all shuffles, get 95% CI, plot
+    shuf_pool = np.concatenate(sshuf.reshape(-1)[~np.isnan(sshuf.reshape(-1))],
+                               oshuf.reshape(-1)[~np.isnan(oshuf.reshape(-1))])
+
+    CIs = np.quantile(shuf_pool, [0.025, 0.975])
+    ax.plot([0, 6], [CIs[0], CIs[0]], 'k--', label='95% CI')
+    ax.plot([0, 6], [CIs[2], CIs[2]], 'k--')
+    ax.plot([0, 6], [CIs[1], CIs[1]], 'k-')
+    ax.legend()
+
+    return ax
 
 if __name__ == '__main__':
     pf_rot_plot('Marble06', 'Open', -2, 'Open', -1)
