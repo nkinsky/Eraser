@@ -62,7 +62,7 @@ def get_PV1(mouse, arena, day, speed_thresh=1.5, session_index=None, pf_file='pl
     try:
         PV1 = PFthresh.sum(axis=1)/nframes*PF.sr_image[0]
     except TypeError:  # Catch a few errors for mice where sr_image is not properly formatted
-        PV1 = PFthresh.sum(axis=1) / nframes * PF.sr_image[0]
+        PV1 = PFthresh.sum(axis=1) / nframes * PF.sr_image
     return PV1
 
 
@@ -476,6 +476,5 @@ class PlaceFieldObject:
 
 
 if __name__ == '__main__':
-    placefields('Marble21', 'Open', 1, cmperbin=1, save_file='placefields_cm1_autolims.pkl',
-                nshuf=1)
+    get_PV1('Marble07','Shock',-2)
     pass

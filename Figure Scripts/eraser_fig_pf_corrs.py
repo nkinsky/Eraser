@@ -82,8 +82,24 @@ for mouse in err.all_mice_good:
     savefile = os.path.join(plot_dir, mouse + ' PFrots simple.pdf')
     fig.savefig(savefile)
     plt.close(fig)
-## Workhorse code below - run before doing much of the above to save shuffled map corrs and
-# id best rotations
+## Workhorse code below - run before doing much of the above
+
+## Run shuffled PV1 correlations for each session pair
+nshuf = 1000
+arenas = ['Shock', 'Open']
+days = [-2, -1, 0, 4, 1, 2, 7]
+for mouse in err.all_mice_good:
+    for arena in ['Shock', 'Open']:
+        for id1, day1 in enumerate(days):
+            for id2, day2 in enumerate(days):
+                if id1 < id2:
+                    try:
+                        print('Running shuffled PV1 corrs for ' + mouse + ' ' + arena + ' day ' + str(day1) + ' to day '
+                              + str(day2))
+                        pfs.PV1_shuf_corrs(mouse, arena, day1, arena, day2, nshuf=nshuf)
+                    except FileNotFoundError:
+                        print('FileNotFoundError for ' + mouse + ' ' + arena + ' day ' + str(day1) + ' to day ' +
+                              str(day2))
 ## Identify the best rotation for each correlation between mice
 # days = [-2, -1, 0, 4, 1, 2, 7]
 # for mouse in err.all_mice_good:

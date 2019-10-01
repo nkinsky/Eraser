@@ -171,8 +171,8 @@ def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5,
     PV1all, PV2all, PV1both, PV2both = registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=shuf_map)
 
     # Now get ALL corrs and BOTH corrs
-    PVcorr_all = sstats.spearmanr(PV1all, PV2all, nan_policy='omit')
-    PVcorr_both = sstats.spearmanr(PV1both, PV2both, nan_policy='omit')
+    PVcorr_all, all_p = sstats.spearmanr(PV1all, PV2all, nan_policy='omit')
+    PVcorr_both, both_p = sstats.spearmanr(PV1both, PV2both, nan_policy='omit')
 
     return PVcorr_all, PVcorr_both
 
@@ -214,6 +214,92 @@ def registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=False):
     PV2bothreg = PV2[good_map]
 
     return PV1all, PV2allreg, PV1both, PV2bothreg
+
+
+def get_all_PV1corrs(mouse, arena1, arena2, nshuf=0):
+    """
+    Gets PV1 corrs for all sessions occurring between arena1 and arena2 for a given mouse.
+    :param mouse:
+    :param arena1:
+    :param arena2:
+    :param nshuf: # shuffles (default = 0).
+    :return: corrs_all, corrs_both: 7x7 np-array with PV corrs between all possible session-pairs.
+             shuf_all, shuf_both: 7x7xnshuf np-array with shuffled correlations.
+    """
+    days = [-2, -1, 0, 4, 1, 2, 7]
+
+    # Pre-allocate
+    corrs_both = np.ones((7, 7)) * np.nan
+    corrs_all = np.ones((7, 7)) * np.nan
+    shuf_both = np.ones((7, 7, nshuf)) * np.nan
+    shuf_all = np.ones((7, 7, nshuf)) * np.nan
+    for id1, day1 in enumerate(days):
+        for id2, day2 in enumerate(days):
+
+            # Don't run any backward registrations
+            if (arena1 == arena2 and id2 > id1) or (arena1 != arena2 and id2 >= id1):
+                try:
+                    PVall, PVboth = PV1_corr_bw_sesh('Marble06', arena1, day1, arena2, day2)
+                    corrs_both[id1, id2] = PVboth
+                    corrs_all[id1, id2] = PVall
+                    shuf_all[id1, id2], shuf_both[id1, id2] = PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf)
+                except FileNotFoundError:
+                    print('File Not Found for ' + mouse + ': ' + arena1 + str(day1) + ' to ' + arena2 + str(day2))
+
+    return corrs_all, corrs_both, shuf_all, shuf_both
+
+
+def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
+    """
+    Gets correlations for 1-d PVs between arenas/days with neuron mapping shuffled between sessions.
+    :param mouse:
+    :param arena1: 'Shock' or 'Open'
+    :param day1: [-2, -1, 0, 4, 1, 2, 7]
+    :param arena2:
+    :param day2:
+    :param nshuf: int
+    :return: shuf_all, shuf_both: (nshuf,) nd-arrays with shuffled corrs using ALL neurons or only those recorded in
+    BOTH sessions
+    """
+
+    # pre-allocate lists
+    temp_all = []
+    temp_both = []
+
+    # Put in something here to check for saved data if this takes too long!
+    save_name = 'PV1shuf_corrs_nshuf' + str(nshuf) + '.pkl'
+    dir_use = get_dir(mouse, arena1, day1)
+    save_file = path.join(dir_use, save_name)
+
+    if not path.exists(save_file):
+        print('Getting shuffled 1-d PV corrs')
+        for n in tqdm(np.arange(nshuf)):
+            corr_all, corr_both = PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, shuf_map=True)
+            temp_all.append(corr_all)
+            temp_both.append(corr_both)
+
+        shuf_all = np.asarray(temp_all)
+        shuf_both = np.asarray(temp_both)
+
+        # pickle data for later use
+        dump([['mouse', 'arena1', 'day1', 'arena2', 'day2', 'shuf_all', 'shuf_both', 'nshuf'],
+              [mouse, arena1, day1, arena2, day2, shuf_all, shuf_both, nshuf]],
+             open(save_file, 'wb'))
+    elif path.exists(save_file):  # load previously pickled data
+        print('Loading previously saved shuffled files')
+        names, save_data = load(open(save_file, 'rb'))  # load it
+
+        # Check that data matches inputs
+        if save_data[0] == mouse and save_data[1] == arena1 and save_data[2] == day1 and save_data[3] == arena2 and \
+                save_data[4] == day2:
+            shuf_all = save_data[5]
+            shuf_both = save_data[6]
+        else:
+            print('Previously saved data does not match inputs')
+            shuf_all = np.nan
+            shuf_both = np.nan
+
+    return shuf_all, shuf_both
 
 
 def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
@@ -645,7 +731,6 @@ class ShufMap:
 
 
 if __name__ == '__main__':
-    # pf_corr_bw_sesh('Marble29', 'Shock', 1, 'Shock', 2, pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=180, shuf_map=False)
-    PV1_corr_bw_sesh('Marble06', 'Shock', -2, 'Shock', -1)
+    shuf_all, shuf_both = PV1_shuf_corrs('Marble06', 'Shock', -2, 'Shock', -1, nshuf=100)
 
     pass
