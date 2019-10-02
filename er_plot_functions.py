@@ -736,6 +736,7 @@ def pf_rot_plot(mouse, arena1, day1, arena2, day2, nshuf=100, plot_type='smoothe
 
     return ax
 
+
 def plot_PV1_simple(mouse, nshuf=10, ax=None, PVtype='both'):
     """
     Simple 1-d PV correlations plots. Shock and Open day -2 and day 1 versus all other sessions afterward
@@ -745,7 +746,9 @@ def plot_PV1_simple(mouse, nshuf=10, ax=None, PVtype='both'):
     :return: ax: axes to plot
     """
     if ax is None:
-        _, ax = plt.subplots()
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
 
     # Get correlations
     scorrs_all, scorrs_both, sshuf_all, sshuf_both = pfs.get_all_PV1corrs(mouse, 'Shock', 'Shock', nshuf=nshuf)
@@ -764,24 +767,31 @@ def plot_PV1_simple(mouse, nshuf=10, ax=None, PVtype='both'):
         oshuf = oshuf_all
 
     # Plot data
-    ax.plot(range(6), scorrs[0][1:], 'b-', label='Shock')
-    ax.plot(range(4, 6, 1), scorrs[4][5:7], 'b--')
-    ax.plot(range(6), ocorrs[0][1:], 'r-', label='Open')
-    ax.plot(range(4, 6, 1), scorrs[4[5:7], 'r--'])
+    ax.plot(range(6), scorrs[0][1:], 'b.-', label='Shock -2')
+    ax.plot(range(3, 6, 1), scorrs[3][4:7], 'b.:', label='Shock 4hr')
+    ax.plot(range(4, 6, 1), scorrs[4][5:7], 'b.--', label='Shock 1')
+    ax.plot(range(6), ocorrs[0][1:], 'r.-', label='Open -2')
+    ax.plot(range(3, 6, 1), ocorrs[3][4:7], 'r.:', label='Open 4hr')
+    ax.plot(range(4, 6, 1), ocorrs[4][5:7], 'r.--', label='Open 1')
 
     # Pool all shuffles, get 95% CI, plot
-    shuf_pool = np.concatenate(sshuf.reshape(-1)[~np.isnan(sshuf.reshape(-1))],
-                               oshuf.reshape(-1)[~np.isnan(oshuf.reshape(-1))])
+    shuf_pool = np.concatenate((sshuf.reshape(-1)[~np.isnan(sshuf.reshape(-1))],
+                               oshuf.reshape(-1)[~np.isnan(oshuf.reshape(-1))]))
 
-    CIs = np.quantile(shuf_pool, [0.025, 0.975])
-    ax.plot([0, 6], [CIs[0], CIs[0]], 'k--', label='95% CI')
-    ax.plot([0, 6], [CIs[2], CIs[2]], 'k--')
-    ax.plot([0, 6], [CIs[1], CIs[1]], 'k-')
+    CIs = np.quantile(shuf_pool, [0.025, 0.5, 0.975])
+    ax.plot([0, 5], [CIs[0], CIs[0]], 'k--', label='95% CI')
+    ax.plot([0, 5], [CIs[2], CIs[2]], 'k--')
+    ax.plot([0, 5], [CIs[1], CIs[1]], 'k-')
     ax.legend()
+    ax.set_xticks([0, 1, 2, 3, 4, 5])
+    ax.set_xticklabels(['-1', '0', '4hr', '1', '2', '7'])
+    ax.set_xlabel('Session')
+    ax.set_ylabel('1-d PV corr')
+    ax.set_title(mouse + 'PV_type=' + PVtype)
 
-    return ax
+    return fig, ax
 
 if __name__ == '__main__':
-    pf_rot_plot('Marble06', 'Open', -2, 'Open', -1)
+    plot_PV1_simple('Marble06', nshuf=10)
 
     pass

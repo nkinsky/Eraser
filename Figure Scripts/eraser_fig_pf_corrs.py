@@ -82,6 +82,19 @@ for mouse in err.all_mice_good:
     savefile = os.path.join(plot_dir, mouse + ' PFrots simple.pdf')
     fig.savefig(savefile)
     plt.close(fig)
+
+
+## Run through and plot 1-d PV corrs for all mice and save
+mice = err.ani_mice_good
+label_use = 'ANI'
+nshuf = 10
+for mouse in mice:
+    print('Running 1d corr plot for ' + mouse)
+    save_file = os.path.join(plot_dir, mouse + '_PV1corrs_nshuf' + str(nshuf) + '.pdf')
+    fig, ax = erp.plot_PV1_simple(mouse, nshuf=nshuf, PVtype='both')
+    ax.set_title(ax.get_title() + ' ' + label_use)
+    fig.savefig(save_file)
+    plt.close(fig)
 ## Workhorse code below - run before doing much of the above
 
 ## Run shuffled PV1 correlations for each session pair

@@ -239,7 +239,7 @@ def get_all_PV1corrs(mouse, arena1, arena2, nshuf=0):
             # Don't run any backward registrations
             if (arena1 == arena2 and id2 > id1) or (arena1 != arena2 and id2 >= id1):
                 try:
-                    PVall, PVboth = PV1_corr_bw_sesh('Marble06', arena1, day1, arena2, day2)
+                    PVall, PVboth = PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2)
                     corrs_both[id1, id2] = PVboth
                     corrs_all[id1, id2] = PVall
                     shuf_all[id1, id2], shuf_both[id1, id2] = PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf)
@@ -267,7 +267,7 @@ def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
     temp_both = []
 
     # Put in something here to check for saved data if this takes too long!
-    save_name = 'PV1shuf_corrs_nshuf' + str(nshuf) + '.pkl'
+    save_name = 'PV1shuf_corrs_' + arena2 + str(day2) + '_nshuf_' + str(nshuf) + '.pkl'
     dir_use = get_dir(mouse, arena1, day1)
     save_file = path.join(dir_use, save_name)
 
@@ -731,6 +731,6 @@ class ShufMap:
 
 
 if __name__ == '__main__':
-    shuf_all, shuf_both = PV1_shuf_corrs('Marble06', 'Shock', -2, 'Shock', -1, nshuf=100)
+    shuf_all, shuf_both = PV1_shuf_corrs('Marble06', 'Shock', -2, 'Shock', 0, nshuf=100)
 
     pass
