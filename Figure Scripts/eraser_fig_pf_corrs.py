@@ -85,13 +85,19 @@ for mouse in err.all_mice_good:
 
 
 ## Run through and plot 1-d PV corrs for all mice and save
-mice = err.ani_mice_good
-label_use = 'ANI'
+mice = err.all_mice_good
 nshuf = 10
+PVtype = 'all'
 for mouse in mice:
     print('Running 1d corr plot for ' + mouse)
-    save_file = os.path.join(plot_dir, mouse + '_PV1corrs_nshuf' + str(nshuf) + '.pdf')
-    fig, ax = erp.plot_PV1_simple(mouse, nshuf=nshuf, PVtype='both')
+    save_file = os.path.join(plot_dir, mouse + '_PV1' + PVtype + ' corrs_nshuf' + str(nshuf) + '.pdf')
+    fig, ax = erp.plot_PV1_simple(mouse, nshuf=nshuf, PVtype=PVtype)
+
+    if mouse in err.ani_mice:
+        label_use = 'ANI'
+    elif mouse in err.control_mice:
+        label_use = 'CTRL'
+
     ax.set_title(ax.get_title() + ' ' + label_use)
     fig.savefig(save_file)
     plt.close(fig)
