@@ -1,4 +1,4 @@
-# Behavioral plots here!
+## Behavioral plots here!
 
 import eraser_reference as err
 import er_plot_functions as er
@@ -8,6 +8,10 @@ import numpy as np
 ## Get difference in context-specific freezing between groups at LTM memory time points!
 _, _, fratio_cont = er.plot_all_freezing(err.control_mice)
 _, _, fratio_ani = er.plot_all_freezing(err.ani_mice)
+_, axg, fratio_gen = er.plot_all_freezing(err.generalizers)
+axg.set_title('*Generalizers*')
+_, axd, fratio_disc = er.plot_all_freezing(err.discriminators)
+axd.set_title('Discriminators')
 
 ## Run stats
 pval_bwgroup_1sidedt_specific = np.ones(6)*np.nan

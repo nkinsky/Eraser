@@ -343,7 +343,7 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
     rot = int(rot_deg/90)
     for idn, neuron in enumerate(good_map_ind):
         reg_neuron = good_map[idn]
-        if rot == 0:  # Do correlations directly if possible
+        if rot == 0 and arena1 == arena2:  # Do correlations directly if possible
             corr_us, p_us = spearmanr_nan(np.reshape(PF1.tmap_us[neuron], -1), np.reshape(PF2.tmap_us[reg_neuron], -1))
 
             corr_sm, p_sm = spearmanr_nan(np.reshape(PF1.tmap_sm[neuron], -1), np.reshape(PF2.tmap_sm[reg_neuron], -1))
@@ -731,6 +731,6 @@ class ShufMap:
 
 
 if __name__ == '__main__':
-    shuf_all, shuf_both = PV1_shuf_corrs('Marble06', 'Shock', -2, 'Shock', 0, nshuf=100)
-
+    # shuf_all, shuf_both = PV1_shuf_corrs('Marble06', 'Shock', -2, 'Shock', 0, nshuf=100)
+    get_best_rot('Marble06', 'Open', -2, 'Shock', -2)
     pass

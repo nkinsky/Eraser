@@ -441,7 +441,7 @@ def get_freezing_epochs(freezing):
 
 
 def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
-                     list_dir='E:\Eraser\SessionDirectories', velocity_threshold=1.044, min_freeze_duration=10):
+                     velocity_threshold=1.044, min_freeze_duration=10):
     """
     Gets freezing ratio for all experimental sessions for a given mouse.
     :param
@@ -463,7 +463,7 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
             try:
 
                 pix2cm = get_conv_factors(arena)
-                dir_use = get_dir(mouse, arena, day, list_dir=list_dir)
+                dir_use = get_dir(mouse, arena, day)
                 freezing = detect_freezing(dir_use, velocity_threshold=velocity_threshold,
                                            min_freeze_duration=min_freeze_duration,
                                            arena=arena, pix2cm=pix2cm)[0]
@@ -792,6 +792,6 @@ def plot_PV1_simple(mouse, nshuf=10, ax=None, PVtype='both'):
     return fig, ax
 
 if __name__ == '__main__':
-    plot_PV1_simple('Marble06', nshuf=10)
+    plot_all_freezing(err.control_mice)
 
     pass

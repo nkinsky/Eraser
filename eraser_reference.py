@@ -15,9 +15,9 @@ all_mice.extend(ani_mice)
 all_mice_good = control_mice_good.copy()
 all_mice_good.extend(ani_mice_good)
 
-generalizers = ["Marble29", "Marble11", "Marble06"]
+generalizers = ["Marble06", "Marble11", "Marble29"]
 
-discriminators = ["Marble12", "Marble24", "Marble27", "Marble07"]
+discriminators = ["Marble07", "Marble12", "Marble24", "Marble27"]
 
 # Designate plotting folder
 from os import environ
