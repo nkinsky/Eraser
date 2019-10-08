@@ -16,28 +16,32 @@ plot_dir = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'  #
 # Variables to specify!
 # group_type = 'Control'  # 'Control'
 # mice = err.control_mice_good  # err.control_mice_good
-# arena1 = 'Shock'
-# arena2 = 'Shock'
-arena1 = 'Open'
-arena2 = 'Open'
-cmice = err.control_mice_good
+arena1 = 'Shock'
+arena2 = 'Shock'
+# arena1 = 'Open'
+# arena2 = 'Open'
+cmice = err.discriminators  #err.control_mice_good
 amice = err.ani_mice_good
 days = [-2, -1, 0, 4, 1, 2, 7]
 group_desig = 2  # 1 = include days 1,2, AND 7 in after shock group, 2 = include days 1 and 2 only
 
-# pre-allocate
 ndays = len(days)
-nmicec = len(cmice)
-nmicea = len(amice)
-cont_corr_sm_mean_all = np.ones((nmicec, ndays, ndays))*np.nan
-ani_corr_sm_mean_all = np.ones((nmicea, ndays, ndays))*np.nan
+_, cont_corr_sm_mean_all = pfs.get_group_pf_corrs(cmice)
+_, ani_corr_sm_mean_all = pfs.get_group_pf_corrs(amice)
 
-# Loop through each mouse and get mean correlations
-for idm, mouse in enumerate(cmice):
-    _, cont_corr_sm_mean_all[idm, :, :] = pfs.pf_corr_mean(mouse, arena1, arena2, days)
+# # pre-allocate
 
-for idm, mouse in enumerate(amice):
-    _, ani_corr_sm_mean_all[idm, :, :] = pfs.pf_corr_mean(mouse, arena1, arena2, days)
+# nmicec = len(cmice)
+# nmicea = len(amice)
+# cont_corr_sm_mean_all = np.ones((nmicec, ndays, ndays))*np.nan
+# ani_corr_sm_mean_all = np.ones((nmicea, ndays, ndays))*np.nan
+#
+# # Loop through each mouse and get mean correlations
+# for idm, mouse in enumerate(cmice):
+#     _, cont_corr_sm_mean_all[idm, :, :] = pfs.pf_corr_mean(mouse, arena1, arena2, days)
+#
+# for idm, mouse in enumerate(amice):
+#     _, ani_corr_sm_mean_all[idm, :, :] = pfs.pf_corr_mean(mouse, arena1, arena2, days)
 
 ## Scatterplot for each group independently
 pfs.plot_pfcorr_bygroup(cont_corr_sm_mean_all, arena1, arena2, 'Control', color='k',
@@ -49,7 +53,7 @@ pfs.plot_pfcorr_bygroup(ani_corr_sm_mean_all, arena1, arena2, 'Anisomycin', colo
 figc, axc = pfs.plot_pfcorr_bygroup(cont_corr_sm_mean_all, arena1, arena2, '',
                                     color='k', offset=-0.1, save_fig=False, group_desig=group_desig)
 pfs.plot_pfcorr_bygroup(ani_corr_sm_mean_all, arena1, arena2, 'Combined (green=Ani)',
-                        color='g', offset=0.1, ax_use=axc, group_desig=group_desig)
+                        color='g', offset=0.1, ax_use=axc, group_desig=group_desig, best_rot=False)
 
 # Plot confusion matrices
 pfs.plot_confmat(np.nanmean(cont_corr_sm_mean_all, axis=0), arena1, arena2, 'Control',
@@ -57,7 +61,7 @@ pfs.plot_confmat(np.nanmean(cont_corr_sm_mean_all, axis=0), arena1, arena2, 'Con
 pfs.plot_confmat(np.nanmean(ani_corr_sm_mean_all, axis=0), arena1, arena2, 'Anisomycin',
                  ndays=ndays)
 
-## Plot best rotations for each mouse
+## Plot best rotations for each mouse within arena
 for mouse in err.all_mice_good:
     fig, ax = plt.subplots(4, 5)
     fig.set_size_inches(18, 11)
@@ -83,6 +87,47 @@ for mouse in err.all_mice_good:
     fig.savefig(savefile)
     plt.close(fig)
 
+## Plot b/w arena best rotation plots on the same day for each mouse
+for mouse in err.all_mice_good:
+    fig, ax = plt.subplots(2, 3)
+    fig.set_size_inches(11, 5)
+    for idd, day in enumerate([-2, -1, 4, 1, 2, 7]):
+        try:
+            erp.pf_rot_plot(mouse, 'Open', day, 'Shock', day, ax=ax.reshape(-1)[idd], nshuf=100)
+        except FileNotFoundError:
+            print('FileNotFoundError for ' + mouse + ' Open to Shock day ' + str(day))
+        savefile = os.path.join(plot_dir, mouse + ' PFrots bw arenas simple.pdf')
+        fig.savefig(savefile)
+        plt.close(fig)
+
+## Plot pf rots at best rotation for each group
+amice = err.ani_mice_good
+dmice = err.discriminators
+gmice = err.generalizers
+days = [-2, -1, 4, 1, 2, 7]
+arena1 = 'Open'
+arena2 = 'Open'
+group_desig = 2
+
+_, disc_bestcorr_sm_mean_all = pfs.get_group_pf_corrs(dmice, arena1, arena2, days, best_rot=True)
+_, gen_bestcorr_sm_mean_all = pfs.get_group_pf_corrs(gmice, arena1, arena2, days, best_rot=True)
+_, ani_bestcorr_sm_mean_all = pfs.get_group_pf_corrs(amice, arena1, arena2, days, best_rot=True)
+
+## Scatterplot for each group independently
+pfs.plot_pfcorr_bygroup(disc_bestcorr_sm_mean_all, arena1, arena2, 'Discriminators', color='k',
+                        group_desig=group_desig)
+pfs.plot_pfcorr_bygroup(gen_bestcorr_sm_mean_all, arena1, arena2, 'Generalizers', color='r',
+                        group_desig=group_desig)
+pfs.plot_pfcorr_bygroup(ani_bestcorr_sm_mean_all, arena1, arena2, 'Anisomycin', color='g',
+                        group_desig=group_desig)
+
+# Combined scatterplots
+figc, axc = pfs.plot_pfcorr_bygroup(disc_bestcorr_sm_mean_all, arena1, arena2, '',
+                                    color='k', offset=0, save_fig=False, group_desig=group_desig)
+pfs.plot_pfcorr_bygroup(ani_bestcorr_sm_mean_all, arena1, arena2, '',
+                        color='g', offset=0.1, ax_use=axc, group_desig=group_desig, save_fig=False)
+pfs.plot_pfcorr_bygroup(gen_bestcorr_sm_mean_all, arena1, arena2, 'Combined (k=disc, b=gen, g=Ani,)',
+                        color='b', offset=0.1, ax_use=axc, group_desig=group_desig, save_fig=True, best_rot=True)
 
 ## Run through and plot 1-d PV corrs for all mice and save
 mice = err.all_mice_good
@@ -110,11 +155,11 @@ days = [-2, -1, 0, 4, 1, 2, 7]
 for mouse in err.all_mice_good:
     # for arena1 in arenas:
     # arena2 = arena1
-    arena1 = 'Shock'
-    arena2 = 'Open'
+    arena1 = 'Open'
+    arena2 = 'Shock'
     for id1, day1 in enumerate(days):
         for id2, day2 in enumerate(days):
-            if id1 <+ id2:
+            if id1 <= id2:
                 try:
                     print('Running shuffled PV1 corrs for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' +
                           arena2 + ' day ' + str(day2))
@@ -154,15 +199,15 @@ for mouse in err.all_mice_good:
                 except FileNotFoundError:
                     print('FileNotFoundError for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' +
                           str(day2))
-## Get correlations between shuffled maps within arenas for all mice
+## Get correlations between shuffled maps within/between arenas for all mice
 days = [-2, -1, 0, 4, 1, 2, 7]
 nshuf = 100
 check = []
 # Add in something to not run if save_file already exists!
 for mouse in err.all_mice_good:
     # for arena in ['Shock', 'Open']:
-    arena1 = 'Shock'
-    arena2 = 'Open'
+    arena1 = 'Open'
+    arena2 = 'Shock'
     for id1, day1 in enumerate(days):
         for id2, day2 in enumerate(days):
             dir_use = get_dir(mouse, arena1, day1)

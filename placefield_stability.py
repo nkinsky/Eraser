@@ -384,18 +384,31 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
     # loop through each pair of sessions and get the mean correlation for each session
     for id1, day1 in enumerate(days):
         for id2, day2 in enumerate(days):
-            if id1 < id2:  # Don't loop through things you don't have reg files for
+            # Don't loop through things you don't have reg files for
+            if arena1 == arena2 and id1 < id2 or arena1 == 'Open' and arena2 == 'Shock' and id1 <= id2:
                 try:
-                    corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file,
-                                                         shuf_map=shuf_map)
-                    corr_mean_us[id1, id2] = corrs_us.mean(axis=0)
-                    corr_mean_sm[id1, id2] = corrs_sm.mean(axis=0)
-                    if np.isnan(corrs_us.mean(axis=0)):
-                        print('NaN corrs in ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' vs. '
-                              + arena2 + ' day ' + str(day2) + ': INVESTIGATE!!!')
-                        print('Running with np.nan for now!')
-                        corr_mean_us[id1, id2] = np.nanmean(corrs_us, axis=0)
-                        corr_mean_sm[id1, id2] = np.nanmean(corrs_sm, axis=0)
+                    if best_rot:
+                        corrs_temp, _, _ = get_best_rot(mouse, arena1=arena1, day1=day1, arena2=arena2, day2=day2,
+                                                        pf_file=pf_file)
+                        corr_mean_us[id1, id2] = corrs_temp[0]
+                        corr_mean_sm[id1, id2] = corrs_temp[1]
+                    elif not best_rot:
+                        if not shuf_map:
+                            _, _, temp = get_best_rot(mouse, arena1=arena1, day1=day1, arena2=arena2, day2=day2,
+                                                      pf_file=pf_file)
+                            corr_mean_us[id1, id2] = temp[0, 0]
+                            corr_mean_sm[id1, id2] = temp[1, 0]
+                        elif shuf_map:
+                            corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file,
+                                                                 shuf_map=shuf_map)
+                            corr_mean_us[id1, id2] = corrs_us.mean(axis=0)
+                            corr_mean_sm[id1, id2] = corrs_sm.mean(axis=0)
+                            if np.isnan(corrs_us.mean(axis=0)):  # This should be obsolete now (fixed in spearman_nan below) - keep just in case!
+                                print('NaN corrs in ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' vs. '
+                                      + arena2 + ' day ' + str(day2) + ': INVESTIGATE!!!')
+                                print('Running with np.nan for now!')
+                                corr_mean_us[id1, id2] = np.nanmean(corrs_us, axis=0)
+                                corr_mean_sm[id1, id2] = np.nanmean(corrs_sm, axis=0)
                 except FileNotFoundError:
                     print('Missing pf files for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) +
                           ' to ' + arena2 + ' Day ' + str(day2))
@@ -431,8 +444,13 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_fil
         rots = [0, 90, 180, 270]
         corr_mean_all = np.empty((2, 4))
         for idr, rot in enumerate(rots):
-            corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
+            print(str(rot))
+            if rot != 270:
+                corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
                                                pf_file=pf_file, rot_deg=rot, shuf_map=False)
+            else:  # for debugging Marble29 Shock 1 to Shock 7 only
+                corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
+                                                     pf_file=pf_file, rot_deg=rot, shuf_map=False)
             corr_mean_all[0, idr] = corrs_us.mean(axis=0)
             corr_mean_all[1, idr] = corrs_sm.mean(axis=0)
 
@@ -471,7 +489,7 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_fil
 
 
 def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True,
-                        color='b', ax_use=None, offset=0, group_desig=1):
+                        color='b', ax_use=None, offset=0, group_desig=1, best_rot=False):
     """
     Scatterplot of correlations before shock, after, and several other groupings
     :param corr_mean_mat: nmice x 7 x 7 array of mean corr values for each mouse
@@ -531,7 +549,8 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
     ax.plot(unique_groups, corr_means, color + '-')
     if save_fig:
         fig.savefig(path.join(err.pathname, 'PFcorrs ' + arena1 + ' v '
-                    + arena2 + ' ' + group_type + 'group_desig' + str(group_desig) + '.pdf'))
+                    + arena2 + ' ' + group_type + 'group_desig' + str(group_desig) + 'best_rot' + str(best_rot) +
+                    '.pdf'))
 
     return fig, ax
 
@@ -579,9 +598,10 @@ def spearmanr_nan(a, b):
     :param b:
     :return: corr, pval
     """
-    if not np.all(np.bitwise_or(np.isnan(a), np.isnan(b))):
+    # make sure at least 3 bins have valid numbers in each session - can't perform correlation with less than 3 points
+    if np.sum(np.bitwise_or(np.isnan(a), np.isnan(b))) < len(a) - 2:
         corr, pval = sstats.spearmanr(a, b, nan_policy='omit')
-    elif np.all(np.bitwise_or(np.isnan(a), np.isnan(b))):
+    else:
         corr = np.nan
         pval = np.nan
 
@@ -608,6 +628,30 @@ def load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf):
         shuf_corrs_sm_mean = np.nan()
 
     return shuf_corrs_us_mean, shuf_corrs_sm_mean
+
+
+def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+    """
+    Assembles a nice matrix of mean correlation values between place field maps on days/arenas specified.
+    :param mice:
+    :param arena1:
+    :param arena2:
+    :param days:
+    :param best_rot:
+    :param pf_file:
+    :return:
+    """
+
+    # pre-allocate
+    ndays = len(days)
+    nmice = len(mice)
+    corr_us_mean_all = np.ones((nmice, ndays, ndays))*np.nan
+    corr_sm_mean_all =  np.ones((nmice, ndays, ndays))*np.nan
+
+    for idm, mouse in enumerate(mice):
+        corr_us_mean_all[idm, :, :], corr_sm_mean_all[idm, :, :] = pf_corr_mean(mouse, arena1, arena2, days,
+                                                                                best_rot=best_rot)
+    return corr_us_mean_all, corr_sm_mean_all
 
 
 ## Object to map and view placefields for same neuron mapped between different sessions
@@ -732,5 +776,8 @@ class ShufMap:
 
 if __name__ == '__main__':
     # shuf_all, shuf_both = PV1_shuf_corrs('Marble06', 'Shock', -2, 'Shock', 0, nshuf=100)
-    get_best_rot('Marble06', 'Open', -2, 'Shock', -2)
+    # get_best_rot('Marble06', 'Open', -2, 'Shock', -2)
+    # pf_corr_mean('Marble06', 'Shock', 'Shock', [-2, -1, 4, 1, 2, 7], best_rot=True)
+    get_best_rot('Marble29','Shock',1,'Shock',7)
     pass
+

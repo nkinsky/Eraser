@@ -791,7 +791,8 @@ def plot_PV1_simple(mouse, nshuf=10, ax=None, PVtype='both'):
 
     return fig, ax
 
-if __name__ == '__main__':
-    plot_all_freezing(err.control_mice)
 
+if __name__ == '__main__':
+    # plot_all_freezing(err.control_mice)
+    pf_rot_plot('Marble06', 'Open', -2, 'Shock', -2, nshuf=100)
     pass
