@@ -216,17 +216,17 @@ def registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=False):
     return PV1all, PV2allreg, PV1both, PV2bothreg
 
 
-def get_all_PV1corrs(mouse, arena1, arena2, nshuf=0):
+def get_all_PV1corrs(mouse, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0):
     """
     Gets PV1 corrs for all sessions occurring between arena1 and arena2 for a given mouse.
     :param mouse:
     :param arena1:
     :param arena2:
+    :param days: default = [-2, -1, 0, 4, 1, 2, 7]
     :param nshuf: # shuffles (default = 0).
     :return: corrs_all, corrs_both: 7x7 np-array with PV corrs between all possible session-pairs.
              shuf_all, shuf_both: 7x7xnshuf np-array with shuffled correlations.
     """
-    days = [-2, -1, 0, 4, 1, 2, 7]
 
     # Pre-allocate
     corrs_both = np.ones((7, 7)) * np.nan
@@ -489,7 +489,8 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_fil
 
 
 def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True,
-                        color='b', ax_use=None, offset=0, group_desig=1, best_rot=False):
+                        color='b', ax_use=None, offset=0, group_desig=1, best_rot=False,
+                        prefix='PFcorrs'):
     """
     Scatterplot of correlations before shock, after, and several other groupings
     :param corr_mean_mat: nmice x 7 x 7 array of mean corr values for each mouse
@@ -498,6 +499,8 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
     :param group_type: e.g. 'Control' or 'Anisomycin'
     :param save_fig: default = 'True' to save to eraser figures folder
     :param group_desig: 1 = include day 7 in post-shock plots, 2 = do not include day 7
+    :param best_rot: True/False/Nan: add to title if 2d pf corrs performed at best rotation between arenas
+    :param prefix: prefix to add to save file. e.g. '1dPVcorrs', 'PFcorrs' by default
     :return: fig, ax
     """
 
@@ -548,7 +551,7 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
         corr_means.append(np.nanmean(corr_mean_mat[groups == group_num]))
     ax.plot(unique_groups, corr_means, color + '-')
     if save_fig:
-        fig.savefig(path.join(err.pathname, 'PFcorrs ' + arena1 + ' v '
+        fig.savefig(path.join(err.pathname, prefix + ' ' + arena1 + ' v '
                     + arena2 + ' ' + group_type + 'group_desig' + str(group_desig) + 'best_rot' + str(best_rot) +
                     '.pdf'))
 
@@ -652,6 +655,30 @@ def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='plac
         corr_us_mean_all[idm, :, :], corr_sm_mean_all[idm, :, :] = pf_corr_mean(mouse, arena1, arena2, days,
                                                                                 best_rot=best_rot)
     return corr_us_mean_all, corr_sm_mean_all
+
+
+def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7]):
+    """
+    Assembles a nice matrix of mean correlation values between 1d PVs on days/arenas specified.
+    :param mice:
+    :param arena1:
+    :param arena2:
+    :param days:
+    :param best_rot:
+    :param pf_file:
+    :return:
+    """
+
+    # pre-allocate
+    ndays = len(days)
+    nmice = len(mice)
+    PV1_both_all = np.ones((nmice, ndays, ndays))*np.nan
+    PV1_all_all =  np.ones((nmice, ndays, ndays))*np.nan
+
+    for idm, mouse in enumerate(mice):
+        PV1_all_all[idm, :, :], PV1_both_all[idm, :, :], _, _ = get_all_PV1corrs(mouse, arena1, arena2, days)
+
+    return PV1_all_all, PV1_both_all
 
 
 ## Object to map and view placefields for same neuron mapped between different sessions

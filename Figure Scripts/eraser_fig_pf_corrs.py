@@ -100,34 +100,50 @@ for mouse in err.all_mice_good:
         fig.savefig(savefile)
         plt.close(fig)
 
-## Plot pf rots at best rotation for each group
+## Plot pf corrs at best rotation of PV1d for each group
 amice = err.ani_mice_good
 dmice = err.discriminators
 gmice = err.generalizers
-days = [-2, -1, 4, 1, 2, 7]
-arena1 = 'Open'
-arena2 = 'Open'
-group_desig = 2
+days = [-2, -1, 0, 4, 1, 2, 7]
+arena1 = 'Shock'
+arena2 = 'Shock'
+group_desig = 1
 
-_, disc_bestcorr_sm_mean_all = pfs.get_group_pf_corrs(dmice, arena1, arena2, days, best_rot=True)
-_, gen_bestcorr_sm_mean_all = pfs.get_group_pf_corrs(gmice, arena1, arena2, days, best_rot=True)
-_, ani_bestcorr_sm_mean_all = pfs.get_group_pf_corrs(amice, arena1, arena2, days, best_rot=True)
+type = 'PV1dall'  # 'PV1dboth' or 'PV1dall' or 'PF' are valid options
+best_rot = True  # perform PFcorrs at best rotation between session if True, False = no rotation
 
-## Scatterplot for each group independently
-pfs.plot_pfcorr_bygroup(disc_bestcorr_sm_mean_all, arena1, arena2, 'Discriminators', color='k',
-                        group_desig=group_desig)
-pfs.plot_pfcorr_bygroup(gen_bestcorr_sm_mean_all, arena1, arena2, 'Generalizers', color='r',
-                        group_desig=group_desig)
-pfs.plot_pfcorr_bygroup(ani_bestcorr_sm_mean_all, arena1, arena2, 'Anisomycin', color='g',
-                        group_desig=group_desig)
+if type == 'PF':
+    _, disc_bestcorr_mean_all = pfs.get_group_pf_corrs(dmice, arena1, arena2, days, best_rot=best_rot)
+    _, gen_bestcorr_mean_all = pfs.get_group_pf_corrs(gmice, arena1, arena2, days, best_rot=best_rot)
+    _, ani_bestcorr_mean_all = pfs.get_group_pf_corrs(amice, arena1, arena2, days, best_rot=best_rot)
+    prefix = 'PFcorrs'
+elif type == 'PV1d':
+    _, disc_bestcorr_mean_all = pfs.get_group_PV1d_corrs(dmice, arena1, arena2, days)
+    _, gen_bestcorr_mean_all = pfs.get_group_PV1d_corrs(gmice, arena1, arena2, days)
+    _, ani_bestcorr_mean_all = pfs.get_group_PV1d_corrs(amice, arena1, arena2, days)
+    prefix = 'PV1dcorrs_both'
+elif type == 'PV1dall':
+    disc_bestcorr_mean_all, _ = pfs.get_group_PV1d_corrs(dmice, arena1, arena2, days)
+    gen_bestcorr_mean_all, _ = pfs.get_group_PV1d_corrs(gmice, arena1, arena2, days)
+    ani_bestcorr_mean_all, _ = pfs.get_group_PV1d_corrs(amice, arena1, arena2, days)
+    prefix = 'PV1dcorrs_all'
+
+
+# Scatterplot for each group independently
+pfs.plot_pfcorr_bygroup(disc_bestcorr_mean_all, arena1, arena2, 'Discriminators', color='k',
+                        group_desig=group_desig, best_rot=best_rot, save_fig=False, prefix=prefix)
+pfs.plot_pfcorr_bygroup(gen_bestcorr_mean_all, arena1, arena2, 'Generalizers', color='r',
+                        group_desig=group_desig, best_rot=best_rot, save_fig=False, prefix=prefix)
+pfs.plot_pfcorr_bygroup(ani_bestcorr_mean_all, arena1, arena2, 'Anisomycin', color='g',
+                        group_desig=group_desig, best_rot=best_rot, save_fig=False, prefix=prefix)
 
 # Combined scatterplots
-figc, axc = pfs.plot_pfcorr_bygroup(disc_bestcorr_sm_mean_all, arena1, arena2, '',
+figc, axc = pfs.plot_pfcorr_bygroup(disc_bestcorr_mean_all, arena1, arena2, '', prefix=prefix,
                                     color='k', offset=0, save_fig=False, group_desig=group_desig)
-pfs.plot_pfcorr_bygroup(ani_bestcorr_sm_mean_all, arena1, arena2, '',
+pfs.plot_pfcorr_bygroup(ani_bestcorr_mean_all, arena1, arena2, '', prefix=prefix,
                         color='g', offset=0.1, ax_use=axc, group_desig=group_desig, save_fig=False)
-pfs.plot_pfcorr_bygroup(gen_bestcorr_sm_mean_all, arena1, arena2, 'Combined (k=disc, b=gen, g=Ani,)',
-                        color='b', offset=0.1, ax_use=axc, group_desig=group_desig, save_fig=True, best_rot=True)
+pfs.plot_pfcorr_bygroup(gen_bestcorr_mean_all, arena1, arena2, 'Combined (k=disc, b=gen, g=Ani)', prefix=prefix,
+                        color='b', offset=0.1, ax_use=axc, group_desig=group_desig, save_fig=True, best_rot=best_rot)
 
 ## Run through and plot 1-d PV corrs for all mice and save
 mice = err.all_mice_good

@@ -792,7 +792,89 @@ def plot_PV1_simple(mouse, nshuf=10, ax=None, PVtype='both'):
     return fig, ax
 
 
+def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar_width=0.25, ax=None):
+    """
+    Plot bar graph with all data points overlaid
+    :param data:
+    :param groups:
+    :param group_names:
+    :param color:
+    :param jitter:
+    :param offset:
+    :param bar_width:
+    :param ax:
+    :return:
+    """
+
+    # Get means for each group
+    unique_groups = np.unique(groups).tolist()
+    data_means = [np.mean(data[a == groups]) for a in unique_groups]
+
+    # Add in jitter to groups
+    xpts = groups.copy() + jitter * np.random.standard_normal(groups.shape)
+
+    # Add in offset
+    xpts = xpts + offset
+
+    # Set up new fig/axes if required
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
+
+    # Plot corrs in scatterplot form
+    ax.scatter(xpts.reshape(-1), data.reshape(-1), color=color, label=data_label)
+
+    # Now plot bars over them all
+    ax.bar(np.asarray(unique_groups) + offset, data_means, width=bar_width, color=color, alpha=0.5)
+
+    return fig, ax
+
+
+def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors = ['k', 'g'],
+                   group_names=['grp1', 'grp2'], ax=None, xlabel='', ylabel=''):
+    """
+    Plots comparison of correlations in open v shock arena for two different groups
+    :param open_corrs1: this and the below are 1d ndarrays of correlations values for each condition
+    :param shock_corrs1:
+    :param open_corrs2:
+    :param shock_corrs2:
+    :param group_names:
+    :return: fig, ax
+    """
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
+
+    scatterbar(np.concatenate((open_corrs1, shock_corrs1)), np.concatenate((np.ones_like(open_corrs1),
+               np.ones_like(shock_corrs1)*2)), ax=ax, color=colors[0], offset=-0.125, data_label=group_names[0],
+               jitter=0.05)
+
+    scatterbar(np.concatenate((open_corrs2, shock_corrs2)), np.concatenate((np.ones_like(open_corrs2),
+               np.ones_like(shock_corrs2)*2)), ax=ax, color=colors[1], offset=0.125, data_label=group_names[1],
+               jitter=0.05)
+
+    ax.set_xticks([1, 2])
+    ax.set_xticklabels(['Open', 'Shock'])
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    plt.legend()
+
+
+    return fig, ax
+
+
 if __name__ == '__main__':
     # plot_all_freezing(err.control_mice)
-    pf_rot_plot('Marble06', 'Open', -2, 'Shock', -2, nshuf=100)
+    # pf_rot_plot('Marble06', 'Open', -2, 'Shock', -2, nshuf=100)
+    x = np.asarray([0, 1, 2, 3, 4, 5, 4, 7, 3, 4, 5, 6, 4, 7, 2, 3, 5, 4, 1, 6, 7, 4, 2, 5, 1])
+    data = np.random.normal(x, scale=1, size=x.shape)
+    # scatterbar(data, x, group_names=[str(a) for a in x])
+    open1 = np.random.normal(x, scale=1, size=x.shape)
+    shock1 = np.random.normal(x, scale=1, size=x.shape) + 0.5
+    open2 = np.random.normal(x, scale=1, size=x.shape)
+    shock2 = np.random.normal(x, scale=1, size=x.shape) - 0.5
+    pfcorr_compare(open1, shock1, open2, shock2, group_names=['Ctrl', 'Ani'], colors=['k', 'g'])
+
     pass
