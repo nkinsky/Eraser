@@ -820,6 +820,7 @@ if __name__ == '__main__':
     # shuf_all, shuf_both = PV1_shuf_corrs('Marble06', 'Shock', -2, 'Shock', 0, nshuf=100)
     # get_best_rot('Marble06', 'Open', -2, 'Shock', -2)
     # pf_corr_mean('Marble06', 'Shock', 'Shock', [-2, -1, 4, 1, 2, 7], best_rot=True)
-    get_best_rot('Marble29','Shock',1,'Shock',7)
+    # get_best_rot('Marble29','Shock',1,'Shock',7)
+    get_group_pf_corrs(['Marble06', 'Marble07'], 'Open', 'Open', [-2, -1, 0, 4, 1, 2, 7], best_rot=True)
     pass
 

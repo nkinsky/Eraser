@@ -810,6 +810,9 @@ def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar
     # Get means for each group
     unique_groups = np.unique(groups).tolist()
     data_means = [np.mean(data[a == groups]) for a in unique_groups]
+    if np.any(np.isnan(data_means)):
+        print('NaNs detected in data - check!')
+        data_means = [np.nanmean(data[a == groups]) for a in unique_groups]
 
     # Add in jitter to groups
     xpts = groups.copy() + jitter * np.random.standard_normal(groups.shape)
@@ -841,11 +844,12 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors 
     :param open_corrs2:
     :param shock_corrs2:
     :param group_names:
+    :param ax: custom axes to plot into.
     :return: fig, ax, pval, tstat: pval/test are 2x2 np arrays from t-tests:
             [[open1 v open2, shock1 v shock2], [open1 v shock1, open2 v shock2]]
     """
     if ax is None:
-        fig, ax = plt.subplots()
+        fig, ax = plt.subplots(1, 2)
     else:
         fig = ax.figure
 
@@ -870,6 +874,18 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors 
     tstat[0, 1], pval[0, 1] = s.stats.ttest_ind(shock_corrs1, shock_corrs2)
     tstat[1, 0], pval[1, 0] = s.stats.ttest_ind(open_corrs1, shock_corrs1)
     tstat[1, 1], pval[1, 1] = s.stats.ttest_ind(open_corrs2, shock_corrs2)
+
+    # Plot stats in second subplot if it is there
+    if len(ax) == 2:
+        ax[1].text(0.1, 0.9, 'Open1 v Open2 pval=' + "{0:.3g}".format(pval[0, 0]) +
+                   ' tstat=' + "{0:.3g}".format(tstat[0, 0]))
+        ax[1].text(0.1, 0.75, 'Shock1 v Shock2 pval=' + "{0:.3g}".format(pval[0, 1]) +
+                   ' tstat=' + "{0:.3g}".format(tstat[0, 1]))
+        ax[1].text(0.1, 0.50, 'Open1 v Shock1 pval=' + "{0:.3g}".format(pval[1, 0]) +
+                   ' tstat=' + "{0:.3g}".format(tstat[1, 0]))
+        ax[1].text(0.1, 0.35, 'Open2 v Shock2 pval=' + "{0:.3g}".format(pval[1, 1]) +
+                   ' tstat=' + "{0:.3g}".format(tstat[1, 1]))
+
 
     return fig, ax, pval, tstat
 

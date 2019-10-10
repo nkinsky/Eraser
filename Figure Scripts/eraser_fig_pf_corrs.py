@@ -116,24 +116,28 @@ disc_bestcorr_mean_all = []
 gen_bestcorr_mean_all = []
 ani_bestcorr_mean_all = []
 
-for ida, arena in enumerate(['Open, Shock']):
+for ida, arena in enumerate(['Open', 'Shock']):
     arena1 = arena
     arena2 = arena
     if type == 'PF':
-        _, disc_bestcorr_mean_all[ida] = pfs.get_group_pf_corrs(dmice, arena1, arena2, days, best_rot=best_rot)
-        _, gen_bestcorr_mean_all[ida] = pfs.get_group_pf_corrs(gmice, arena1, arena2, days, best_rot=best_rot)
-        _, ani_bestcorr_mean_all[ida] = pfs.get_group_pf_corrs(amice, arena1, arena2, days, best_rot=best_rot)
+        _, tempd = pfs.get_group_pf_corrs(dmice, arena1, arena2, days, best_rot=best_rot)
+        _, tempg = pfs.get_group_pf_corrs(gmice, arena1, arena2, days, best_rot=best_rot)
+        _, tempa= pfs.get_group_pf_corrs(amice, arena1, arena2, days, best_rot=best_rot)
         prefix = 'PFcorrs'
     elif type == 'PV1d':
-        _, disc_bestcorr_mean_all[ida] = pfs.get_group_PV1d_corrs(dmice, arena1, arena2, days)
-        _, gen_bestcorr_mean_all[ida] = pfs.get_group_PV1d_corrs(gmice, arena1, arena2, days)
-        _, ani_bestcorr_mean_all[ida] = pfs.get_group_PV1d_corrs(amice, arena1, arena2, days)
+        _, tempd= pfs.get_group_PV1d_corrs(dmice, arena1, arena2, days)
+        _, tempg = pfs.get_group_PV1d_corrs(gmice, arena1, arena2, days)
+        _, tempa = pfs.get_group_PV1d_corrs(amice, arena1, arena2, days)
         prefix = 'PV1dcorrs_both'
     elif type == 'PV1dall':
-        disc_bestcorr_mean_all[ida], _ = pfs.get_group_PV1d_corrs(dmice, arena1, arena2, days)
-        gen_bestcorr_mean_all[ida], _ = pfs.get_group_PV1d_corrs(gmice, arena1, arena2, days)
-        ani_bestcorr_mean_all[ida], _ = pfs.get_group_PV1d_corrs(amice, arena1, arena2, days)
+        tempd, _ = pfs.get_group_PV1d_corrs(dmice, arena1, arena2, days)
+        tempg, _ = pfs.get_group_PV1d_corrs(gmice, arena1, arena2, days)
+        tempa, _ = pfs.get_group_PV1d_corrs(amice, arena1, arena2, days)
         prefix = 'PV1dcorrs_all'
+
+    disc_bestcorr_mean_all.append(tempd)
+    gen_bestcorr_mean_all.append(tempg)
+    ani_bestcorr_mean_all.append(tempa)
 
     # Scatterplot for each group independently
     pfs.plot_pfcorr_bygroup(disc_bestcorr_mean_all[ida], arena1, arena2, 'Discriminators', color='k',
@@ -151,16 +155,18 @@ for ida, arena in enumerate(['Open, Shock']):
     pfs.plot_pfcorr_bygroup(gen_bestcorr_mean_all[ida], arena1, arena2, 'Combined (k=disc, b=gen, g=Ani)', prefix=prefix,
                             color='b', offset=0.1, ax_use=axc, group_desig=group_desig, save_fig=True, best_rot=best_rot)
 
-# Now do better combined plots
-dgroups, group_labels = pfs.get_time_groups(dmice.shape[0], group_desig)
-agroups, _ = pfs.get_time_groups(amice.shape[0], group_desig)
-for idg, group in enumerate(np.unique(dgroups).tolist):
+## Now do better combined plots
+dgroups, group_labels = pfs.get_time_groups(len(dmice), group_desig)
+agroups, _ = pfs.get_time_groups(len(amice), group_desig)
+for idg, group in enumerate(np.unique(dgroups[~np.isnan(dgroups)]).tolist()):
     open_corrs1 = disc_bestcorr_mean_all[0][dgroups == group]
     shock_corrs1 = disc_bestcorr_mean_all[1][dgroups == group]
     open_corrs2 = ani_bestcorr_mean_all[0][agroups == group]
     shock_corrs2 = ani_bestcorr_mean_all[1][agroups == group]
-    erp.pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors=['k', 'g'],
-                   group_names=['Discr', 'Ani'], ax=None, xlabel=group_labels[idg], ylabel=prefix)
+    fig, ax = plt.subplots(1, 2)
+    fig.set_size_inches([12, 5])
+    _, _, pval, tstat = erp.pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors=['k', 'g'],
+                   group_names=['Discr', 'Ani'], ax=ax[0], xlabel=group_labels[idg], ylabel=prefix)
 
 ## Run through and plot 1-d PV corrs for all mice and save
 mice = err.all_mice_good
