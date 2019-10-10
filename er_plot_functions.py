@@ -21,6 +21,7 @@ import session_directory as sd
 import placefield_stability as pfs
 import eraser_reference as err
 import scipy as sp
+import scipy.stats as s
 sd.make_session_list()  # update session list
 plt.rcParams['pdf.fonttype'] = 42
 import helpers as hlp
@@ -840,7 +841,8 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors 
     :param open_corrs2:
     :param shock_corrs2:
     :param group_names:
-    :return: fig, ax
+    :return: fig, ax, pval, tstat: pval/test are 2x2 np arrays from t-tests:
+            [[open1 v open2, shock1 v shock2], [open1 v shock1, open2 v shock2]]
     """
     if ax is None:
         fig, ax = plt.subplots()
@@ -861,8 +863,15 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors 
     ax.set_ylabel(ylabel)
     plt.legend()
 
+    # Now run t-tests on each
+    tstat = np.ones((2, 2))*np.nan
+    pval = np.ones((2, 2))*np.nan
+    tstat[0, 0], pval[0, 0] = s.stats.ttest_ind(open_corrs1, open_corrs2)
+    tstat[0, 1], pval[0, 1] = s.stats.ttest_ind(shock_corrs1, shock_corrs2)
+    tstat[1, 0], pval[1, 0] = s.stats.ttest_ind(open_corrs1, shock_corrs1)
+    tstat[1, 1], pval[1, 1] = s.stats.ttest_ind(open_corrs2, shock_corrs2)
 
-    return fig, ax
+    return fig, ax, pval, tstat
 
 
 if __name__ == '__main__':

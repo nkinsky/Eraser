@@ -504,21 +504,10 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
     :return: fig, ax
     """
 
+    nmice = corr_mean_mat.shape[0]
+
     # Define groups for scatter plots
-    if group_desig == 1:
-        groups = np.ones_like(corr_mean_mat) * np.nan
-        groups[:, 0:2, 0:2] = 1  # 1 = before shock
-        groups[:, 4:7, 4:7] = 2  # 2 = after shock days 1,2,7
-        groups[:, 0:2, 4:7] = 3  # 3 = before-v-after shock
-        groups[:, 0:2, 3] = 4  # 4 = before-v-STM
-        groups[:, 3, 4:7] = 5  # 5 = STM-v-LTM (4hr to 1,2,7)
-    elif group_desig == 2:
-        groups = np.ones_like(corr_mean_mat) * np.nan
-        groups[:, 0:2, 0:2] = 1  # 1 = before shock
-        groups[:, 4:6, 4:6] = 2  # 2 = after shock days 1,2 only
-        groups[:, 0:2, 4:6] = 3  # 3 = before-v-after shock
-        groups[:, 0:2, 3] = 4  # 4 = before-v-STM
-        groups[:, 3, 4:6] = 5  # 5 = STM-v-LTM (days 1 and 2 only)
+    groups, group_labels = get_time_groups(nmice, group_desig)
 
     # Add in jitter to groups
     xpts = groups.copy() + 0.1 * np.random.standard_normal(groups.shape)
@@ -536,12 +525,7 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
     # Plot corrs in scatterplot form
     ax.scatter(xpts.reshape(-1), corr_mean_mat.reshape(-1), color=color)
     ax.set_xticks(np.arange(1, 6))
-    if group_desig == 1:
-        ax.set_xticklabels(['Before Shk', 'After Shk (Days1-7)', 'Bef-Aft',
-                            'Bef-STM', 'STM-Aft'])
-    elif group_desig == 2:
-        ax.set_xticklabels(['Before Shk', 'After Shk (Days1,2 only)', 'Bef-Aft',
-                            'Bef-STM', 'STM-Aft'])
+    ax.set_xticklabels(group_labels)
 
     ax.set_ylabel('Mean Spearman Rho')
     ax.set_title(group_type)
@@ -556,6 +540,37 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
                     '.pdf'))
 
     return fig, ax
+
+
+def get_time_groups(nmice, group_desig=1):
+    """
+    Returns groupings for plotting different time-epochs in group correlation matrices.
+    :param nmice:
+    :param group_desig: 1: include day 1, 2, AND 7 in AFTER epochs, 2: include day 1 and 2 only in AFTER
+    :return: groups: nmice x 7 x 7 array with groupings for pf comparisons - see below comments for description
+    """
+
+    # Define groups for scatter plots
+    if group_desig == 1:
+        groups = np.ones((nmice, 7, 7)) * np.nan
+        groups[:, 0:2, 0:2] = 1  # 1 = before shock
+        groups[:, 4:7, 4:7] = 2  # 2 = after shock days 1,2,7
+        groups[:, 0:2, 4:7] = 3  # 3 = before-v-after shock
+        groups[:, 0:2, 3] = 4  # 4 = before-v-STM
+        groups[:, 3, 4:7] = 5  # 5 = STM-v-LTM (4hr to 1,2,7)
+        group_labels = ['Before', 'After(Days 1-7)', 'Before v After',
+                        'Before v STM', 'STM v After']
+    elif group_desig == 2:
+        groups = np.ones((nmice, 7, 7)) * np.nan
+        groups[:, 0:2, 0:2] = 1  # 1 = before shock
+        groups[:, 4:6, 4:6] = 2  # 2 = after shock days 1,2 only
+        groups[:, 0:2, 4:6] = 3  # 3 = before-v-after shock
+        groups[:, 0:2, 3] = 4  # 4 = before-v-STM
+        groups[:, 3, 4:6] = 5  # 5 = STM-v-LTM (days 1 and 2 only)
+        group_labels = ['Before', 'After (Day 1-2))', 'Before v After',
+                        'Before v STM', 'STM v After']
+
+    return groups, group_labels
 
 
 def plot_confmat(corr_mean_mat, arena1, arena2, group_type, ndays=7, ax_use=None, save_fig=True):
