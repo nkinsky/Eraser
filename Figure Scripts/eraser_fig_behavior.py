@@ -4,10 +4,30 @@ import eraser_reference as err
 import er_plot_functions as er
 import scipy.stats as s
 import numpy as np
+import matplotlib.pyplot as plt
+from os import path
+
+# Make text save as whole words
+plt.rcParams['pdf.fonttype'] = 42
+
+plot_dir = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'  # Plotting folder
 
 ## Get difference in context-specific freezing between groups at LTM memory time points!
-_, _, fratio_cont = er.plot_all_freezing(err.control_mice)
-_, _, fratio_ani = er.plot_all_freezing(err.ani_mice)
+figc, axc, fratio_cont = er.plot_all_freezing(err.control_mice)
+axc.set_ylim([0, 0.80])
+axc.set_title('Control')
+figc.savefig(path.join(plot_dir, 'Control Group All Freezing Plot.pdf'))
+
+# Exclude 29 who is freezing a bunch before even being shocked in shock arena
+figcn29, axcn29, fratio_contn29 = er.plot_all_freezing(err.control_mice[0:-1])
+axcn29.set_ylim([0, 0.80])
+axcn29.set_title('Control')
+figcn29.savefig(path.join(plot_dir, 'Control Group All Freezing Plot excluding Marble29.pdf'))
+
+figa, axa, fratio_ani = er.plot_all_freezing(err.ani_mice)
+axa.set_ylim([0, 0.80])
+axa.set_title('Anisomycin')
+figa.savefig(path.join(plot_dir, 'Anisomycin Group All Freezing Plot.pdf'))
 _, axg, fratio_gen = er.plot_all_freezing(err.generalizers)
 axg.set_title('*Generalizers*')
 _, axd, fratio_disc = er.plot_all_freezing(err.discriminators)
@@ -81,15 +101,25 @@ axab.set_title('Anisomycin Mice')
 
 ##  Now between day -1 and day 1 for each group, shock arena only
 
-statsc, pvalc = s.ttest_rel(fratio_cont[1, 1, :], fratio_cont[1, 3, :])
-pvalc = pvalc/2
+validc_bool = np.bitwise_and(~np.isnan(fratio_cont[1, 1, :]),
+                             ~np.isnan(fratio_cont[1, 3, :]))
+statsc_paired, pvalc_paired = s.ttest_rel(fratio_cont[1, 1, validc_bool],
+                                          fratio_cont[1, 3, validc_bool])
+statsc_ind, pvalc_ind = s.ttest_ind(fratio_cont[1, 1, ~np.isnan(fratio_cont[1, 1, :])],
+                                    fratio_cont[1, 3, ~np.isnan(fratio_cont[1, 3, :])])
+
 
 # try to exclude Marble29 who seems to freeze a bunch even BEFORE being shocked...
-statsc_no29, pvalc_no29 = s.ttest_rel(fratio_cont[1, 1, 0:7], fratio_cont[1, 3, 0:7])
-pvalc_no29 = pvalc_no29/2
+validc_no29_bool = validc_bool.copy()
+validc_no29_bool[8] = False
+statsc_no29, pvalc_no29 = s.ttest_rel(fratio_cont[1, 1, validc_no29_bool],
+                                      fratio_cont[1, 3, validc_no29_bool])
+# pvalc_no29 = pvalc_no29/2
 
-statsa, pvala = s.ttest_rel(fratio_ani[1, 1, :], fratio_ani[1, 3, :])
-pvala = pvala/2
+valida_bool = np.bitwise_and(~np.isnan(fratio_ani[1, 1, :]),
+                             ~np.isnan(fratio_ani[1, 3, :]))
+statsa, pvala = s.ttest_rel(fratio_ani[1, 1, valida_bool], fratio_ani[1, 3, valida_bool])
+# pvala = pvala/2
 
 
 ## Plot the above - day -1 to day 1 in shock arena, then day shock-freezing compared between

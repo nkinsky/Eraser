@@ -567,7 +567,7 @@ def get_time_groups(nmice, group_desig=1):
         groups[:, 0:2, 4:6] = 3  # 3 = before-v-after shock
         groups[:, 0:2, 3] = 4  # 4 = before-v-STM
         groups[:, 3, 4:6] = 5  # 5 = STM-v-LTM (days 1 and 2 only)
-        group_labels = ['Before', 'After (Day 1-2))', 'Before v After',
+        group_labels = ['Before', 'After (Day 1-2)', 'Before v After',
                         'Before v STM', 'STM v After']
 
     return groups, group_labels
@@ -688,7 +688,7 @@ def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7]):
     ndays = len(days)
     nmice = len(mice)
     PV1_both_all = np.ones((nmice, ndays, ndays))*np.nan
-    PV1_all_all =  np.ones((nmice, ndays, ndays))*np.nan
+    PV1_all_all = np.ones((nmice, ndays, ndays))*np.nan
 
     for idm, mouse in enumerate(mice):
         PV1_all_all[idm, :, :], PV1_both_all[idm, :, :], _, _ = get_all_PV1corrs(mouse, arena1, arena2, days)

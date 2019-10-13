@@ -836,7 +836,7 @@ def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar
 
 
 def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors = ['k', 'g'],
-                   group_names=['grp1', 'grp2'], ax=None, xlabel='', ylabel=''):
+                   group_names=['grp1', 'grp2'], xlabel='', ylabel=''):
     """
     Plots comparison of correlations in open v shock arena for two different groups
     :param open_corrs1: this and the below are 1d ndarrays of correlations values for each condition
@@ -848,32 +848,30 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors 
     :return: fig, ax, pval, tstat: pval/test are 2x2 np arrays from t-tests:
             [[open1 v open2, shock1 v shock2], [open1 v shock1, open2 v shock2]]
     """
-    if ax is None:
-        fig, ax = plt.subplots(1, 2)
-    else:
-        fig = ax.figure
+    fig, ax = plt.subplots(1, 2)
+    fig.set_size_inches([12, 5])
 
     scatterbar(np.concatenate((open_corrs1, shock_corrs1)), np.concatenate((np.ones_like(open_corrs1),
-               np.ones_like(shock_corrs1)*2)), ax=ax, color=colors[0], offset=-0.125, data_label=group_names[0],
+               np.ones_like(shock_corrs1)*2)), ax=ax[0], color=colors[0], offset=-0.125, data_label=group_names[0],
                jitter=0.05)
 
     scatterbar(np.concatenate((open_corrs2, shock_corrs2)), np.concatenate((np.ones_like(open_corrs2),
-               np.ones_like(shock_corrs2)*2)), ax=ax, color=colors[1], offset=0.125, data_label=group_names[1],
+               np.ones_like(shock_corrs2)*2)), ax=ax[0], color=colors[1], offset=0.125, data_label=group_names[1],
                jitter=0.05)
 
-    ax.set_xticks([1, 2])
-    ax.set_xticklabels(['Open', 'Shock'])
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    plt.legend()
+    ax[0].set_xticks([1, 2])
+    ax[0].set_xticklabels(['Open', 'Shock'])
+    ax[0].set_xlabel(xlabel)
+    ax[0].set_ylabel(ylabel)
+    ax[0].legend()
 
     # Now run t-tests on each
     tstat = np.ones((2, 2))*np.nan
     pval = np.ones((2, 2))*np.nan
-    tstat[0, 0], pval[0, 0] = s.stats.ttest_ind(open_corrs1, open_corrs2)
-    tstat[0, 1], pval[0, 1] = s.stats.ttest_ind(shock_corrs1, shock_corrs2)
-    tstat[1, 0], pval[1, 0] = s.stats.ttest_ind(open_corrs1, shock_corrs1)
-    tstat[1, 1], pval[1, 1] = s.stats.ttest_ind(open_corrs2, shock_corrs2)
+    tstat[0, 0], pval[0, 0] = s.stats.ttest_ind(open_corrs1, open_corrs2, nan_policy='omit')
+    tstat[0, 1], pval[0, 1] = s.stats.ttest_ind(shock_corrs1, shock_corrs2, nan_policy='omit')
+    tstat[1, 0], pval[1, 0] = s.stats.ttest_ind(open_corrs1, shock_corrs1, nan_policy='omit')
+    tstat[1, 1], pval[1, 1] = s.stats.ttest_ind(open_corrs2, shock_corrs2, nan_policy='omit')
 
     # Plot stats in second subplot if it is there
     if len(ax) == 2:
@@ -885,7 +883,6 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors 
                    ' tstat=' + "{0:.3g}".format(tstat[1, 0]))
         ax[1].text(0.1, 0.35, 'Open2 v Shock2 pval=' + "{0:.3g}".format(pval[1, 1]) +
                    ' tstat=' + "{0:.3g}".format(tstat[1, 1]))
-
 
     return fig, ax, pval, tstat
 
