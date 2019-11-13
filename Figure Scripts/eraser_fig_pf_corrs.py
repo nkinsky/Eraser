@@ -105,9 +105,7 @@ amice = err.ani_mice_good
 dmice = err.discriminators
 gmice = err.generalizers
 days = [-2, -1, 0, 4, 1, 2, 7]
-arena1 = 'Shock'
-arena2 = 'Shock'
-group_desig = 2
+group_desig = 1
 
 type = 'PF'  # 'PV1dboth' or 'PV1dall' or 'PF' are valid options
 best_rot = True  # perform PFcorrs at best rotation between session if True, False = no rotation
@@ -167,7 +165,7 @@ for idg, group in enumerate(np.unique(dgroups[~np.isnan(dgroups)]).tolist()):
     shock_corrs2 = ani_bestcorr_mean_all[1][agroups == group]
 
     fig, ax, pval, tstat = erp.pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors=['k', 'g'],
-                   group_names=['Discr', 'Ani'], xlabel=group_labels[idg], ylabel=prefix)
+                   group_names=['Discr', 'Ani'], xlabel=group_labels[idg], ylabel=prefix, xticklabels=['Open', 'Shock'])
 
     if type == 'PF':
         if not match_yaxis:
@@ -181,6 +179,81 @@ for idg, group in enumerate(np.unique(dgroups[~np.isnan(dgroups)]).tolist()):
         ax[0].set_title('best_rot=' + str(best_rot))
     else:
         savefile = os.path.join(plot_dir, prefix + ' 2x2 Discr and Ani ' + group_labels[idg] + '.pdf')
+    fig.savefig(savefile)
+
+## Get mean 95% CIs to put in plots manually for SfN, add into code above later
+
+# preallocate
+disc_allCI = np.ones((len(dmice), 3, 7, 7))*np.nan
+disc_allCI_open = np.ones((len(dmice), 3, 7, 7))*np.nan
+ani_allCI = np.ones((len(amice), 3, 7, 7))*np.nan
+ani_allCI_open = np.ones((len(amice), 3, 7, 7))*np.nan
+
+# Get CIs for all session-pairs/mice
+nshuf = 100
+for idm, mouse in enumerate(dmice):
+    disc_allCI[idm, :, :, :] = pfs.get_all_CIshuf(mouse, 'Shock', 'Shock', nshuf=100)
+    disc_allCI_open[idm, :, :, :] = pfs.get_all_CIshuf(mouse, 'Open', 'Open', nshuf=100)
+
+for idm, mouse in enumerate(amice):
+    ani_allCI[idm, :, :, :] = pfs.get_all_CIshuf(mouse, 'Shock', 'Shock', nshuf=100)
+    ani_allCI_open[idm, :, :, :] = pfs.get_all_CIshuf(mouse, 'Open', 'Open', nshuf=100)
+
+# Get mean CIs for all session-pairs at each stage after combining groups (vet this assumption later?)
+CIcomb_shock = np.concatenate((disc_allCI, ani_allCI), 0)
+CIcomb_open = np.concatenate((disc_allCI_open, ani_allCI_open), 0)
+
+# Now estimate them by stage
+groups, group_labels = pfs.get_time_groups(len(dmice) + len(amice), group_desig=group_desig)
+
+unique_groups = np.unique(groups[~np.isnan(groups)])
+ngroups = len(unique_groups)
+CIshock_mean = np.ones((3, ngroups))*np.nan
+CIopen_mean = np.ones((3, ngroups))*np.nan
+for idg, group in enumerate(unique_groups):
+    for j in range(3):
+        CIshock_mean[j, idg] = np.nanmean(CIcomb_shock[:, j][groups == group])
+        CIopen_mean[j, idg] = np.nanmean(CIcomb_open[:, j][groups == group])
+
+
+## Compare best_rot=True to False in shock arena
+amice = err.ani_mice_good
+dmice = err.discriminators
+days = [-2, -1, 0, 4, 1, 2, 7]
+arena1 = 'Shock'
+arena2 = 'Shock'
+group_desig = 1
+
+prefix = 'PFcorrs'
+_, disc_corrs_norot = pfs.get_group_pf_corrs(dmice, arena1, arena2, days, best_rot=False)
+_, disc_corrs_bestrot = pfs.get_group_pf_corrs(dmice, arena1, arena2, days, best_rot=True)
+_, ani_corrs_norot = pfs.get_group_pf_corrs(amice, arena1, arena2, days, best_rot=False)
+_, ani_corrs_bestrot = pfs.get_group_pf_corrs(amice, arena1, arena2, days, best_rot=True)
+
+# Set up plots
+match_yaxis = True
+match_ylims = [-0.3, 0.6]
+dgroups, group_labels = pfs.get_time_groups(len(dmice), group_desig)
+agroups, _ = pfs.get_time_groups(len(amice), group_desig)
+
+# Plot them all out
+for idg, group in enumerate(np.unique(dgroups[~np.isnan(dgroups)]).tolist()):
+    disc_corrs_norot_use = disc_corrs_norot[dgroups == group]
+    disc_corrs_bestrot_use = disc_corrs_bestrot[dgroups == group]
+    ani_corrs_norot_use = ani_corrs_norot[agroups == group]
+    ani_corrs_bestrot_use = ani_corrs_bestrot[agroups == group]
+
+    fig, ax, pval, tstat = erp.pfcorr_compare(disc_corrs_norot_use, disc_corrs_bestrot_use, ani_corrs_norot_use,
+                                              ani_corrs_bestrot_use, colors=['k', 'g'], group_names=['Discr', 'Ani'],
+                                              xlabel=group_labels[idg], ylabel=prefix, xticklabels=['no rot', 'best rot'])
+
+    if not match_yaxis:
+        savefile = os.path.join(plot_dir, prefix + ' 2x2 Discr and Ani no v best rot ' + group_labels[idg] + '.pdf')
+    elif match_yaxis:
+        ax[0].set_ylim(match_ylims)
+        savefile = os.path.join(plot_dir, prefix + ' 2x2 Discr and Ani no v best rot ' + group_labels[idg] + '_equalaxes.pdf')
+
+    ax[0].set_title('No rot v Best rot')
     fig.savefig(savefile)
 
 ## Run through and plot 1-d PV corrs for all mice and save

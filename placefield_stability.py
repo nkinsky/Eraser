@@ -419,6 +419,40 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
     return corr_mean_us, corr_mean_sm
 
 
+def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7], nshuf=1000, pct=95):
+    """
+    Calculate CIs at pct specified (95% = default) and median for all days
+    :param mouse:
+    :param arena1:
+    :param arena2:
+    :param days:
+    :param nshuf: 1000 = default
+    :param pct:
+    :return:
+    """
+
+    # pre-allocate arrays
+    ndays = len(days)
+    shuf_CI = np.ones((3, ndays, ndays)) * np.nan
+
+    # Calculate quantiles
+    qtop = 1 - (100 - pct)/2/100
+    qbot = (100 - pct)/2/100
+    # loop through each pair of sessions and get the mean correlation for each session
+    for id1, day1 in enumerate(days):
+        for id2, day2 in enumerate(days):
+            # Don't loop through things you don't have reg files for
+            if arena1 == arena2 and id1 < id2 or arena1 == 'Open' and arena2 == 'Shock' and id1 <= id2:
+                try:
+                    _, shuf_corrs = load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf)
+                    shuf_CI[:, id1, id2] = np.quantile(shuf_corrs, [qbot, 0.5, qtop])
+                except (FileNotFoundError, TypeError):
+                    print('Missing pf files for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) +
+                          ' to ' + arena2 + ' Day ' + str(day2))
+
+    return shuf_CI
+
+
 def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
     """
     Gets the rotation of the arena in day2 that produces the best correlation. Will load previous runs from file saved in
@@ -558,8 +592,8 @@ def get_time_groups(nmice, group_desig=1):
         groups[:, 0:2, 4:7] = 3  # 3 = before-v-after shock
         groups[:, 0:2, 3] = 4  # 4 = before-v-STM
         groups[:, 3, 4:7] = 5  # 5 = STM-v-LTM (4hr to 1,2,7)
-        group_labels = ['Before', 'After(Days 1-7)', 'Before v After',
-                        'Before v STM', 'STM v After']
+        group_labels = ['Before', 'After(Days 1-7)', 'Before v After(Days 1-7)',
+                        'Before v STM', 'STM v After(Days 1-7)']
     elif group_desig == 2:
         groups = np.ones((nmice, 7, 7)) * np.nan
         groups[:, 0:2, 0:2] = 1  # 1 = before shock
@@ -567,8 +601,8 @@ def get_time_groups(nmice, group_desig=1):
         groups[:, 0:2, 4:6] = 3  # 3 = before-v-after shock
         groups[:, 0:2, 3] = 4  # 4 = before-v-STM
         groups[:, 3, 4:6] = 5  # 5 = STM-v-LTM (days 1 and 2 only)
-        group_labels = ['Before', 'After (Day 1-2)', 'Before v After',
-                        'Before v STM', 'STM v After']
+        group_labels = ['Before', 'After (Day 1-2)', 'Before v After(Days1-2)',
+                        'Before v STM', 'STM v After(Days1-2)']
 
     return groups, group_labels
 

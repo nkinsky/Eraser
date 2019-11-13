@@ -836,14 +836,15 @@ def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar
 
 
 def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors = ['k', 'g'],
-                   group_names=['grp1', 'grp2'], xlabel='', ylabel=''):
+                   group_names=['grp1', 'grp2'], xlabel='', ylabel='', xticklabels = ['Open', 'Shock']):
     """
     Plots comparison of correlations in open v shock arena for two different groups
     :param open_corrs1: this and the below are 1d ndarrays of correlations values for each condition
     :param shock_corrs1:
     :param open_corrs2:
     :param shock_corrs2:
-    :param group_names:
+    :param group_names: ['Disc, 'Ani'] by default. Colors = black, green (not adjustable).
+    :param xticklabels: ['Open','Shock'] by default, adjust accordingly if using different groups in corrs above
     :param ax: custom axes to plot into.
     :return: fig, ax, pval, tstat: pval/test are 2x2 np arrays from t-tests:
             [[open1 v open2, shock1 v shock2], [open1 v shock1, open2 v shock2]]
@@ -860,7 +861,7 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors 
                jitter=0.05)
 
     ax[0].set_xticks([1, 2])
-    ax[0].set_xticklabels(['Open', 'Shock'])
+    ax[0].set_xticklabels(xticklabels)
     ax[0].set_xlabel(xlabel)
     ax[0].set_ylabel(ylabel)
     ax[0].legend()
@@ -874,14 +875,16 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors 
     tstat[1, 1], pval[1, 1] = s.stats.ttest_ind(open_corrs2, shock_corrs2, nan_policy='omit')
 
     # Plot stats in second subplot if it is there
+    label1 = xticklabels[0]
+    label2 = xticklabels[1]
     if len(ax) == 2:
-        ax[1].text(0.1, 0.9, 'Open1 v Open2 pval=' + "{0:.3g}".format(pval[0, 0]) +
+        ax[1].text(0.1, 0.9, label1 + '1 v ' + label1 + '2 pval=' + "{0:.3g}".format(pval[0, 0]) +
                    ' tstat=' + "{0:.3g}".format(tstat[0, 0]))
-        ax[1].text(0.1, 0.75, 'Shock1 v Shock2 pval=' + "{0:.3g}".format(pval[0, 1]) +
+        ax[1].text(0.1, 0.75, label2 + '1 v ' + label2 + '2 pval=' + "{0:.3g}".format(pval[0, 1]) +
                    ' tstat=' + "{0:.3g}".format(tstat[0, 1]))
-        ax[1].text(0.1, 0.50, 'Open1 v Shock1 pval=' + "{0:.3g}".format(pval[1, 0]) +
+        ax[1].text(0.1, 0.50, label1 + '1 v ' + label2 + '1 pval=' + "{0:.3g}".format(pval[1, 0]) +
                    ' tstat=' + "{0:.3g}".format(tstat[1, 0]))
-        ax[1].text(0.1, 0.35, 'Open2 v Shock2 pval=' + "{0:.3g}".format(pval[1, 1]) +
+        ax[1].text(0.1, 0.35, label1 + '2 v ' + label2 + '2 pval=' + "{0:.3g}".format(pval[1, 1]) +
                    ' tstat=' + "{0:.3g}".format(tstat[1, 1]))
 
     return fig, ax, pval, tstat
