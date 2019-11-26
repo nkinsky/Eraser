@@ -413,6 +413,30 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
     return mi, isec, ispk, ipos, okpix
 
 
+def load_all_mi(mice, arenas=['Open', 'Shock'], days=[-2, -1, 4, 1, 2, 7], pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+    """
+    Get previously calculated mutual information for all mice/days/arenas
+    :param mice: list
+    :param arenas: list
+    :param days: list
+    :param pf_file: str
+    :return: mimean_all: nmice x narenas x ndays nd-array of mean mutual info values
+    """
+    nmice = len(mice)
+    ndays = len(days)
+    mimean_all = np.ones((nmice, 2, ndays))*np.nan
+    for idm, mouse in enumerate(mice):
+        for ida, arena in enumerate(arenas):
+            for idd, day in enumerate(days):
+                try:
+                    PFobj = load_pf(mouse, arena, day, pf_file=pf_file)
+                    mimean_all[idm, ida, idd] = np.nanmean(PFobj.mi)
+                except FileNotFoundError:
+                    print('Missing file for ' + mouse + ' ' + arena + ' day ' + str(day))
+
+    return mimean_all
+
+
 class PlaceFieldObject:
     def __init__(self, tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
                  xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
