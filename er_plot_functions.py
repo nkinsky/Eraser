@@ -806,7 +806,7 @@ def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar
     :param ax:
     :return:
     """
-
+    # NK - reorganize/rewrite to align with Will's code - much clearer/more elegant.
     # Get means for each group
     unique_groups = np.unique(groups).tolist()
     data_means = [np.mean(data[a == groups]) for a in unique_groups]
