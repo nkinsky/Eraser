@@ -612,7 +612,8 @@ def write_all_freezing(fratio_all, filepath, days=[-2, -1, 4, 1, 2, 7]):
         writer.writerows(fratio_all[1, :, :].T)
 
 
-def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7]):
+def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7], arenas=['Neutral', 'Shock'], ref_day='Shock -2',
+                  legendstr=['Shock v Shock', 'Shock v Neutral']):
     """
 
     :param overlaps: nmice x 5sesh x narenas ndarray with cell overlap ratios
@@ -621,32 +622,40 @@ def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7]):
     :return: fig and ax handles
     """
 
+    colors = ['b', 'r']
+
     try:
-        nmice, _, narenas = overlaps.shape
+        nmice, ndays, narenas = overlaps.shape
     except ValueError:
         nmice = 1
-        _, narenas = overlaps.shape
+        ndays, narenas = overlaps.shape
+        overlaps = overlaps.reshape((nmice, ndays, narenas))
     fig, ax = plt.subplots()
-    if nmice != 1:
-        ax.plot(np.matlib.repmat(np.arange(0, 5), nmice, 1), overlaps[:, :, 0], 'bo')
-        lineshock, = ax.plot(np.arange(0, 5), np.nanmean(overlaps[:, :, 0], axis=0), 'b-')
-    elif nmice == 1:
-        lineshock, = ax.plot(np.arange(0, 5), overlaps[:, 0], 'bo-')
+
+    hline = []
+    for ida, arena in enumerate(arenas):
+        # if nmice != 1: # There should be a better way to do this!
+        ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), overlaps[:, :, ida], colors[ida] + 'o')
+        linetemp, = ax.plot(np.arange(0, ndays), np.nanmean(overlaps[:, :, ida], axis=0), colors[ida] + '-')
+        # elif nmice == 1:
+        # linetemp, = ax.plot(np.arange(0, ndays), overlaps[:, ida], colors[ida] + 'o-')
+        hline.append(linetemp)
     ax.set_xlabel('Day/session')
-    ax.set_ylabel('Overlap Ratio (Shock Day -2 = ref)')
-    ax.set_xticks([0, 1, 2, 3, 4])
+    ax.set_ylabel('Overlap Ratio (' + ref_day + ' = ref)')
+    ax.set_xticks(np.arange(ndays))
     ax.set_xticklabels([str(sesh) for sesh in days])
+    ax.legend(hline[0:narenas], legendstr[0:narenas])
 
-    if narenas == 2:
-        if nmice != 1:
-            ax.plot(np.matlib.repmat(np.arange(0, 5), nmice, 1), overlaps[:, :, 1], 'ro')
-            linebw, = ax.plot([0, 1, 2, 3, 4], np.nanmean(overlaps[:, :, 1], axis=0), 'r-')
-        elif nmice == 1:
-            linebw, = ax.plot(np.arange(0, 5), overlaps[:, 1], 'ro-')
-
-        ax.legend((lineshock, linebw), ('Shock v Shock', 'Shock v Open'))
-    elif narenas == 1:
-        ax.legend((lineshock,), ('Shock v Shock',))
+    # if narenas == 2:
+    #     if nmice != 1:
+    #         ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), overlaps[:, :, 1], 'ro')
+    #         linebw, = ax.plot(np.arange(0, ndays), np.nanmean(overlaps[:, :, 1], axis=0), 'r-')
+    #     elif nmice == 1:
+    #         linebw, = ax.plot(np.arange(0, ndays), overlaps[:, 1], 'ro-')
+    #
+    #     ax.legend((lineshock, linebw), ('Shock v Shock', 'Shock v Open'))
+    # elif narenas == 1:
+    #     ax.legend((lineshock,), ('Shock v Shock',))
 
     return fig, ax
 

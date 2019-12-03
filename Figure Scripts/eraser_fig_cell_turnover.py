@@ -26,7 +26,7 @@ oratiomax = np.ones((len(mice), len(days), len(arenas)))*np.nan
 
 # Get overlapping cell ratios for each day/arena using Shock day -2 as a reference
 plot_ind = True
-pathname = r'C:\Users\kinsky.AD\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'  # Plotting folder
+pathname = err.pathname  # Get plotting folder
 for idm, mouse in enumerate(mice):
     for idd, day in enumerate(days):
         for ida, arena in enumerate(arenas):

@@ -100,15 +100,21 @@ def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     good_map_bool = np.isnan(neuron_map) == 0
 
     # Get new neurons
-    nneurons2 = ct.get_num_neurons(reg_session['Animal'], reg_session['Date'],
-                                   reg_session['Session'])
+    try:
+        nneurons2 = ct.get_num_neurons(reg_session['Animal'], reg_session['Date'],
+                                       reg_session['Session'])
+        new_ind = np.where(np.invert(np.isin(np.arange(0, nneurons2), neuron_map)))[0]
 
-    new_ind = np.where(np.invert(np.isin(np.arange(0, nneurons2), neuron_map)))[0]
+    except FileNotFoundError:
+        print('No neural data for ' + reg_session['Animal'] + ': ' + reg_session['Date'] +
+              '-s' + str(reg_session['Session']))
+        good_map_bool, silent_ind, new_ind = np.ones((3,)*np.nan)
 
     return good_map_bool, silent_ind, new_ind
 
 
-def get_overlap(mouse, arena1, day1, arena2, day2):
+def \
+        get_overlap(mouse, arena1, day1, arena2, day2):
     """
     Gets overlap of cells between sessions.
     :param mouse:
