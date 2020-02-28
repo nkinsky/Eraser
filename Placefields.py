@@ -272,7 +272,7 @@ def imshow_nan(array, ax=None, cmap='viridis'):
 
 def align_imaging_to_tracking(pos_cm, speed_cm, time_tracking, PSAbool, sr_imaging):
     """
-    Aligns imaging and tracking data and spits out all at the sample rate of the imaging data
+    Aligns all tracking data to imaging data and spits out all at the sample rate of the imaging data
     :param pos_cm:
     :param time_tracking:
     :param sr_imaging:
@@ -477,28 +477,46 @@ class PlaceFieldObject:
         with open(save_file, 'wb') as output:
             dump(self, output)
 
-    def pfscroll(self, current_position=0):
+    def pfscroll(self, current_position=0, pval_thresh=1, plot_xy=False):
         """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
         and unsmoothed tmaps in another
 
-        :param current_position:
+        :param current_position: index in spatially tuned neuron ndarray to start with (clunky, since you don't
+        know how many spatially tuned neurons you have until you threshold them below).
+        :param pval_thresh: default = 1. Only scroll through neurons with pval (based on mutual information scores
+        calculated after circularly permuting calcium traces/events) < pval_thresh
+        :param plot_xy: plot x and y position versus time with calcium activity indicated in red.
         :return:
         """
 
-        # Plot frame and position of mouse.
-        titles = ["Neuron " + str(n) for n in range(self.nneurons)]  # set up array of neuron numbers
+        # Get only spatially tuned neurons: those with mutual spatial information pval < pval_thresh
+        spatial_neurons = np.where([a < pval_thresh for a in self.pval])[0]
 
-        # Hijack Will's ScrollPlot function to make it through
+        # Plot frame and position of mouse.
+        titles = ["Neuron " + str(n) for n in spatial_neurons]  # set up array of neuron numbers
+
+        # Hijack Will's ScrollPlot function to scroll through each neuron
         lims = [[self.xEdges.min(), self.xEdges.max()], [self.yEdges.min(), self.yEdges.max()]]
-        self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm),
-                            current_position=current_position, n_frames=self.nneurons,
-                            n_rows=1, n_cols=3, figsize=(17.2, 5.3), titles=titles,
-                            x=self.pos_align[0, self.isrunning], y=self.pos_align[1, self.isrunning],
-                            traj_lims=lims, PSAbool=self.PSAboolrun,
-                            tmap_us=self.tmap_us, tmap_sm=self.tmap_sm, mouse=self.mouse,
-                            arena=self.arena, day=self.day)
+        if not plot_xy:
+            self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm),
+                                current_position=current_position, n_neurons=len(spatial_neurons),
+                                n_rows=1, n_cols=3, figsize=(17.2, 5.3), titles=titles,
+                                x=self.pos_align[0, self.isrunning], y=self.pos_align[1, self.isrunning],
+                                traj_lims=lims, PSAbool=self.PSAboolrun[spatial_neurons, :],
+                                tmap_us=[self.tmap_us[a] for a in spatial_neurons],
+                                tmap_sm=[self.tmap_sm[a] for a in spatial_neurons],
+                                mouse=self.mouse, arena=self.arena, day=self.day)
+        elif plot_xy:
+            self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm, plot_psax, plot_psay),
+                                current_position=current_position, n_neurons=len(spatial_neurons),
+                                n_rows=3, n_cols=3, combine_rows=[1, 2], figsize=(17.2, 10.6), titles=titles,
+                                x=self.pos_align[0, self.isrunning], y=self.pos_align[1, self.isrunning],
+                                traj_lims=lims, PSAbool=self.PSAboolrun[spatial_neurons, :],
+                                tmap_us=[self.tmap_us[a] for a in spatial_neurons],
+                                tmap_sm=[self.tmap_sm[a] for a in spatial_neurons],
+                                mouse=self.mouse, arena=self.arena, day=self.day, sample_rate=self.sr_image)
 
 
 if __name__ == '__main__':
-    get_PV1('Marble07','Shock',-2)
+    get_PV1('Marble07', 'Shock', -2)
     pass

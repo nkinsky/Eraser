@@ -427,7 +427,7 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
 
 def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7], nshuf=1000, pct=95):
     """
-    Calculate CIs at pct specified (95% = default) and median for all days
+    Retrieve previously calculated CIs at pct specified (95% = default) and median for all days
     :param mouse:
     :param arena1:
     :param arena2:
@@ -584,7 +584,8 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
 
 def get_time_groups(nmice, group_desig=1):
     """
-    Returns groupings for plotting different time-epochs in group correlation matrices.
+    Returns groupings for plotting different time-epochs in group correlation matrices, e.g. BEFORE shock, AFTER shock,
+    BEFORE v AFTER shock
     :param nmice:
     :param group_desig: 1: include day 1, 2, AND 7 in AFTER epochs, 2: include day 1 and 2 only in AFTER
     :return: groups: nmice x 7 x 7 array with groupings for pf comparisons - see below comments for description
@@ -793,7 +794,7 @@ class PFCombineObject:
         lims2 = [[self.PF2.xEdges.min(), self.PF2.xEdges.max()], [self.PF2.yEdges.min(), self.PF2.yEdges.max()]]
         self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm,
                              plot_events_over_pos2, plot_tmap_us2, plot_tmap_sm2),
-                            current_position=current_position, n_frames=self.nneurons,
+                            current_position=current_position, n_neurons=self.nneurons,
                             n_rows=2, n_cols=3, figsize=(17.2, 10.6), titles=titles,
                             x=self.PF1.pos_align[0, self.PF1.isrunning],
                             y=self.PF1.pos_align[1, self.PF1.isrunning],

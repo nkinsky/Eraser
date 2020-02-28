@@ -181,7 +181,7 @@ for idg, group in enumerate(np.unique(dgroups[~np.isnan(dgroups)]).tolist()):
         savefile = os.path.join(plot_dir, prefix + ' 2x2 Discr and Ani ' + group_labels[idg] + '.pdf')
     fig.savefig(savefile)
 
-## Get mean 95% CIs to put in plots manually for SfN, add into code above later
+## Get mean 95% CIs to put in plots manually for SfN, add into code above later. Only works for 2d corrs currently...
 
 # preallocate
 disc_allCI = np.ones((len(dmice), 3, 7, 7))*np.nan
@@ -216,7 +216,7 @@ for idg, group in enumerate(unique_groups):
         CIopen_mean[j, idg] = np.nanmean(CIcomb_open[:, j][groups == group])
 
 
-## Compare best_rot=True to False in shock arena
+## Compare best_rot=True to False in specified arena
 amice = err.ani_mice_good
 dmice = err.discriminators
 days = [-2, -1, 0, 4, 1, 2, 7]
@@ -328,7 +328,7 @@ for mouse in err.all_mice_good:
                           str(day2))
 ## Get correlations between shuffled maps within/between arenas for all mice
 days = [-2, -1, 0, 4, 1, 2, 7]
-nshuf = 100
+nshuf = 1000
 check = []
 # Add in something to not run if save_file already exists!
 for mouse in err.all_mice_good:
