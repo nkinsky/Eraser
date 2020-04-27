@@ -16,7 +16,7 @@ from session_directory import load_session_list, master_directory
 import er_plot_functions as er
 from mouse_sessions import make_session_list
 from plot_helper import ScrollPlot
-from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos
+from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos, plot_psax, plot_psay
 # from progressbar import ProgressBar  # NK need a better version of this
 from tqdm import tqdm
 from pickle import dump, load
@@ -509,14 +509,15 @@ class PlaceFieldObject:
         elif plot_xy:
             self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm, plot_psax, plot_psay),
                                 current_position=current_position, n_neurons=len(spatial_neurons),
-                                n_rows=3, n_cols=3, combine_rows=[1, 2], figsize=(17.2, 10.6), titles=titles,
+                                n_rows=3, n_cols=3, combine_rows=[1, 2], figsize=(12.43, 9.82), titles=titles,
                                 x=self.pos_align[0, self.isrunning], y=self.pos_align[1, self.isrunning],
                                 traj_lims=lims, PSAbool=self.PSAboolrun[spatial_neurons, :],
                                 tmap_us=[self.tmap_us[a] for a in spatial_neurons],
                                 tmap_sm=[self.tmap_sm[a] for a in spatial_neurons],
-                                mouse=self.mouse, arena=self.arena, day=self.day, sample_rate=self.sr_image)
+                                mouse=self.mouse, arena=self.arena, day=self.day, sample_rate=self.sr_image[0][0])
 
 
 if __name__ == '__main__':
-    get_PV1('Marble07', 'Shock', -2)
+    pfo = load_pf('Marble11','Open',1, pf_file='placefields_cm1_manlims_1000shuf.pkl')
+    pfo.pfscroll(plot_xy=True)
     pass
