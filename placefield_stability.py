@@ -367,6 +367,62 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
     return corrs_us, corrs_sm
 
 
+def compare_pf_at_bestrot(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7],
+                          pf_file='placefields_cm1_manlims_1000shuf.pkl', smooth=True):
+    """
+    Plot histogram of place-field correlations at no rotation and best rotation for all days listed.
+    :param mouse:
+    :param arena1:
+    :param arena2:
+    :param days:
+    :param pf_file:
+    :param smooth: False = un-smoothed correlations, True (default) = use smoothed correlations
+    :return: fig_not, ax_norot, fig_bestrot, ax_bestrot: figures and axes for correlations histograms at no rotation
+    and at best rotation between sessions.
+    """
+    if smooth:
+        idcorrs = 1
+        smooth_text = 'Smoothed TMaps'
+    elif not smooth:
+        smooth_text = 'Unsmoothed TMaps'
+        idcorrs = 0
+    # Load in to get cmperbin - assume same name has same value across all sessions!
+    PFobj = pf.load_pf(mouse, arena=arena1, day=days[0], pf_file=pf_file)
+    # Get pre-computed shuffled values for all day comparisons
+    shufCIs = get_all_CIshuf(mouse, arena1, arena2, days=days, nshuf=100, pct=95)
+    ndays = len(days)
+    fig_norot, ax_norot = plt.subplots(ndays - 1, ndays - 1)
+    fig_bestrot, ax_bestrot = plt.subplots(ndays - 1, ndays - 1)
+    nbins = 30
+    # plot each days correlations versus the other days!
+
+    # label stuff in un-used axes for clarity
+    ax_norot[1, 0].text(0.3, 0.5, 'No rotation')
+    ax_bestrot[1, 0].text(0.3, 0.5, 'At best rotation')
+    [a[2, 1].text(0.3, 0.5, 'cmperbin = ' + str(PFobj.cmperbin)) for a in [ax_norot, ax_bestrot]]
+    [a[2, 0].text(0.3, 0.5, arena1 + ' vs ' + arena2) for a in [ax_norot, ax_bestrot]]
+    # turn off axes in un-used axes for clarity - there has to be a better way to do this!
+    for id1off, day1_off in enumerate(days[1:]):
+        for ax_use in [ax_norot, ax_bestrot]:
+            [a.axis('off') for a in ax_use[(1+id1off):, id1off]]
+    for id1, day1 in enumerate(days[0:-1]):
+        for id2, day2 in enumerate(days[(id1+1):]):
+            _, best_rot, _ = get_best_rot(mouse, arena1, day1, arena2, day2,
+                         pf_file='placefields_cm1_manlims_1000shuf.pkl')
+            corrs_norot = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file, shuf_map=False)
+            corrs_bestrot = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file, shuf_map=False,
+                                            rot_deg=best_rot[idcorrs])
+            corrs_comb = [corrs_norot, corrs_bestrot]
+            for ida, ax in enumerate([ax_norot, ax_bestrot]):
+                ax[id1, id1+id2].hist(corrs_comb[ida][idcorrs], range=(-1, 1), bins=nbins)
+                ax[id1, id1+id2].plot(np.ones(2,)*np.nanmean(corrs_comb[ida][idcorrs]), ax[id1, id1 + id2].get_ylim(), 'r-')
+                [ax[id1, id1+id2].plot([a, a], ax[id1, id1+id2].get_ylim(), style) for a, style in
+                 zip(shufCIs[:, id1, id1+id2], ['k--', 'k-', 'k--'])]
+                ax[id1, id1+id2].set_title('Day ' + str(day1) + ' vs Day ' + str(day2))
+
+    return fig_norot, fig_bestrot, ax_norot, ax_bestrot
+
+
 def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7],
                  pf_file='placefields_cm1_manlims_1000shuf.pkl', shuf_map=False, best_rot=False):
     """
@@ -452,7 +508,7 @@ def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1,
                     _, shuf_corrs = load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf)
                     shuf_CI[:, id1, id2] = np.quantile(shuf_corrs, [qbot, 0.5, qtop])
                 except (FileNotFoundError, TypeError):
-                    print('Missing pf files for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) +
+                    print('Missing shuffled correlation files for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) +
                           ' to ' + arena2 + ' Day ' + str(day2))
 
     return shuf_CI
@@ -896,6 +952,7 @@ if __name__ == '__main__':
     # get_best_rot('Marble06', 'Open', -2, 'Shock', -2)
     # pf_corr_mean('Marble06', 'Shock', 'Shock', [-2, -1, 4, 1, 2, 7], best_rot=True)
     # get_best_rot('Marble29','Shock',1,'Shock',7)
-    get_group_pf_corrs(['Marble06', 'Marble07'], 'Open', 'Open', [-2, -1, 0, 4, 1, 2, 7], best_rot=True)
+    # get_group_pf_corrs(['Marble06', 'Marble07'], 'Open', 'Open', [-2, -1, 0, 4, 1, 2, 7], best_rot=True)
+    compare_pf_at_bestrot('Marble11', arena1='Open', arena2='Open', smooth=True)
     pass
 
