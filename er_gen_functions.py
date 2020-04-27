@@ -56,11 +56,11 @@ def plot_psax(obj, ax_ind):
 
     """
     psa_use = obj.PSAbool[obj.current_position, :]
-    time_use = np.asarray((np.arange(obj.PSAbool.shape[1]) +1)/obj.sample_rate)
+    time_use = np.asarray((np.arange(len(psa_use)) + 1)/obj.sample_rate)
     obj.ax[ax_ind].plot(time_use, obj.x, 'k-')
-    obj.ax[ax_ind].plot(time_use[psa_use], obj.x[psa_use == 1], 'r*')
-    obj.ax[ax_ind].xlabel('Time (s)')
-    obj.ax[ax_ind].ylabel('X position (cm)')
+    obj.ax[ax_ind].plot(time_use[psa_use == 1], obj.x[psa_use == 1], 'r*')
+    obj.ax[ax_ind].set_xlabel('Time (s)')
+    obj.ax[ax_ind].set_ylabel('X position (cm)')
 
 
 def plot_psay(obj, ax_ind):
@@ -69,11 +69,11 @@ def plot_psay(obj, ax_ind):
 
     """
     psa_use = obj.PSAbool[obj.current_position, :]
-    time_use = np.asarray((np.arange(obj.PSAbool.shape[1]) + 1) / obj.sample_rate)
+    time_use = np.asarray((np.arange(len(psa_use)) + 1)/obj.sample_rate)
     obj.ax[ax_ind].plot(time_use, obj.y, 'k-')
-    obj.ax[ax_ind].plot(time_use[psa_use], obj.y[psa_use == 1], 'r*')
-    obj.ax[ax_ind].xlabel('Time (s)')
-    obj.ax[ax_ind].ylabel('Y position (cm)')
+    obj.ax[ax_ind].plot(time_use[psa_use == 1], obj.y[psa_use == 1], 'r*')
+    obj.ax[ax_ind].set_xlabel('Time (s)')
+    obj.ax[ax_ind].set_ylabel('Y position (cm)')
 
 
 def plot_tmap_us2(obj, ax_ind):

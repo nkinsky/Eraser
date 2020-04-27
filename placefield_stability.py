@@ -113,8 +113,7 @@ def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     return good_map_bool, silent_ind, new_ind
 
 
-def \
-        get_overlap(mouse, arena1, day1, arena2, day2):
+def get_overlap(mouse, arena1, day1, arena2, day2):
     """
     Gets overlap of cells between sessions.
     :param mouse:
@@ -773,40 +772,75 @@ class PFCombineObject:
         # Get PSAbool for co-active neurons
         self.PSAalign1 = self.PF1.PSAbool_align[good_map_ind, :]
         self.PSAalign2 = self.PF2.PSAbool_align[good_map, :]
+        self.pval1_reg = [self.PF1.pval[a] for a in good_map_ind]
 
         # Get correlations between sessions!
         self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
                                                        pf_file=pf_file)
 
-    def pfscroll(self, current_position=0):
+    def pfscroll(self, current_position=0, pval_thresh=1, best_rot=False):
         """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
         and unsmoothed tmaps in another.
 
-        :param current_position:
+        :param current_position: starting index of neurons in pval_thresholded neuron array. A bit clunky since
+        you don't know which neurons are in the thresholded version until below.
+        :param pval_thresh: default = 1. Only scroll through neurons with pval (based on mutual information scores
+        calculated after circularly permuting calcium traces/events) < pval_thresh
         :return:
         """
 
+        # Get only spatially tuned neurons: those with mutual spatial information pval < pval_thresh
+        spatial_neurons = [a < pval_thresh for a in self.pval1_reg]
+
         # Plot frame and position of mouse.
-        titles = ["Neuron " + str(n) for n in range(self.nneurons)]  # set up array of neuron numbers
+        titles = ["Neuron " + str(n) + " best_rot=" + str(best_rot) for n in np.where(spatial_neurons)[0]]  # set up array of neuron numbers
 
         # Hijack Will's ScrollPlot function to make it through
         lims1 = [[self.PF1.xEdges.min(), self.PF1.xEdges.max()], [self.PF1.yEdges.min(), self.PF1.yEdges.max()]]
         lims2 = [[self.PF2.xEdges.min(), self.PF2.xEdges.max()], [self.PF2.yEdges.min(), self.PF2.yEdges.max()]]
-        self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm,
-                             plot_events_over_pos2, plot_tmap_us2, plot_tmap_sm2),
-                            current_position=current_position, n_neurons=self.nneurons,
-                            n_rows=2, n_cols=3, figsize=(17.2, 10.6), titles=titles,
-                            x=self.PF1.pos_align[0, self.PF1.isrunning],
-                            y=self.PF1.pos_align[1, self.PF1.isrunning],
-                            PSAbool=self.PSAalign1[:, self.PF1.isrunning], tmap_us=self.tmap1_us_reg,
-                            tmap_sm=self.tmap1_sm_reg, x2=self.PF2.pos_align[0, self.PF2.isrunning],
-                            y2=self.PF2.pos_align[1, self.PF2.isrunning],
-                            PSAbool2=self.PSAalign2[:, self.PF2.isrunning],
-                            tmap_us2=self.tmap2_us_reg, tmap_sm2=self.tmap2_sm_reg,
-                            arena=self.PF1.arena, day=self.PF1.day, arena2=self.PF2.arena,
-                            day2=self.PF2.day, mouse=self.PF1.mouse,
-                            corrs_us=self.corrs_us, corrs_sm=self.corrs_sm,
-                            traj_lims=lims1, traj_lims2=lims2)
+        if not best_rot:
+            self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm,
+                                 plot_events_over_pos2, plot_tmap_us2, plot_tmap_sm2),
+                                current_position=current_position, n_neurons=self.nneurons,
+                                n_rows=2, n_cols=3, figsize=(17.2, 10.6), titles=titles,
+                                x=self.PF1.pos_align[0, self.PF1.isrunning],
+                                y=self.PF1.pos_align[1, self.PF1.isrunning],
+                                PSAbool=self.PSAalign1[spatial_neurons, :][:, self.PF1.isrunning],
+                                tmap_us=[self.tmap1_us_reg[a] for a in np.where(spatial_neurons)[0]],
+                                tmap_sm=[self.tmap1_sm_reg[a] for a in np.where(spatial_neurons)[0]],
+                                x2=self.PF2.pos_align[0, self.PF2.isrunning],
+                                y2=self.PF2.pos_align[1, self.PF2.isrunning],
+                                PSAbool2=self.PSAalign2[spatial_neurons, :][:, self.PF2.isrunning],
+                                tmap_us2=[self.tmap2_us_reg[a] for a in np.where(spatial_neurons)[0]],
+                                tmap_sm2=[self.tmap2_sm_reg[a] for a in np.where(spatial_neurons)[0]],
+                                arena=self.PF1.arena, day=self.PF1.day, arena2=self.PF2.arena,
+                                day2=self.PF2.day, mouse=self.PF1.mouse,
+                                corrs_us=self.corrs_us[spatial_neurons], corrs_sm=self.corrs_sm[spatial_neurons],
+                                traj_lims=lims1, traj_lims2=lims2)
+        elif best_rot:
+            if best_rot == 90 or best_rot == 270:  # change limits if rotated 90 or 270 degrees
+                lims2 = [[self.PF2.yEdges.min(), self.PF2.yEdges.max()],
+                         [self.PF2.xEdges.min(), self.PF2.xEdges.max()]]
+            _, best_rot, _ = get_best_rot(self.mouse, self.arena1, self.day1, self.arena2, self.day2)
+            # best_rot is spit out for un-smoothed and smoothed place maps. use smoothed [1]
+            self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm,
+                                 plot_events_over_pos2, plot_tmap_us2, plot_tmap_sm2),
+                                current_position=current_position, n_neurons=self.nneurons,
+                                n_rows=2, n_cols=3, figsize=(17.2, 10.6), titles=titles,
+                                x=self.PF1.pos_align[0, self.PF1.isrunning],
+                                y=self.PF1.pos_align[1, self.PF1.isrunning],
+                                PSAbool=self.PSAalign1[spatial_neurons, :][:, self.PF1.isrunning],
+                                tmap_us=[self.tmap1_us_reg[a] for a in np.where(spatial_neurons)[0]],
+                                tmap_sm=[self.tmap1_sm_reg[a] for a in np.where(spatial_neurons)[0]],
+                                x2=self.PF2.pos_align[0, self.PF2.isrunning],
+                                y2=self.PF2.pos_align[1, self.PF2.isrunning],
+                                PSAbool2=self.PSAalign2[spatial_neurons, :][:, self.PF2.isrunning],
+                                tmap_us2=[np.rot90(self.tmap2_us_reg[a], best_rot[1]/90) for a in np.where(spatial_neurons)[0]],
+                                tmap_sm2=[np.rot90(self.tmap2_sm_reg[a], best_rot[1]/90) for a in np.where(spatial_neurons)[0]],
+                                arena=self.PF1.arena, day=self.PF1.day, arena2=self.PF2.arena,
+                                day2=self.PF2.day, mouse=self.PF1.mouse,
+                                corrs_us=self.corrs_us[spatial_neurons], corrs_sm=self.corrs_sm[spatial_neurons],
+                                traj_lims=lims1, traj_lims2=lims2)
 
 
 # Create class to calculate and save correlations between sessions with neuron_map shuffled
