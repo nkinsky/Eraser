@@ -28,7 +28,7 @@ from pickle import dump, load
 session_list = load_session_list()
 
 
-def load_pf(mouse, arena, day, session_index=None, pf_file='placefields_cm1.pkl'):
+def load_pf(mouse, arena, day, session_index=None, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
     if session_index is None:
         dir_use = get_dir(mouse, arena, day)
     elif session_index >= 0:

@@ -2,6 +2,7 @@
 
 import eraser_reference as err
 import placefield_stability as pfs
+import Placefields as pf
 import er_plot_functions as erp
 import numpy as np
 from pickle import dump, load
@@ -342,16 +343,27 @@ for mouse in err.all_mice_good:
                         str(day2) + '_nshuf' + str(nshuf) + '.pkl'
             save_file = os.path.join(dir_use, file_name)
             if os.path.exists(save_file):
-                check = check + [mouse, arena1, day1, arena2, day2, True]
+                check.append([mouse, arena1, day1, arena2, day2, True])
             if id1 <= id2 and not os.path.exists(save_file):  # Only run for sessions forward in time
                 try:
                     ShufMap = pfs.ShufMap(mouse, arena1=arena1, day1=day1, arena2=arena2, day2=day2, nshuf=nshuf)
                     ShufMap.get_shuffled_corrs()
                     ShufMap.save_data()
-                    check = check + [mouse, arena1, day1, arena2, day2, True]
+                    check.append([mouse, arena1, day1, arena2, day2, True])
                 except:  # FileNotFoundError:
                     print('Error in ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' + str(day2))
-                    check = check + [mouse, arena1, day1, arena2, day2, False]
+                    check.append([mouse, arena1, day1, arena2, day2, False])
+
+## Get place-field correlation histograms at no rotation versus best rotation for all mice/arenas for comparison purposes
+# Not that between arena plots aren't as useful. Better is to do each day versus itself and put on the same plot...
+smooth = True
+for mouse in err.all_mice_good:
+    for arena1, arena2 in zip(['Open', 'Shock'], ['Open', 'Shock']):
+        rotfigs, _ = pfs.compare_pf_at_bestrot(mouse, arena1=arena1, arena2=arena2, smooth=smooth)
+        [fig.savefig(os.path.join(err.plot_dir, rot_text + ' rot PF corrs ' + mouse + ' ' + arena1 + 'v' + arena2 +
+                                     ' smooth=' + str(smooth)) + '.pdf') for fig, rot_text in zip(rotfigs, ['No', 'Best'])]
+        plt.close('all')
+
 
 ##
 # Define groups for scatter plots

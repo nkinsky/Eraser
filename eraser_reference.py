@@ -19,13 +19,22 @@ generalizers = ["Marble06", "Marble11", "Marble29"]
 
 discriminators = ["Marble07", "Marble12", "Marble24", "Marble27"]
 
+plot_dir = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'  # Plotting folder
+
 # Designate plotting folder
 from os import environ
-comp_name = environ['COMPUTERNAME']
+try:
+    comp_name = environ['COMPUTERNAME']
+except KeyError:  # Above does NOT work for Unix-based systems
+    from os import uname
+    comp_name = uname()[1]
+
 if comp_name == 'NATLAPTOP':
     pathname = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'
 elif comp_name == 'RKC-HAS-WD-0005':
     pathname = r'C:\Users\kinsky\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'
+elif comp_name == 'Evans computer':
+    pathname = 'fill in folder to plot to here evan'
 
 def grab_ax_lims(ax):
     """

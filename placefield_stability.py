@@ -28,6 +28,9 @@ from skimage.transform import resize as sk_resize
 from pickle import load, dump
 from tqdm import tqdm
 
+# Make text save as whole words
+plt.rcParams['pdf.fonttype'] = 42
+
 
 def get_neuronmap(mouse, arena1, day1, arena2, day2):
     """
@@ -308,7 +311,7 @@ def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
 
 
 def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
-                    pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=0, shuf_map=False):
+                    pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=0, shuf_map=False, debug=False):
     """
     Gets placefield correlations between sessions. Note that
     :param mouse:
@@ -347,6 +350,10 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
     # Step through each mapped neuron and get corrs between each
     rot = int(rot_deg/90)
     for idn, neuron in enumerate(good_map_ind):
+        if debug:  # for debugging nans in sstats.spearmanr
+            idn = 17
+            neuron = 17
+
         reg_neuron = good_map[idn]
         if rot == 0 and arena1 == arena2:  # Do correlations directly if possible
             corr_us, p_us = spearmanr_nan(np.reshape(PF1.tmap_us[neuron], -1), np.reshape(PF2.tmap_us[reg_neuron], -1))
@@ -392,7 +399,9 @@ def compare_pf_at_bestrot(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0
     shufCIs = get_all_CIshuf(mouse, arena1, arena2, days=days, nshuf=100, pct=95)
     ndays = len(days)
     fig_norot, ax_norot = plt.subplots(ndays - 1, ndays - 1)
+    fig_norot.set_size_inches([19.2, 9.28])
     fig_bestrot, ax_bestrot = plt.subplots(ndays - 1, ndays - 1)
+    fig_bestrot.set_size_inches([19.2, 9.28])
     nbins = 30
     # plot each days correlations versus the other days!
 
@@ -400,27 +409,40 @@ def compare_pf_at_bestrot(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0
     ax_norot[1, 0].text(0.3, 0.5, 'No rotation')
     ax_bestrot[1, 0].text(0.3, 0.5, 'At best rotation')
     [a[2, 1].text(0.3, 0.5, 'cmperbin = ' + str(PFobj.cmperbin)) for a in [ax_norot, ax_bestrot]]
+    [a[2, 1].text(0.3, 0.3, 'smooth =  ' + str(smooth)) for a in [ax_norot, ax_bestrot]]
     [a[2, 0].text(0.3, 0.5, arena1 + ' vs ' + arena2) for a in [ax_norot, ax_bestrot]]
+    ax_bestrot[2, 0].text(0.3, 0.3, 'Red dashed = no rot. mean corr')
+
     # turn off axes in un-used axes for clarity - there has to be a better way to do this!
     for id1off, day1_off in enumerate(days[1:]):
         for ax_use in [ax_norot, ax_bestrot]:
             [a.axis('off') for a in ax_use[(1+id1off):, id1off]]
+
+    # Not plot everything!
     for id1, day1 in enumerate(days[0:-1]):
         for id2, day2 in enumerate(days[(id1+1):]):
-            _, best_rot, _ = get_best_rot(mouse, arena1, day1, arena2, day2,
-                         pf_file='placefields_cm1_manlims_1000shuf.pkl')
-            corrs_norot = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file, shuf_map=False)
-            corrs_bestrot = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file, shuf_map=False,
-                                            rot_deg=best_rot[idcorrs])
-            corrs_comb = [corrs_norot, corrs_bestrot]
-            for ida, ax in enumerate([ax_norot, ax_bestrot]):
-                ax[id1, id1+id2].hist(corrs_comb[ida][idcorrs], range=(-1, 1), bins=nbins)
-                ax[id1, id1+id2].plot(np.ones(2,)*np.nanmean(corrs_comb[ida][idcorrs]), ax[id1, id1 + id2].get_ylim(), 'r-')
-                [ax[id1, id1+id2].plot([a, a], ax[id1, id1+id2].get_ylim(), style) for a, style in
-                 zip(shufCIs[:, id1, id1+id2], ['k--', 'k-', 'k--'])]
-                ax[id1, id1+id2].set_title('Day ' + str(day1) + ' vs Day ' + str(day2))
+            try:
+                _, best_rot, _ = get_best_rot(mouse, arena1, day1, arena2, day2,
+                             pf_file='placefields_cm1_manlims_1000shuf.pkl')
+                corrs_norot = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file, shuf_map=False)
+                corrs_bestrot = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file, shuf_map=False,
+                                                rot_deg=best_rot[idcorrs])
+                corrs_comb = [corrs_norot, corrs_bestrot]
+                for ida, ax in enumerate([ax_norot, ax_bestrot]):
+                    ax[id1, id1 + id2].hist(corrs_comb[ida][idcorrs], range=(-1, 1), bins=nbins)
+                    ylims = ax[id1, id1 + id2].get_ylim()
+                    if ida == 1:  # plot no-rot corr mean on best rot plots
+                        ax[id1, id1 + id2].plot(np.ones(2,)*np.nanmean(corrs_norot[idcorrs]), ylims, 'r-.')
+                    ax[id1, id1 + id2].plot(np.ones(2,)*np.nanmean(corrs_comb[ida][idcorrs]), ylims, 'r-')
+                    [ax[id1, id1 + id2].plot([a, a], ylims, style) for a, style in
+                     zip(shufCIs[:, id1, id1 + id2 + 1], ['k--', 'k-', 'k--'])]
+                    ax[id1, id1 + id2].set_ylim(ylims)
+                    ax[id1, id1 + id2].set_title('Day ' + str(day1) + ' vs Day ' + str(day2))
 
-    return fig_norot, fig_bestrot, ax_norot, ax_bestrot
+            except (FileNotFoundError, TypeError):
+                print('Error for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) + ' v ' + arena2 + ' Day ' + str(day2))
+
+    return [fig_norot, fig_bestrot], [ax_norot, ax_bestrot]
 
 
 def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7],
@@ -714,7 +736,11 @@ def spearmanr_nan(a, b):
     """
     # make sure at least 3 bins have valid numbers in each session - can't perform correlation with less than 3 points
     if np.sum(np.bitwise_or(np.isnan(a), np.isnan(b))) < len(a) - 2:
-        corr, pval = sstats.spearmanr(a, b, nan_policy='omit')
+
+        good_bool = np.bitwise_and(np.bitwise_not(np.isnan(a)), np.bitwise_not(np.isnan(b)))  # Hack to fix
+        # improper handling of all zero array with nan_policy='omit'
+
+        corr, pval = sstats.spearmanr(a[good_bool], b[good_bool], nan_policy='omit')
     else:
         corr = np.nan
         pval = np.nan
@@ -794,7 +820,7 @@ def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7]):
 
 ## Object to map and view placefields for same neuron mapped between different sessions
 class PFCombineObject:
-    def __init__(self, mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+    def __init__(self, mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl', debug=False):
         self.mouse = mouse
         self.arena1 = arena1
         self.day1 = day1
@@ -832,7 +858,7 @@ class PFCombineObject:
 
         # Get correlations between sessions!
         self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
-                                                       pf_file=pf_file)
+                                                       pf_file=pf_file, debug=debug)
 
     def pfscroll(self, current_position=0, pval_thresh=1, best_rot=False):
         """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
@@ -948,11 +974,6 @@ class ShufMap:
 
 
 if __name__ == '__main__':
-    # shuf_all, shuf_both = PV1_shuf_corrs('Marble06', 'Shock', -2, 'Shock', 0, nshuf=100)
-    # get_best_rot('Marble06', 'Open', -2, 'Shock', -2)
-    # pf_corr_mean('Marble06', 'Shock', 'Shock', [-2, -1, 4, 1, 2, 7], best_rot=True)
-    # get_best_rot('Marble29','Shock',1,'Shock',7)
-    # get_group_pf_corrs(['Marble06', 'Marble07'], 'Open', 'Open', [-2, -1, 0, 4, 1, 2, 7], best_rot=True)
-    compare_pf_at_bestrot('Marble11', arena1='Open', arena2='Open', smooth=True)
+    PFO = PFCombineObject('Marble29', 'Shock', 1, 'Shock', 2, debug=True)
     pass
 
