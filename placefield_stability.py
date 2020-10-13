@@ -111,7 +111,7 @@ def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     except FileNotFoundError:
         print('No neural data for ' + reg_session['Animal'] + ': ' + reg_session['Date'] +
               '-s' + str(reg_session['Session']))
-        good_map_bool, silent_ind, new_ind = np.ones((3,)*np.nan)
+        good_map_bool, silent_ind, new_ind = np.ones((3,))*np.nan
 
     return good_map_bool, silent_ind, new_ind
 
@@ -448,7 +448,7 @@ def compare_pf_at_bestrot(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0
 def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7],
                  pf_file='placefields_cm1_manlims_1000shuf.pkl', shuf_map=False, best_rot=False):
     """
-    Get mean placefield correlations between all sessions. Note that arena1 and arena2 must have the same size occpupancy
+    Get mean placefield correlations between all sessions. Note that arena1 and arena2 must have the same size occupancy
     maps already ran for each arena (tmap_us and tmap_sm arrays in Placefield object defined in Placefields.py)
     :param mouse: str of mousename
     :param arena1: str of arena1
@@ -772,7 +772,7 @@ def load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf):
 
 def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
     """
-    Assembles a nice matrix of mean correlation values between place field maps on days/arenas specified.
+    Assembles a nice matrix of mean 2d correlation values between place field maps on days/arenas specified.
     :param mice:
     :param arena1:
     :param arena2:
@@ -936,13 +936,16 @@ class ShufMap:
         self.nshuf = nshuf
         self.shuf_corrs_us_mean = []
         self.shuf_corrs_sm_mean = []
+        self.save_file = path.join(get_dir(self.mouse, self.arena1, self.day1), 'shuffle_map_mean_corrs_' + self.arena1
+                                   + 'day' + str(self.day1) + '_' + self.arena2 + 'day' +
+                                   str(self.day2) + '_nshuf' + str(self.nshuf) + '.pkl')
 
     def get_shuffled_corrs(self):  # Get tmap correlations after shuffling neuron_map
         shuf_corrs_us_mean = []
         shuf_corrs_sm_mean = []
+        print('Running Shuffled Map Corrs for ' + self.mouse + ' ' + self.arena1 + ' day ' + str(self.day1) + ' to ' +
+              self.arena2 + ' day ' + str(self.day2))
         for n in tqdm(np.arange(self.nshuf)):
-            print('Running Shuffled Map Corrs for ' + self.mouse + ' ' + self.arena1 + ' day ' + str(self.day1) + ' to ' +
-                  self.arena2 + ' day ' + str(self.day2))
             shuf_corrs_us, shuf_corrs_sm = pf_corr_bw_sesh(self.mouse, self.arena1, self.day1, self.arena2, self.day2,
                                                            shuf_map=True)
             shuf_corrs_us_mean.append(shuf_corrs_us.mean(axis=0))
@@ -953,11 +956,7 @@ class ShufMap:
 
     def save_data(self):  # Save data to pickle file
         # dump into pickle file with name
-        dir_use = get_dir(self.mouse, self.arena1, self.day1)
-        file_name = 'shuffle_map_mean_corrs_' + self.arena1 + 'day' + str(self.day1) + '_' + self.arena2 + 'day' + \
-                    str(self.day2) + '_nshuf' + str(self.nshuf) + '.pkl'
-        save_file = path.join(dir_use, file_name)
-        with open(save_file, 'wb') as output:
+        with open(self.save_file, 'wb') as output:
             dump(self, output)
 
 
@@ -974,6 +973,6 @@ class ShufMap:
 
 
 if __name__ == '__main__':
-    PFO = PFCombineObject('Marble29', 'Shock', 1, 'Shock', 2, debug=True)
+    ('Marble06', 'Open', 1, 'Shock', 1)
     pass
 

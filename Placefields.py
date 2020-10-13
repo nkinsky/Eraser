@@ -108,7 +108,7 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5,
     speed_cm = speed*pix2cm
 
     # Align imaging and position data
-    pos_align, speed_align, PSAbool_align, time_interp  = \
+    pos_align, speed_align, PSAbool_align, time_interp = \
         align_imaging_to_tracking(pos_cm, speed_cm, t_track, PSAbool, sr_image)
 
     # Smooth speed data for legitimate thresholding, get limits of data
@@ -283,7 +283,7 @@ def align_imaging_to_tracking(pos_cm, speed_cm, time_tracking, PSAbool, sr_imagi
     # Get timestamps for PSAbool
     _, nframes = np.shape(PSAbool)
     t_imaging = np.arange(0, nframes/sr_imaging, 1/sr_imaging) + \
-                np.min(time_tracking)  # tracking software starts image capture
+        np.min(time_tracking)  # tracking software starts image capture
     pos_align = np.empty((2, t_imaging.shape[0]))
     pos_align[0, :] = np.interp(t_imaging, time_tracking, pos_cm[0, :])
     pos_align[1, :] = np.interp(t_imaging, time_tracking, pos_cm[1, :])
@@ -518,6 +518,5 @@ class PlaceFieldObject:
 
 
 if __name__ == '__main__':
-    pfo = load_pf('Marble11','Open',1, pf_file='placefields_cm1_manlims_1000shuf.pkl')
-    pfo.pfscroll(plot_xy=True)
+    placefields('Marble07', 'Open', -2)
     pass

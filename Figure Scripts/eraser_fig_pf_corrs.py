@@ -1,5 +1,7 @@
 ## Placefield correlation figures/analysis
 
+
+
 import eraser_reference as err
 import placefield_stability as pfs
 import Placefields as pf
@@ -9,8 +11,11 @@ from pickle import dump, load
 from session_directory import find_eraser_directory as get_dir
 import os
 import matplotlib.pyplot as plt
+from glob import glob
 
 plot_dir = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'  # Plotting folder
+
+fixed_reg = ['Marble06', 'Marble07', 'Marble12', 'Marble17', 'Marble18', 'Marble20', 'Marble25']
 
 ## Step through each mouse/day and construct confusion matrices
 
@@ -27,8 +32,8 @@ days = [-2, -1, 0, 4, 1, 2, 7]
 group_desig = 2  # 1 = include days 1,2, AND 7 in after shock group, 2 = include days 1 and 2 only
 
 ndays = len(days)
-_, cont_corr_sm_mean_all = pfs.get_group_pf_corrs(cmice)
-_, ani_corr_sm_mean_all = pfs.get_group_pf_corrs(amice)
+_, cont_corr_sm_mean_all = pfs.get_group_pf_corrs(cmice, arena1, arena2, days)
+_, ani_corr_sm_mean_all = pfs.get_group_pf_corrs(amice, arena1, arena2, days)
 
 # # pre-allocate
 
@@ -95,8 +100,8 @@ for mouse in err.all_mice_good:
     for idd, day in enumerate([-2, -1, 4, 1, 2, 7]):
         try:
             erp.pf_rot_plot(mouse, 'Open', day, 'Shock', day, ax=ax.reshape(-1)[idd], nshuf=100)
-        except FileNotFoundError:
-            print('FileNotFoundError for ' + mouse + ' Open to Shock day ' + str(day))
+        except (FileNotFoundError, IndexError):
+            print('FileNotFoundError or IndexError for ' + mouse + ' Open to Shock day ' + str(day))
         savefile = os.path.join(plot_dir, mouse + ' PFrots bw arenas simple.pdf')
         fig.savefig(savefile)
         plt.close(fig)
@@ -151,7 +156,8 @@ for ida, arena in enumerate(['Open', 'Shock']):
                                         color='k', offset=0, save_fig=False, group_desig=group_desig)
     pfs.plot_pfcorr_bygroup(ani_bestcorr_mean_all[ida], arena1, arena2, '', prefix=prefix,
                             color='g', offset=0.1, ax_use=axc, group_desig=group_desig, save_fig=False)
-    pfs.plot_pfcorr_bygroup(gen_bestcorr_mean_all[ida], arena1, arena2, 'Combined (k=disc, b=gen, g=Ani)', prefix=prefix,
+    pfs.plot_pfcorr_bygroup(gen_bestcorr_mean_all[ida], arena1, arena2,
+                            prefix + ' ' + arena1 + 'v' + arena2 + ' Combined (k=disc, b=gen, g=Ani) best_rot=' + str(best_rot), prefix=prefix,
                             color='b', offset=0.1, ax_use=axc, group_desig=group_desig, save_fig=True, best_rot=best_rot)
 
 ## Now do better combined plots
@@ -221,8 +227,8 @@ for idg, group in enumerate(unique_groups):
 amice = err.ani_mice_good
 dmice = err.discriminators
 days = [-2, -1, 0, 4, 1, 2, 7]
-arena1 = 'Shock'
-arena2 = 'Shock'
+arena1 = 'Open'
+arena2 = 'Open'
 group_desig = 1
 
 prefix = 'PFcorrs'
@@ -249,10 +255,10 @@ for idg, group in enumerate(np.unique(dgroups[~np.isnan(dgroups)]).tolist()):
                                               xlabel=group_labels[idg], ylabel=prefix, xticklabels=['no rot', 'best rot'])
 
     if not match_yaxis:
-        savefile = os.path.join(plot_dir, prefix + ' 2x2 Discr and Ani no v best rot ' + group_labels[idg] + '.pdf')
+        savefile = os.path.join(plot_dir, prefix + ' ' + arena1 + 'v' + arena2 + ' 2x2 Discr and Ani no v best rot ' + group_labels[idg] + '.pdf')
     elif match_yaxis:
         ax[0].set_ylim(match_ylims)
-        savefile = os.path.join(plot_dir, prefix + ' 2x2 Discr and Ani no v best rot ' + group_labels[idg] + '_equalaxes.pdf')
+        savefile = os.path.join(plot_dir, prefix + ' ' + arena1 + 'v' + arena2 + ' 2x2 Discr and Ani no v best rot ' + group_labels[idg] + '_equalaxes.pdf')
 
     ax[0].set_title('No rot v Best rot')
     fig.savefig(savefile)
@@ -276,35 +282,73 @@ for mouse in mice:
     plt.close(fig)
 ## Workhorse code below - run before doing much of the above
 
+## For mice with fixed registrations move all files to "archive" folders
+arenas = ['Shock', 'Open']
+days = [-2, -1, 0, 4, 1, 2, 7]
+for mouse in fixed_reg:
+    for arena1 in arenas:
+        for arena2 in arenas:
+            for id1, day1 in enumerate(days):
+                for id2, day2 in enumerate(days):
+                    if id1 <= id2 and arena1 != arena2 or id1 < id2 and arena1 == arena2:
+                        dir_use = get_dir(mouse, arena1, day1)
+                        archive_dir = os.path.join(dir_use, 'rot_archive')
+                        if not os.path.isdir(archive_dir):
+                            try:
+                                os.mkdir(archive_dir)
+                            except FileNotFoundError:
+                                print('Error for ' + mouse + ' ' + arena1 + ' day ' + str(day1)
+                                      + ' to ' + arena2 + ' day ' + str(day2))
+                        files_move = glob(os.path.join(dir_use, 'best_rot*.pkl'))
+                        files_move.extend(glob(os.path.join(dir_use, 'PV1shuf*nshuf_1000.pkl')))
+                        files_move.extend(glob(os.path.join(dir_use, 'shuffle_map_mean*nshuf100.pkl')))
+                        for file in files_move:
+                            try:
+                                _, f = os.path.split(file)
+                                os.rename(file, os.path.join(archive_dir, f))
+                            except FileNotFoundError:
+                                print('Error for ' + mouse + ' ' + arena1 + ' day ' + str(day1)
+                                      + ' to ' + arena2 + ' day ' + str(day2))
+
+
 ## Run shuffled PV1 correlations for each session pair
 nshuf = 1000
 arenas = ['Shock', 'Open']
 days = [-2, -1, 0, 4, 1, 2, 7]
-for mouse in err.all_mice_good:
-    # for arena1 in arenas:
-    # arena2 = arena1
-    arena1 = 'Open'
-    arena2 = 'Shock'
-    for id1, day1 in enumerate(days):
-        for id2, day2 in enumerate(days):
-            if id1 <= id2:
-                try:
-                    print('Running shuffled PV1 corrs for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' +
-                          arena2 + ' day ' + str(day2))
-                    pfs.PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf=nshuf)
-                except FileNotFoundError:
-                    print('FileNotFoundError for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' +
-                          str(day2))
+for mouse in fixed_reg:
+    # # for arena1 in arenas:
+
+
+    # # arena2 = arena1
+    # arena1 = 'Open'
+    # arena2 = 'Shock'
+    for arena1 in arenas:
+        for arena2 in arenas:
+            for id1, day1 in enumerate(days):
+                for id2, day2 in enumerate(days):
+                    if id1 <= id2 and arena1 != arena2 or id1 < id2 and arena1 == arena2:
+                        try:
+                            print('Running shuffled PV1 corrs for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' +
+                                  arena2 + ' day ' + str(day2))
+                            pfs.PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf=nshuf)
+                        except FileNotFoundError:
+                            print('FileNotFoundError for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' +
+                                  str(day2))
 ## Identify the best rotation for each correlation between mice
 days = [-2, -1, 0, 4, 1, 2, 7]
-for mouse in err.all_mice_good:
-    # for arena1 in ['Shock', 'Open']:
-    # arena2 = arena1
+arenas = ['Shock', 'Shock']
+
+for mouse in fixed_reg:
+
+    # # for arena1 in ['Shock', 'Open']:
+    # # arena2 = arena1
     arena1 = 'Open'
-    arena2 = 'Shock'
+    arena2 = 'Open' \
+             ''
+
     for id1, day1 in enumerate(days):
         for id2, day2 in enumerate(days):
-            if id1 <= id2:  # Only run for sessions forward in time
+            if id1 <= id2 and arena1 != arena2 or id1 < id2 and arena1 == arena2:
                 try:
                     # Construct unique file save name
                     save_name = 'best_rot_' + arena1 + 'day' + str(day1) + '_' + arena2 + 'day' + str(day2) + '.pkl'
@@ -327,32 +371,41 @@ for mouse in err.all_mice_good:
                 except FileNotFoundError:
                     print('FileNotFoundError for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' +
                           str(day2))
+                except TypeError:
+                    print('TypeError for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' +
+                          arena2 + ' day ' + str(day2))
 ## Get correlations between shuffled maps within/between arenas for all mice
+arenas = ['Open', 'Shock']
 days = [-2, -1, 0, 4, 1, 2, 7]
 nshuf = 1000
 check = []
 # Add in something to not run if save_file already exists!
-for mouse in err.all_mice_good:
-    # for arena in ['Shock', 'Open']:
-    arena1 = 'Open'
-    arena2 = 'Shock'
-    for id1, day1 in enumerate(days):
-        for id2, day2 in enumerate(days):
-            dir_use = get_dir(mouse, arena1, day1)
-            file_name = 'shuffle_map_mean_corrs_' + arena1 + 'day' + str(day1) + '_' + arena2 + 'day' + \
-                        str(day2) + '_nshuf' + str(nshuf) + '.pkl'
-            save_file = os.path.join(dir_use, file_name)
-            if os.path.exists(save_file):
-                check.append([mouse, arena1, day1, arena2, day2, True])
-            if id1 <= id2 and not os.path.exists(save_file):  # Only run for sessions forward in time
-                try:
-                    ShufMap = pfs.ShufMap(mouse, arena1=arena1, day1=day1, arena2=arena2, day2=day2, nshuf=nshuf)
-                    ShufMap.get_shuffled_corrs()
-                    ShufMap.save_data()
-                    check.append([mouse, arena1, day1, arena2, day2, True])
-                except:  # FileNotFoundError:
-                    print('Error in ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' + str(day2))
-                    check.append([mouse, arena1, day1, arena2, day2, False])
+for mouse in fixed_reg:
+    # # for arena in ['Shock', 'Open']:
+    # arena1 = 'Open'
+    # arena2 = 'Shock'
+    for arena1 in arenas:
+        for arena2 in arenas:
+            for id1, day1 in enumerate(days):
+                for id2, day2 in enumerate(days):
+                    dir_use = get_dir(mouse, arena1, day1)
+                    file_name = 'shuffle_map_mean_corrs_' + arena1 + 'day' + str(day1) + '_' + arena2 + 'day' + \
+                                str(day2) + '_nshuf' + str(nshuf) + '.pkl'
+                    save_file = os.path.join(dir_use, file_name)
+                    if id1 <= id2 and arena1 != arena2 or id1 < id2 and arena1 == arena2 and not os.path.exists(save_file):  # Only run for sessions forward in time
+                        try:
+                            ShufMap = pfs.ShufMap(mouse, arena1=arena1, day1=day1, arena2=arena2, day2=day2, nshuf=nshuf)
+                            if not os.path.exists(ShufMap.save_file):
+                                ShufMap.get_shuffled_corrs()
+                                ShufMap.save_data()
+                                check.append([mouse, arena1, day1, arena2, day2, True])
+                            else:
+                                print('Previously saved data for ' + mouse + ' ' + arena1 + ' day'  + str(day1) + ' to '
+                                      + arena2 + ' day ' + str(day2) + ": Skipping.")
+                                check.append([mouse, arena1, day1, arena2, day2, True])
+                        except:  # FileNotFoundError:
+                            print('Error in ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' + str(day2))
+                            check.append([mouse, arena1, day1, arena2, day2, False])
 
 ## Get place-field correlation histograms at no rotation versus best rotation for all mice/arenas for comparison purposes
 # Not that between arena plots aren't as useful. Better is to do each day versus itself and put on the same plot...

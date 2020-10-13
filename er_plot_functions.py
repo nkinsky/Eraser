@@ -900,15 +900,16 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors 
 
 
 if __name__ == '__main__':
+
     # plot_all_freezing(err.control_mice)
-    # pf_rot_plot('Marble06', 'Open', -2, 'Shock', -2, nshuf=100)
-    x = np.asarray([0, 1, 2, 3, 4, 5, 4, 7, 3, 4, 5, 6, 4, 7, 2, 3, 5, 4, 1, 6, 7, 4, 2, 5, 1])
-    data = np.random.normal(x, scale=1, size=x.shape)
-    # scatterbar(data, x, group_names=[str(a) for a in x])
-    open1 = np.random.normal(x, scale=1, size=x.shape)
-    shock1 = np.random.normal(x, scale=1, size=x.shape) + 0.5
-    open2 = np.random.normal(x, scale=1, size=x.shape)
-    shock2 = np.random.normal(x, scale=1, size=x.shape) - 0.5
-    pfcorr_compare(open1, shock1, open2, shock2, group_names=['Ctrl', 'Ani'], colors=['k', 'g'])
+    pf_rot_plot('Marble06', 'Open', 1, 'Shock', 1, nshuf=100)
+    # x = np.asarray([0, 1, 2, 3, 4, 5, 4, 7, 3, 4, 5, 6, 4, 7, 2, 3, 5, 4, 1, 6, 7, 4, 2, 5, 1])
+    # data = np.random.normal(x, scale=1, size=x.shape)
+    # # scatterbar(data, x, group_names=[str(a) for a in x])
+    # open1 = np.random.normal(x, scale=1, size=x.shape)
+    # shock1 = np.random.normal(x, scale=1, size=x.shape) + 0.5
+    # open2 = np.random.normal(x, scale=1, size=x.shape)
+    # shock2 = np.random.normal(x, scale=1, size=x.shape) - 0.5
+    # pfcorr_compare(open1, shock1, open2, shock2, group_names=['Ctrl', 'Ani'], colors=['k', 'g'])
 
     pass
