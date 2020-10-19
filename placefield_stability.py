@@ -326,33 +326,41 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
     in both sessions. us = unsmoothed, sm = smoothed
     """
 
-    # Get mapping between sessions
-    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2)
-    reg_session = sd.find_eraser_session(mouse, arena2, day2)
-    good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
-    good_map = neuron_map[good_map_bool].astype(np.int64)
-
-    # Shuffle neuron_map if specified
-    if shuf_map:
-        good_map = np.random.permutation(good_map)
-
     # load in placefield objects between sessions
     PF1 = pf.load_pf(mouse, arena1, day1, pf_file=pf_file)
     PF2 = pf.load_pf(mouse, arena2, day2, pf_file=pf_file)
 
-    # Identify neurons with proper mapping between sessions
-    good_map_ind, _ = np.where(good_map_bool)
+    # Get mapping between sessions
+    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2)
+    reg_session = sd.find_eraser_session(mouse, arena2, day2)
+
+    # only include neurons validly mapped to other neurons
+    valid_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
+    valid_map = neuron_map[valid_map_bool].astype(np.int64)
+
+    # Identify neurons with least one calcium event after speed thresholding
+    run_events_bool = np.bitwise_and(PF1.PSAboolrun[valid_map_bool, :].sum(axis=1) > 0, PF2.PSAboolrun[valid_map, :].sum(axis=1) > 0)
+
+    # Refine map to only include validly mapped neurons that are active after speed thresholding
+    good_map_ind, _ = np.where(np.bitwise_and(valid_map_bool, run_events_bool))
+    good_map = neuron_map[good_map_ind]
     ngood = len(good_map_ind)
+
+    # Shuffle neuron_map if specified
+    if shuf_map:
+        good_map = np.random.permutation(good_map)
 
     corrs_us = np.ndarray(ngood)  # Initialize correlation arrays
     corrs_sm = np.ndarray(ngood)
 
     # Step through each mapped neuron and get corrs between each
     rot = int(rot_deg/90)
+    no_run_events_bool = np.ones(ngood, dtype=bool)
     for idn, neuron in enumerate(good_map_ind):
+
         if debug:  # for debugging nans in sstats.spearmanr
-            idn = 17
-            neuron = 17
+            idn = 66
+            neuron = np.int64(good_map_ind[idn])
 
         reg_neuron = good_map[idn]
         if rot == 0 and arena1 == arena2:  # Do correlations directly if possible
@@ -562,12 +570,12 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_fil
         corr_mean_all = np.empty((2, 4))
         for idr, rot in enumerate(rots):
             print(str(rot))
-            if rot != 270:
+            try:
                 corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
                                                pf_file=pf_file, rot_deg=rot, shuf_map=False)
-            else:  # for debugging Marble29 Shock 1 to Shock 7 only
-                corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
-                                                     pf_file=pf_file, rot_deg=rot, shuf_map=False)
+            except IndexError:  # Fix for missing sessions
+                print('Index Error for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' + str(day2))
+                corrs_us = corrs_sm = np.ones(1)*np.nan
             corr_mean_all[0, idr] = corrs_us.mean(axis=0)
             corr_mean_all[1, idr] = corrs_sm.mean(axis=0)
 
@@ -973,6 +981,10 @@ class ShufMap:
 
 
 if __name__ == '__main__':
-    ('Marble06', 'Open', 1, 'Shock', 1)
+    # cmice = err.discriminators  # err.control_mice_good
+    # amice = err.ani_mice_good
+    # days = [-2, -1, 0, 4, 1, 2, 7]
+    # get_group_pf_corrs(amice, 'Open', 'Open', days)
+    corrs_us, corrs_sm = pf_corr_bw_sesh('Marble17', 'Shock', -2, 'Shock', -1, rot_deg=0, debug=True)
     pass
 
