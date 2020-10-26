@@ -179,8 +179,8 @@ def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5,
     PV1all, PV2all, PV1both, PV2both = registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=shuf_map)
 
     # Now get ALL corrs and BOTH corrs
-    PVcorr_all, all_p = sstats.spearmanr(PV1all, PV2all, nan_policy='omit')
-    PVcorr_both, both_p = sstats.spearmanr(PV1both, PV2both, nan_policy='omit')
+    PVcorr_all, all_p, _ = sstats.spearmanr(PV1all, PV2all, nan_policy='omit')
+    PVcorr_both, both_p, _ = sstats.spearmanr(PV1both, PV2both, nan_policy='omit')
 
     return PVcorr_all, PVcorr_both
 
@@ -282,7 +282,7 @@ def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
     if not path.exists(save_file):
         print('Getting shuffled 1-d PV corrs')
         for n in tqdm(np.arange(nshuf)):
-            corr_all, corr_both = PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, shuf_map=True)
+            corr_all, corr_both, _ = PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, shuf_map=True)
             temp_all.append(corr_all)
             temp_both.append(corr_both)
 
@@ -360,14 +360,7 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
 
     for base_neuron, reg_neuron in zip(good_neurons_base, good_neurons_reg):
 
-        if debug and base_neuron == 364:  # for debugging nans in sstats.spearmanr
-            print('Debugging')
-            a = PF1.tmap_us[base_neuron].reshape(-1)
-            b = PF2.tmap_us[reg_neuron].reshape(-1)
-            brot = np.reshape(sk_resize(np.rot90(
-                PF2.tmap_us[reg_neuron], rot), PF1_size, anti_aliasing=True), -1)
-            spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1), np.reshape(sk_resize(np.rot90(
-                PF2.tmap_us[reg_neuron], rot), PF1_size, anti_aliasing=True), -1))
+        # if debug and base_neuron == 364:  # for debugging nans in sstats.spearmanr
         try:
             if rot == 0 and arena1 == arena2:  # Do correlations directly if possible
                 corr_us, p_us, poor_overlap_us = spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1), PF2.tmap_us[reg_neuron].reshape(-1))
