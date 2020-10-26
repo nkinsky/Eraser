@@ -285,6 +285,9 @@ for mouse in mice:
 ## For mice with fixed registrations move all files to "archive" folders
 arenas = ['Shock', 'Open']
 days = [-2, -1, 0, 4, 1, 2, 7]
+name_append = '_2'  # super ocd tracking of # times you've had to redo stuff _2 = 2nd, _87 = 87th, etc.
+
+# IMPORTANT - comment out files you don't want to move in code below!
 for mouse in fixed_reg:
     for arena1 in arenas:
         for arena2 in arenas:
@@ -305,7 +308,7 @@ for mouse in fixed_reg:
                         for file in files_move:
                             try:
                                 _, f = os.path.split(file)
-                                os.rename(file, os.path.join(archive_dir, f))
+                                os.rename(file, os.path.join(archive_dir, f[0:-4] + name_append + '.pkl'))
                             except FileNotFoundError:
                                 print('Error for ' + mouse + ' ' + arena1 + ' day ' + str(day1)
                                       + ' to ' + arena2 + ' day ' + str(day2))
@@ -343,8 +346,7 @@ for mouse in fixed_reg:
     # # for arena1 in ['Shock', 'Open']:
     # # arena2 = arena1
     arena1 = 'Open'
-    arena2 = 'Open' \
-             ''
+    arena2 = 'Open'
 
     for id1, day1 in enumerate(days):
         for id2, day2 in enumerate(days):
@@ -408,7 +410,7 @@ for mouse in fixed_reg:
                             check.append([mouse, arena1, day1, arena2, day2, False])
 
 ## Get place-field correlation histograms at no rotation versus best rotation for all mice/arenas for comparison purposes
-# Not that between arena plots aren't as useful. Better is to do each day versus itself and put on the same plot...
+# Note that between arena plots aren't as useful. Better is to do each day versus itself and put on the same plot...
 smooth = True
 for mouse in err.all_mice_good:
     for arena1, arena2 in zip(['Open', 'Shock'], ['Open', 'Shock']):

@@ -62,7 +62,7 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2):
     map_import = map_data['neuron_map']['neuron_id'][0][0]  # Grab terribly formatted neuron map from matlab
 
     # Fix the map - spit out an array!
-    neuron_map = fix_neuronmap(map_import)
+    neuron_map = fix_neuronmap(map_import).reshape(-1)
 
     # good_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
 
@@ -99,7 +99,7 @@ def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     """
 
     # Get silent neurons
-    silent_ind, _ = np.where(np.isnan(neuron_map))
+    silent_ind = np.where(np.isnan(neuron_map))[0]
     good_map_bool = np.isnan(neuron_map) == 0
 
     # Get new neurons
@@ -336,48 +336,61 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
 
     # only include neurons validly mapped to other neurons
     valid_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
-    valid_map = neuron_map[valid_map_bool].astype(np.int64)
+    valid_neurons_reg = neuron_map[valid_map_bool].astype(np.int64)
+    valid_neurons_base = np.where(valid_map_bool)[0]
 
-    # Identify neurons with least one calcium event after speed thresholding
-    run_events_bool = np.bitwise_and(PF1.PSAboolrun[valid_map_bool, :].sum(axis=1) > 0, PF2.PSAboolrun[valid_map, :].sum(axis=1) > 0)
+    # Identify mapped neurons with least one calcium event after speed thresholding
+    run_events_bool = np.bitwise_and(PF1.PSAboolrun[valid_neurons_base, :].sum(axis=1) > 0,
+                                     PF2.PSAboolrun[valid_neurons_reg, :].sum(axis=1) > 0)
 
-    # Refine map to only include validly mapped neurons that are active after speed thresholding
-    good_map_ind, _ = np.where(np.bitwise_and(valid_map_bool, run_events_bool))
-    good_map = neuron_map[good_map_ind]
-    ngood = len(good_map_ind)
+    # Refine map again to only include active neurons after speed thresholding
+    good_neurons_base = valid_neurons_base[run_events_bool]
+    good_neurons_reg = valid_neurons_reg[run_events_bool].astype(np.int64)
+    ngood = len(good_neurons_base)
 
-    # Shuffle neuron_map if specified
+    # Shuffle mapping between sessions if specified
     if shuf_map:
-        good_map = np.random.permutation(good_map)
+        good_map = np.random.permutation(good_neurons_reg)
 
-    corrs_us = np.ndarray(ngood)  # Initialize correlation arrays
-    corrs_sm = np.ndarray(ngood)
+    corrs_us, corrs_sm = [], []  # Initialize correlation lists
 
     # Step through each mapped neuron and get corrs between each
     rot = int(rot_deg/90)
     no_run_events_bool = np.ones(ngood, dtype=bool)
-    for idn, neuron in enumerate(good_map_ind):
 
-        if debug:  # for debugging nans in sstats.spearmanr
-            idn = 66
-            neuron = np.int64(good_map_ind[idn])
+    for base_neuron, reg_neuron in zip(good_neurons_base, good_neurons_reg):
 
-        reg_neuron = good_map[idn]
-        if rot == 0 and arena1 == arena2:  # Do correlations directly if possible
-            corr_us, p_us = spearmanr_nan(np.reshape(PF1.tmap_us[neuron], -1), np.reshape(PF2.tmap_us[reg_neuron], -1))
-
-            corr_sm, p_sm = spearmanr_nan(np.reshape(PF1.tmap_sm[neuron], -1), np.reshape(PF2.tmap_sm[reg_neuron], -1))
-
-        else:  # rotate and resize PF2 before doing corrs if rotations are specified
-            PF1_size = PF1.tmap_us[0].shape
-            corr_us, p_us = spearmanr_nan(np.reshape(PF1.tmap_us[neuron], -1), np.reshape(sk_resize(np.rot90(
+        if debug and base_neuron == 364:  # for debugging nans in sstats.spearmanr
+            print('Debugging')
+            a = PF1.tmap_us[base_neuron].reshape(-1)
+            b = PF2.tmap_us[reg_neuron].reshape(-1)
+            brot = np.reshape(sk_resize(np.rot90(
+                PF2.tmap_us[reg_neuron], rot), PF1_size, anti_aliasing=True), -1)
+            spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1), np.reshape(sk_resize(np.rot90(
                 PF2.tmap_us[reg_neuron], rot), PF1_size, anti_aliasing=True), -1))
+        try:
+            if rot == 0 and arena1 == arena2:  # Do correlations directly if possible
+                corr_us, p_us, poor_overlap_us = spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1), PF2.tmap_us[reg_neuron].reshape(-1))
 
-            corr_sm, p_sm = spearmanr_nan(np.reshape(PF1.tmap_sm[neuron], -1), np.reshape(sk_resize(np.rot90(
-                PF2.tmap_sm[reg_neuron], rot), PF1_size, anti_aliasing=True), -1))
+                corr_sm, p_sm, poor_overlap_sm = spearmanr_nan(PF1.tmap_sm[base_neuron].reshape(-1), PF2.tmap_sm[reg_neuron].reshape(-1))
 
-        corrs_us[idn] = corr_us
-        corrs_sm[idn] = corr_sm
+            else:  # rotate and resize PF2 before doing corrs if rotations are specified
+                PF1_size = PF1.tmap_us[0].shape
+                corr_us, p_us, poor_overlap_us = spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1), np.reshape(sk_resize(np.rot90(
+                    PF2.tmap_us[reg_neuron], rot), PF1_size, anti_aliasing=True), -1))
+
+                corr_sm, p_sm, poor_overlap_sm = spearmanr_nan(np.reshape(PF1.tmap_sm[base_neuron], -1), np.reshape(sk_resize(np.rot90(
+                    PF2.tmap_sm[reg_neuron], rot), PF1_size, anti_aliasing=True), -1))
+        except RuntimeWarning:  # Note you will have to enable warnings for this to work a la >> import warnings, >>warnings.filterwarnings('error', category=RuntimeWarning)
+            print('RunTimeWarning Encountered in some basic scipy/numpy functions - should probably debug WHY this is happening')
+            print('Base_neuron = ' + str(base_neuron))
+
+        # exclude any correlations that would throw a scipy.stats.spearmanr RuntimeWarning due to
+        # # poor overlap after rotation...
+        if not poor_overlap_us: corrs_us.append(corr_us)
+        if not poor_overlap_sm: corrs_sm.append(corr_sm)
+
+    corrs_us, corrs_sm = np.asarray(corrs_us), np.asarray(corrs_sm)
 
     return corrs_us, corrs_sm
 
@@ -740,20 +753,25 @@ def spearmanr_nan(a, b):
 
     :param a:
     :param b:
-    :return: corr, pval
+    :return: corr, pval, poor_overlap (this last variable can be used to exclude any values at a later point)
     """
+
     # make sure at least 3 bins have valid numbers in each session - can't perform correlation with less than 3 points
+    poor_overlap = False  # initialize this variable to track if you have poor overlap or not
     if np.sum(np.bitwise_or(np.isnan(a), np.isnan(b))) < len(a) - 2:
 
         good_bool = np.bitwise_and(np.bitwise_not(np.isnan(a)), np.bitwise_not(np.isnan(b)))  # Hack to fix
         # improper handling of all zero array with nan_policy='omit'
 
-        corr, pval = sstats.spearmanr(a[good_bool], b[good_bool], nan_policy='omit')
+        # Handle RuntimeWarning in corrcoef where you don't get enough unique values to calculate a spearman correlation.
+        if np.unique(a[good_bool]).shape[0] < 2 or np.unique(b[good_bool]).shape[0] < 2:
+            corr, pval, poor_overlap = np.nan, np.nan, True
+        else:
+            corr, pval = sstats.spearmanr(a[good_bool], b[good_bool], nan_policy='omit')
     else:
-        corr = np.nan
-        pval = np.nan
+        corr, pval = np.nan, np.nan
 
-    return corr, pval
+    return corr, pval, poor_overlap
 
 
 def load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf):
@@ -985,6 +1003,8 @@ if __name__ == '__main__':
     # amice = err.ani_mice_good
     # days = [-2, -1, 0, 4, 1, 2, 7]
     # get_group_pf_corrs(amice, 'Open', 'Open', days)
-    corrs_us, corrs_sm = pf_corr_bw_sesh('Marble17', 'Shock', -2, 'Shock', -1, rot_deg=0, debug=True)
+    import warnings
+    # warnings.filterwarnings('error', category=RuntimeWarning)
+    pf_corr_bw_sesh('Marble07', 'Shock', -2, 'Shock', -1, rot_deg=90, debug=True)
     pass
 
