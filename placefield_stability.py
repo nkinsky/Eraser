@@ -32,7 +32,7 @@ from tqdm import tqdm
 plt.rcParams['pdf.fonttype'] = 42
 
 
-def get_neuronmap(mouse, arena1, day1, arena2, day2):
+def get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=False):
     """
     Get mapping between registered neurons from arena1/day1 to arena2/day2
     :param mouse:
@@ -40,6 +40,8 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2):
     :param day1:
     :param arena2: session 2 day/arena
     :param day2:
+    :param batch_map: False (default) = do direct pairwise registration, True = use batch map to generate pairwise map
+    (assumes batch_map lives in the Open day -2 working folder).
     :return: neuron_map: an array the length of the number of neurons in session1. NaNs indicate
     that neuron has no matched counterpart in session2. numbers indicate index of neuron in session2
     that matches session1 neuron.
@@ -47,26 +49,91 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2):
 
     make_session_list()  # Initialize session list
 
-    # Identify map file
-    dir_use = get_dir(mouse, arena1, day1)
-    reg_session = sd.find_eraser_session(mouse, arena2, day2)
-    reg_filename = 'neuron_map-' + mouse + '-' + sd.fix_slash_date(reg_session['Date']) + \
-                   '-session' + reg_session['Session'] + '.mat'
-    map_file = path.join(dir_use, reg_filename)
+    if not batch_map_use:
+        # Identify map file
+        dir_use = get_dir(mouse, arena1, day1)
+        reg_session = sd.find_eraser_session(mouse, arena2, day2)
+        reg_filename = 'neuron_map-' + mouse + '-' + sd.fix_slash_date(reg_session['Date']) + \
+                       '-session' + reg_session['Session'] + '.mat'
+        map_file = path.join(dir_use, reg_filename)
 
-    # Load file in
-    try:
-        map_data = sio.loadmat(map_file)
-    except TypeError:
-        map_data = sio.loadmat(map_file)
-    map_import = map_data['neuron_map']['neuron_id'][0][0]  # Grab terribly formatted neuron map from matlab
+        # Load file in
+        try:
+            map_data = sio.loadmat(map_file)
+        except TypeError:
+            map_data = sio.loadmat(map_file)
+        map_import = map_data['neuron_map']['neuron_id'][0][0]  # Grab terribly formatted neuron map from matlab
 
-    # Fix the map - spit out an array!
-    neuron_map = fix_neuronmap(map_import).reshape(-1)
+        # Fix the map - spit out an array!
+        neuron_map = fix_neuronmap(map_import).reshape(-1)
 
-    # good_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
+        # good_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
+    elif batch_map_use:
+        t = 1  # placeholder
+
+
 
     return neuron_map
+
+
+def fix_batchmap(batch_path):
+    """Takes batchmap output and makes it into a nice reading format. Input = full path to batch_session_map_py.mat"""
+    batch_map_import = sio.loadmat(batch_path)  # load in file in poorly formatted fashion
+    map = batch_map_import['map']
+    animals = [a[0][0] for a in batch_map_import['session'][0]]
+    dates = [a[1][0] for a in batch_map_import['session'][0]]
+    sessions = [a[2][0][0] for a in batch_map_import['session'][0]]
+    session_list = [animals, dates, sessions]
+
+    return map, session_list
+
+
+def get_pairwise_map_from_batch(mouse, arena1, day1, arena2, day2):
+    """
+    Extracts a direct map from session1 to session2
+    :param batch_map:
+    :param session:
+    :param mouse:
+    :param arena1:
+    :param day1:
+    :param arena2:
+    :param day2:
+    :return:
+    """
+    # first load in and make batch map variables nice
+    batch_path = path.join(get_dir(mouse, 'Open', -2), 'batch_session_map_py.mat')
+    map, session_list = fix_batchmap(batch_path)
+
+    # first figure out which recording session corresponds to which column in batch_map
+    base_idx, reg_idx = [get_batchmap_index(session_list, mouse, arena, day) for arena, day in
+                         zip([arena1, arena2], [day1, day2])]
+
+    # now map neurons!
+    map1 = np.asarray(map[:, base_idx], dtype=int) - 1  # convert from matlab to pythong indexing
+    neurons1 = np.arange(0, np.nanmax(map1))
+    map2 = np.asarray(map[:, reg_idx], dtype=int) - 1  # convert from matlab to pythong indexing
+    map1_2 = np.zeros_like(neurons1)
+    for neuron1 in neurons1:
+        id1_batch = np.where(neuron1 == map1)
+        if neuron1 >= 0:
+            map1_2[neuron1] = map2[id1_batch]
+
+    return map1_2
+def get_batchmap_index(session_list, mouse, arena, day):
+    """helper function to get column # for a given session in batch_session_map"""
+
+    session_info = sd.find_eraser_session(mouse, arena, day)
+    mouse_bool = [animal == mouse for animal in session_list[0]]
+    date_bool = [date == sd.fix_slash_date(session_info['Date']) for date in session_list[1]]
+    session_bool = [str(session) == session_info['Session'] for session in session_list[2]]
+
+    if np.all(mouse_bool):
+        idx = np.where(np.bitwise_and(date_bool, session_bool))[0][0]
+    else:
+        idx = np.nan
+    # add one to account for first column being a list of ALL neurons
+    idx += 1
+    return idx
 
 
 def fix_neuronmap(map_import):
@@ -998,6 +1065,7 @@ if __name__ == '__main__':
     # get_group_pf_corrs(amice, 'Open', 'Open', days)
     import warnings
     # warnings.filterwarnings('error', category=RuntimeWarning)
-    pf_corr_bw_sesh('Marble07', 'Shock', -2, 'Shock', -1, rot_deg=90, debug=True)
+    get_pairwise_map_from_batch('Marble07', 'Shock', -1, 'Shock', 1)
+
     pass
 
