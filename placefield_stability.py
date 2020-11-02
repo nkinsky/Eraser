@@ -69,9 +69,7 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=False):
 
         # good_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
     elif batch_map_use:
-        t = 1  # placeholder
-
-
+        neuron_map = get_pairwise_map_from_batch(mouse, arena1, day1, arena2, day2)
 
     return neuron_map
 
@@ -109,16 +107,22 @@ def get_pairwise_map_from_batch(mouse, arena1, day1, arena2, day2):
                          zip([arena1, arena2], [day1, day2])]
 
     # now map neurons!
-    map1 = np.asarray(map[:, base_idx], dtype=int) - 1  # convert from matlab to pythong indexing
-    neurons1 = np.arange(0, np.nanmax(map1))
-    map2 = np.asarray(map[:, reg_idx], dtype=int) - 1  # convert from matlab to pythong indexing
-    map1_2 = np.zeros_like(neurons1)
+    map1 = np.asarray(map[:, base_idx], dtype=int) - 1  # convert from matlab to python indexing
+    valid_bool = np.bitwise_not(np.isnan(map[:, base_idx]))  # id non-neg values
+    neurons1 = np.arange(0, np.nanmax(map1[valid_bool] + 1))
+    map2 = map[:, reg_idx] - 1  # convert from matlab to python indexing
+    map1_2 = np.zeros_like(neurons1, dtype=float)
     for neuron1 in neurons1:
         id1_batch = np.where(neuron1 == map1)
         if neuron1 >= 0:
-            map1_2[neuron1] = map2[id1_batch]
+            try:
+                map1_2[neuron1] = map2[id1_batch]
+            except ValueError:
+                t = 1
 
     return map1_2
+
+
 def get_batchmap_index(session_list, mouse, arena, day):
     """helper function to get column # for a given session in batch_session_map"""
 
@@ -1065,7 +1069,7 @@ if __name__ == '__main__':
     # get_group_pf_corrs(amice, 'Open', 'Open', days)
     import warnings
     # warnings.filterwarnings('error', category=RuntimeWarning)
-    get_pairwise_map_from_batch('Marble07', 'Shock', -1, 'Shock', 1)
+    get_neuronmap('Marble06', 'Open', -2, 'Open', 1, batch_map_use=True)
 
     pass
 
