@@ -1,11 +1,10 @@
 ## Placefield correlation figures/analysis
 
-
-
 import eraser_reference as err
 import placefield_stability as pfs
 import Placefields as pf
 import er_plot_functions as erp
+from plot_helper import pretty_plot
 import numpy as np
 from pickle import dump, load
 from session_directory import find_eraser_directory as get_dir
@@ -16,6 +15,7 @@ from glob import glob
 plot_dir = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'  # Plotting folder
 
 fixed_reg = ['Marble06', 'Marble07', 'Marble12', 'Marble17', 'Marble18', 'Marble20', 'Marble25']
+good_reg = ['Marble11', 'Marble14', 'Marble19', 'Marble24', 'Marble27', 'Marble29']
 
 ## Step through each mouse/day and construct confusion matrices
 
@@ -285,7 +285,7 @@ for mouse in mice:
 ## For mice with fixed registrations move all files to "archive" folders
 arenas = ['Shock', 'Open']
 days = [-2, -1, 0, 4, 1, 2, 7]
-name_append = '_bad'  # super ocd tracking of # times you've had to redo stuff _2 = 2nd, _87 = 87th, etc.
+name_append = '_bad4'  # super ocd tracking of # times you've had to redo stuff _2 = 2nd, _87 = 87th, etc.
 
 # IMPORTANT - comment out files you don't want to move in code below!
 for mouse in fixed_reg:
@@ -302,9 +302,10 @@ for mouse in fixed_reg:
                             except FileNotFoundError:
                                 print('Error for ' + mouse + ' ' + arena1 + ' day ' + str(day1)
                                       + ' to ' + arena2 + ' day ' + str(day2))
+                        # files_move = glob(os.path.join(dir_use, 'shuffle_map_mean*nshuf1000.pkl'))
                         files_move = glob(os.path.join(dir_use, 'best_rot*.pkl'))
-                        files_move.extend(glob(os.path.join(dir_use, 'PV1shuf*nshuf_1000.pkl')))
-                        files_move.extend(glob(os.path.join(dir_use, 'shuffle_map_mean*nshuf100.pkl')))
+                        # files_move.extend(glob(os.path.join(dir_use, 'PV1shuf*nshuf_1000.pkl')))
+                        # files_move.extend(glob(os.path.join(dir_use, 'shuffle_map_mean*nshuf100.pkl')))
                         for file in files_move:
                             try:
                                 _, f = os.path.split(file)
@@ -339,9 +340,11 @@ for mouse in fixed_reg:
                                   str(day2))
 ## Identify the best rotation for each correlation between mice
 days = [-2, -1, 0, 4, 1, 2, 7]
-arenas = ['Open', 'Open']
+arenas = ['Open', 'Shock']
+batch_map = True
 
-for mouse in fixed_reg:
+
+for mouse in err.all_mice_good:
 
     arena1 = arenas[0]
     arena2 = arenas[1]
@@ -351,7 +354,8 @@ for mouse in fixed_reg:
             if id1 <= id2 and arena1 != arena2 or id1 < id2 and arena1 == arena2:
                 try:
                     # Construct unique file save name
-                    save_name = 'best_rot_' + arena1 + 'day' + str(day1) + '_' + arena2 + 'day' + str(day2) + '.pkl'
+                    save_name = 'best_rot_' + arena1 + 'day' + str(day1) + '_' + arena2 + 'day' + str(day2) + \
+                                '_batch_map=' + str(batch_map) + '.pkl'
                     dir_use = get_dir(mouse, arena1, day1)
                     save_file = os.path.join(dir_use, save_name)
 
@@ -359,7 +363,8 @@ for mouse in fixed_reg:
                     if not os.path.exists(save_file):
                         print('Running best rot analysis for ' + mouse + ' ' + arena1 + ' day ' + str(day1) +
                               ' to ' + arena2 + ' day ' + str(day2))
-                        best_corr_mean, best_rot, corr_mean_all = pfs.get_best_rot(mouse, arena1, day1, arena2, day2)
+                        best_corr_mean, best_rot, corr_mean_all = pfs.get_best_rot(mouse, arena1, day1, arena2, day2,
+                                                                                   batch_map_use=batch_map)
 
                     else:
                         print('Skipping: file already exists for ' + mouse + ' ' + arena1 + ' day ' + str(day1) +

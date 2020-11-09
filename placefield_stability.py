@@ -4,6 +4,7 @@ Created on Mon Feb 04 09:53:00 2019
 
 @author: Nat Kinsky
 """
+import importlib
 import numpy as np
 import scipy.io as sio
 import scipy.stats as sstats
@@ -20,13 +21,14 @@ from scipy.signal import decimate
 import Placefields as pf
 from mouse_sessions import make_session_list
 import cell_tracking as ct
-from plot_helper import ScrollPlot
+from plot_helper import ScrollPlot, pretty_plot
 from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos, plot_tmap_us2, plot_tmap_sm2, plot_events_over_pos2
 import eraser_reference as err
 import skimage as ski
 from skimage.transform import resize as sk_resize
 from pickle import load, dump
 from tqdm import tqdm
+
 
 # Make text save as whole words
 plt.rcParams['pdf.fonttype'] = 42
@@ -40,7 +42,7 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=False):
     :param day1:
     :param arena2: session 2 day/arena
     :param day2:
-    :param batch_map: False (default) = do direct pairwise registration, True = use batch map to generate pairwise map
+    :param batch_map_use: False (default) = do direct pairwise registration, True = use batch map to generate pairwise map
     (assumes batch_map lives in the Open day -2 working folder).
     :return: neuron_map: an array the length of the number of neurons in session1. NaNs indicate
     that neuron has no matched counterpart in session2. numbers indicate index of neuron in session2
@@ -111,7 +113,8 @@ def get_pairwise_map_from_batch(mouse, arena1, day1, arena2, day2):
     valid_bool = np.bitwise_not(np.isnan(map[:, base_idx]))  # id non-neg values
     neurons1 = np.arange(0, np.nanmax(map1[valid_bool] + 1))
     map2 = map[:, reg_idx] - 1  # convert from matlab to python indexing
-    map1_2 = np.zeros_like(neurons1, dtype=float)
+    map2[map2 == -1] = np.nan  # Set un-mapped values to nan to match pairwise map conventions
+    map1_2 = np.ones_like(neurons1, dtype=float)*np.nan
     for neuron1 in neurons1:
         id1_batch = np.where(neuron1 == map1)
         if neuron1 >= 0:
@@ -250,8 +253,8 @@ def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5,
     PV1all, PV2all, PV1both, PV2both = registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=shuf_map)
 
     # Now get ALL corrs and BOTH corrs
-    PVcorr_all, all_p, _ = sstats.spearmanr(PV1all, PV2all, nan_policy='omit')
-    PVcorr_both, both_p, _ = sstats.spearmanr(PV1both, PV2both, nan_policy='omit')
+    PVcorr_all, all_p = sstats.spearmanr(PV1all, PV2all, nan_policy='omit')
+    PVcorr_both, both_p = sstats.spearmanr(PV1both, PV2both, nan_policy='omit')
 
     return PVcorr_all, PVcorr_both
 
@@ -278,7 +281,10 @@ def registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=False):
         good_map = np.random.permutation(good_map)
 
     # Identify neurons with proper mapping between sessions
-    good_map_ind, _ = np.where(good_map_bool)
+    try:
+        good_map_ind = np.where(good_map_bool)[0]
+    except ValueError:
+        print('ValueError?')
     ngood = len(good_map_ind)
     nnew = len(new_ind)
 
@@ -353,7 +359,7 @@ def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
     if not path.exists(save_file):
         print('Getting shuffled 1-d PV corrs')
         for n in tqdm(np.arange(nshuf)):
-            corr_all, corr_both, _ = PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, shuf_map=True)
+            corr_all, corr_both = PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, shuf_map=True)
             temp_all.append(corr_all)
             temp_both.append(corr_both)
 
@@ -381,8 +387,8 @@ def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
     return shuf_all, shuf_both
 
 
-def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
-                    pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=0, shuf_map=False, debug=False):
+def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl',
+                    rot_deg=0, shuf_map=False, debug=False, batch_map_use=False):
     """
     Gets placefield correlations between sessions. Note that
     :param mouse:
@@ -390,7 +396,7 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
     :param day1:
     :param arena2:
     :param day2:
-    :param pf_file: string. Defauls = 'placefields_cm1_manlims_1000shuf.pkl'
+    :param pf_file: string. Defaults = 'placefields_cm1_manlims_1000shuf.pkl'
     :param rot_deg: indicates how much to rotate day2 tmaps before calculating corrs. 0=default, 0/90/180/270 = options
     :param shuf_map: randomly shuffle neuron_map to get shuffled correlations
     :return: corrs_us, corrs_sm: spearman rho values between all cells that are active
@@ -402,7 +408,7 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
     PF2 = pf.load_pf(mouse, arena2, day2, pf_file=pf_file)
 
     # Get mapping between sessions
-    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2)
+    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map_use)
     reg_session = sd.find_eraser_session(mouse, arena2, day2)
 
     # only include neurons validly mapped to other neurons
@@ -621,7 +627,8 @@ def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1,
     return shuf_CI
 
 
-def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_file='placefields_cm1_manlims_1000shuf.pkl',
+                 batch_map_use=False):
     """
     Gets the rotation of the arena in day2 that produces the best correlation. Will load previous runs from file saved in
     the appropriate directory by default
@@ -637,7 +644,8 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_fil
     """
 
     # Construct unique file save name
-    save_name = 'best_rot_' + arena1 + 'day' + str(day1) + '_' + arena2 + 'day' + str(day2) + '.pkl'
+    save_name = 'best_rot_' + arena1 + 'day' + str(day1) + '_' + arena2 + 'day' + str(day2) + '_batch_map=' + \
+                str(batch_map_use) + '.pkl'
     dir_use = get_dir(mouse, arena1, day1)
     save_file = path.join(dir_use, save_name)
 
@@ -649,7 +657,7 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_fil
             print(str(rot))
             try:
                 corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
-                                               pf_file=pf_file, rot_deg=rot, shuf_map=False)
+                                               pf_file=pf_file, rot_deg=rot, shuf_map=False, batch_map_use=batch_map_use)
             except IndexError:  # Fix for missing sessions
                 print('Index Error for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' + str(day2))
                 corrs_us = corrs_sm = np.ones(1)*np.nan
@@ -1063,13 +1071,7 @@ class ShufMap:
 
 
 if __name__ == '__main__':
-    # cmice = err.discriminators  # err.control_mice_good
-    # amice = err.ani_mice_good
-    # days = [-2, -1, 0, 4, 1, 2, 7]
-    # get_group_pf_corrs(amice, 'Open', 'Open', days)
-    import warnings
-    # warnings.filterwarnings('error', category=RuntimeWarning)
-    get_neuronmap('Marble06', 'Open', -2, 'Open', 1, batch_map_use=True)
+    get_neuronmap('Marble11', 'Open', -2, 'Shock', -2, batch_map_use=True)
 
     pass
 
