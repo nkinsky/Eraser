@@ -30,10 +30,11 @@ cmice = err.discriminators  #err.control_mice_good
 amice = err.ani_mice_good
 days = [-2, -1, 0, 4, 1, 2, 7]
 group_desig = 2  # 1 = include days 1,2, AND 7 in after shock group, 2 = include days 1 and 2 only
+batch_map = False  #
 
 ndays = len(days)
-_, cont_corr_sm_mean_all = pfs.get_group_pf_corrs(cmice, arena1, arena2, days)
-_, ani_corr_sm_mean_all = pfs.get_group_pf_corrs(amice, arena1, arena2, days)
+_, cont_corr_sm_mean_all = pfs.get_group_pf_corrs(cmice, arena1, arena2, days, batch_map_use=batch_map)
+_, ani_corr_sm_mean_all = pfs.get_group_pf_corrs(amice, arena1, arena2, days, batch_map_use=batch_map)
 
 # # pre-allocate
 
@@ -99,7 +100,7 @@ for mouse in err.all_mice_good:
     fig.set_size_inches(11, 5)
     for idd, day in enumerate([-2, -1, 4, 1, 2, 7]):
         try:
-            erp.pf_rot_plot(mouse, 'Open', day, 'Shock', day, ax=ax.reshape(-1)[idd], nshuf=100)
+            erp.pf_rot_plot(mouse, 'Open', day, 'Shock', day, ax=ax.reshape(-1)[idd], nshuf=1000)
         except (FileNotFoundError, IndexError):
             print('FileNotFoundError or IndexError for ' + mouse + ' Open to Shock day ' + str(day))
         savefile = os.path.join(plot_dir, mouse + ' PFrots bw arenas simple.pdf')
@@ -340,7 +341,7 @@ for mouse in fixed_reg:
                                   str(day2))
 ## Identify the best rotation for each correlation between mice
 days = [-2, -1, 0, 4, 1, 2, 7]
-arenas = ['Open', 'Shock']
+arenas = ['Open', 'Open']
 batch_map = True
 
 

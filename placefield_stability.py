@@ -536,7 +536,7 @@ def compare_pf_at_bestrot(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0
     return [fig_norot, fig_bestrot], [ax_norot, ax_bestrot]
 
 
-def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7],
+def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7], batch_map_use=False,
                  pf_file='placefields_cm1_manlims_1000shuf.pkl', shuf_map=False, best_rot=False):
     """
     Get mean placefield correlations between all sessions. Note that arena1 and arena2 must have the same size occupancy
@@ -563,18 +563,18 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
                 try:
                     if best_rot:
                         corrs_temp, _, _ = get_best_rot(mouse, arena1=arena1, day1=day1, arena2=arena2, day2=day2,
-                                                        pf_file=pf_file)
+                                                        pf_file=pf_file, batch_map_use=batch_map_use)
                         corr_mean_us[id1, id2] = corrs_temp[0]
                         corr_mean_sm[id1, id2] = corrs_temp[1]
                     elif not best_rot:
                         if not shuf_map:
                             _, _, temp = get_best_rot(mouse, arena1=arena1, day1=day1, arena2=arena2, day2=day2,
-                                                      pf_file=pf_file)
+                                                      pf_file=pf_file, batch_map_use=batch_map_use)
                             corr_mean_us[id1, id2] = temp[0, 0]
                             corr_mean_sm[id1, id2] = temp[1, 0]
                         elif shuf_map:
                             corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file,
-                                                                 shuf_map=shuf_map)
+                                                                 shuf_map=shuf_map, batch_map_use=batch_map_use)
                             corr_mean_us[id1, id2] = corrs_us.mean(axis=0)
                             corr_mean_sm[id1, id2] = corrs_sm.mean(axis=0)
                             if np.isnan(corrs_us.mean(axis=0)):  # This should be obsolete now (fixed in spearman_nan below) - keep just in case!
@@ -868,7 +868,8 @@ def load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf):
     return shuf_corrs_us_mean, shuf_corrs_sm_mean
 
 
-def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='placefields_cm1_manlims_1000shuf.pkl',
+                       batch_map_use=False):
     """
     Assembles a nice matrix of mean 2d correlation values between place field maps on days/arenas specified.
     :param mice:
@@ -888,7 +889,8 @@ def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='plac
 
     for idm, mouse in enumerate(mice):
         corr_us_mean_all[idm, :, :], corr_sm_mean_all[idm, :, :] = pf_corr_mean(mouse, arena1, arena2, days,
-                                                                                best_rot=best_rot)
+                                                                                best_rot=best_rot, pf_file=pf_file,
+                                                                                batch_map_use=batch_map_use)
     return corr_us_mean_all, corr_sm_mean_all
 
 
