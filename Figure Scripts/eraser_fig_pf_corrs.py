@@ -112,9 +112,9 @@ amice = err.ani_mice_good
 dmice = err.discriminators
 gmice = err.generalizers
 days = [-2, -1, 0, 4, 1, 2, 7]
-group_desig = 1
+group_desig = 2
 
-type = 'PF'  # 'PV1dboth' or 'PV1dall' or 'PF' are valid options
+type = 'PV1dboth'  # 'PV1dboth' or 'PV1dall' or 'PF' are valid options
 best_rot = True  # perform PFcorrs at best rotation between session if True, False = no rotation
 
 disc_bestcorr_mean_all = []
@@ -228,8 +228,8 @@ for idg, group in enumerate(unique_groups):
 amice = err.ani_mice_good
 dmice = err.discriminators
 days = [-2, -1, 0, 4, 1, 2, 7]
-arena1 = 'Open'
-arena2 = 'Open'
+arena1 = 'Shock'
+arena2 = 'Shock'
 group_desig = 1
 
 prefix = 'PFcorrs'
