@@ -109,39 +109,39 @@ for mouse in err.all_mice_good:
 
 ## Plot pf corrs at best rotation or PV1d for each group
 amice = err.ani_mice_good
-dmice = err.discriminators
-gmice = err.generalizers
+lmice = err.discriminators  # NRK todo: update names in eraser reference!
+nlmice = err.generalizers
 days = [-2, -1, 0, 4, 1, 2, 7]
 group_desig = 2
 
 type = 'PV1dboth'  # 'PV1dboth' or 'PV1dall' or 'PF' are valid options
 best_rot = True  # perform PFcorrs at best rotation between session if True, False = no rotation
 
-disc_bestcorr_mean_all = []
-gen_bestcorr_mean_all = []
+learn_bestcorr_mean_all = []
+nlearn_bestcorr_mean_all = []
 ani_bestcorr_mean_all = []
 
 for ida, arena in enumerate(['Open', 'Shock']):
     arena1 = arena
     arena2 = arena
     if type == 'PF':
-        _, tempd = pfs.get_group_pf_corrs(dmice, arena1, arena2, days, best_rot=best_rot)
-        _, tempg = pfs.get_group_pf_corrs(gmice, arena1, arena2, days, best_rot=best_rot)
+        _, templ = pfs.get_group_pf_corrs(lmice, arena1, arena2, days, best_rot=best_rot)
+        _, tempnl = pfs.get_group_pf_corrs(nlmice, arena1, arena2, days, best_rot=best_rot)
         _, tempa= pfs.get_group_pf_corrs(amice, arena1, arena2, days, best_rot=best_rot)
         prefix = 'PFcorrs'
     elif type == 'PV1dboth':
-        _, tempd= pfs.get_group_PV1d_corrs(dmice, arena1, arena2, days)
-        _, tempg = pfs.get_group_PV1d_corrs(gmice, arena1, arena2, days)
+        _, tempd = pfs.get_group_PV1d_corrs(lmice, arena1, arena2, days)
+        _, tempnl = pfs.get_group_PV1d_corrs(nlmice, arena1, arena2, days)
         _, tempa = pfs.get_group_PV1d_corrs(amice, arena1, arena2, days)
         prefix = 'PV1dcorrs_both'
     elif type == 'PV1dall':
-        tempd, _ = pfs.get_group_PV1d_corrs(dmice, arena1, arena2, days)
-        tempg, _ = pfs.get_group_PV1d_corrs(gmice, arena1, arena2, days)
+        templ, _ = pfs.get_group_PV1d_corrs(lmice, arena1, arena2, days)
+        tempnl, _ = pfs.get_group_PV1d_corrs(nlmice, arena1, arena2, days)
         tempa, _ = pfs.get_group_PV1d_corrs(amice, arena1, arena2, days)
         prefix = 'PV1dcorrs_all'
 
-    disc_bestcorr_mean_all.append(tempd)
-    gen_bestcorr_mean_all.append(tempg)
+    learn_bestcorr_mean_all.append(templ)
+    nlearn_bestcorr_mean_all.append(tempnl)
     ani_bestcorr_mean_all.append(tempa)
 
     # Scatterplot for each group independently
@@ -152,41 +152,45 @@ for ida, arena in enumerate(['Open', 'Shock']):
     # pfs.plot_pfcorr_bygroup(ani_bestcorr_mean_all[ida],arena1, arena2, 'Anisomycin', color='g',
     #                             group_desig=group_desig, best_rot=best_rot, save_fig=False, prefix=prefix)
 
-    # Combined scatterplots
-    figc, axc = pfs.plot_pfcorr_bygroup(disc_bestcorr_mean_all[ida], arena1, arena2, '', prefix=prefix,
+    #  Combined scatterplots
+    figc, axc = pfs.plot_pfcorr_bygroup(learn_bestcorr_mean_all[ida], arena1, arena2, '', prefix=prefix,
                                         color='k', offset=0, save_fig=False, group_desig=group_desig)
     pfs.plot_pfcorr_bygroup(ani_bestcorr_mean_all[ida], arena1, arena2, '', prefix=prefix,
                             color='g', offset=0.1, ax_use=axc, group_desig=group_desig, save_fig=False)
-    pfs.plot_pfcorr_bygroup(gen_bestcorr_mean_all[ida], arena1, arena2,
-                            prefix + ' ' + arena1 + 'v' + arena2 + ' Combined (k=disc, b=gen, g=Ani) best_rot=' + str(best_rot), prefix=prefix,
+    pfs.plot_pfcorr_bygroup(nlearn_bestcorr_mean_all[ida], arena1, arena2,
+                            prefix + ' ' + arena1 + 'v' + arena2 + ' Combined (k=learn, b=n-learn, g=Ani) best_rot=' + str(best_rot), prefix=prefix,
                             color='b', offset=0.1, ax_use=axc, group_desig=group_desig, save_fig=True, best_rot=best_rot)
 
 ## Now do better combined plots
 match_yaxis = True
 match_ylims = [-0.3, 0.6]
-dgroups, group_labels = pfs.get_time_groups(len(dmice), group_desig)
+lgroups, group_labels = pfs.get_time_groups(len(lmice), group_desig)
 agroups, _ = pfs.get_time_groups(len(amice), group_desig)
-for idg, group in enumerate(np.unique(dgroups[~np.isnan(dgroups)]).tolist()):
-    open_corrs1 = disc_bestcorr_mean_all[0][dgroups == group]
-    shock_corrs1 = disc_bestcorr_mean_all[1][dgroups == group]
+nlgroups, _ = pfs.get_time_groups(len(nlmice), group_desig)
+for idg, group in enumerate(np.unique(lgroups[~np.isnan(lgroups)]).tolist()):
+    open_corrs1 = learn_bestcorr_mean_all[0][lgroups == group]
+    shock_corrs1 = learn_bestcorr_mean_all[1][lgroups == group]
     open_corrs2 = ani_bestcorr_mean_all[0][agroups == group]
     shock_corrs2 = ani_bestcorr_mean_all[1][agroups == group]
+    open_corrs3 = nlearn_bestcorr_mean_all[0][nlgroups == group]
+    shock_corrs3 = nlearn_bestcorr_mean_all[1][nlgroups == group]
 
-    fig, ax, pval, tstat = erp.pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, colors=['k', 'g'],
-                   group_names=['Discr', 'Ani'], xlabel=group_labels[idg], ylabel=prefix, xticklabels=['Open', 'Shock'])
+
+    fig, ax, pval, tstat = erp.pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, open_corrs3, shock_corrs3,
+                   group_names=['Learn', 'Ani', 'Non-Learn'], xlabel=group_labels[idg], ylabel=prefix, xticklabels=['Open', 'Shock'])
 
     if type == 'PF':
         if not match_yaxis:
-            savefile = os.path.join(plot_dir, prefix + ' 2x2 Discr and Ani best_rot=' + str(best_rot) + ' ' +
-                                    group_labels[idg] +'.pdf')
+            savefile = os.path.join(plot_dir, prefix + ' 2x2 All groups best_rot=' + str(best_rot) + ' ' +
+                                    group_labels[idg] +' .pdf')
         elif match_yaxis:
             ax[0].set_ylim(match_ylims)
-            savefile = os.path.join(plot_dir, prefix + ' 2x2 Discr and Ani best_rot=' + str(best_rot) + ' ' +
+            savefile = os.path.join(plot_dir, prefix + ' 2x2 All Groups best_rot=' + str(best_rot) + ' ' +
                                     group_labels[idg] +'_equalaxes.pdf')
 
         ax[0].set_title('best_rot=' + str(best_rot))
     else:
-        savefile = os.path.join(plot_dir, prefix + ' 2x2 Discr and Ani ' + group_labels[idg] + '.pdf')
+        savefile = os.path.join(plot_dir, prefix + ' 2x2 All Groups ' + group_labels[idg] + '.pdf')
     fig.savefig(savefile)
 
 ## Get mean 95% CIs to put in plots manually for SfN, add into code above later. Only works for 2d corrs currently...

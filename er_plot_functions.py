@@ -866,21 +866,21 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, open_co
     # Set up plots
     if open_corrs3 is None:
         offsets = [-0.125, 0.125]
-    else: offsets = [-0.375, 0, 0.375]
+    else: offsets = [-0.25, 0, 0.25]
     colors = plt.get_cmap('Set2')
 
     scatterbar(np.concatenate((open_corrs1, shock_corrs1)), np.concatenate((np.ones_like(open_corrs1),
-               np.ones_like(shock_corrs1)*2)), ax=ax[0], color=colors[0], offset=offsets[0], data_label=group_names[0],
+               np.ones_like(shock_corrs1)*2)), ax=ax[0], color=colors(0), offset=offsets[0], data_label=group_names[0],
                jitter=0.05)
 
     scatterbar(np.concatenate((open_corrs2, shock_corrs2)), np.concatenate((np.ones_like(open_corrs2),
-               np.ones_like(shock_corrs2)*2)), ax=ax[0], color=colors[2], offset=offsets[1], data_label=group_names[1],
+               np.ones_like(shock_corrs2)*2)), ax=ax[0], color=colors(2), offset=offsets[1], data_label=group_names[1],
                jitter=0.05)
 
     if open_corrs3 is not None:
         scatterbar(np.concatenate((open_corrs3, shock_corrs3)), np.concatenate((np.ones_like(open_corrs3),
                                                                                 np.ones_like(shock_corrs3) * 2)),
-                   ax=ax[0], color=colors[1], offset=offsets[2], data_label=group_names[2], jitter=0.05)
+                   ax=ax[0], color=colors(1), offset=offsets[2], data_label=group_names[2], jitter=0.05)
 
 
     ax[0].set_xticks([1, 2])
@@ -906,11 +906,11 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, open_co
                    ' tstat=' + "{0:.3g}".format(tstat[0, 1]))
         ax[1].text(0.1, 0.50, group_names[0] + ': ' + label1 + 'v ' + label2 + ' pval=' + "{0:.3g}".format(pval[1, 0]) +
                    ' tstat=' + "{0:.3g}".format(tstat[1, 0]))
-        ax[1].text(0.1, 0.35, group_names[1] + ': ' + label1 + ' v ' + label2 + 'pval=' + "{0:.3g}".format(pval[1, 1]) +
+        ax[1].text(0.1, 0.35, group_names[1] + ': ' + label1 + ' v ' + label2 + ' pval=' + "{0:.3g}".format(pval[1, 1]) +
                    ' tstat=' + "{0:.3g}".format(tstat[1, 1]))
         if open_corrs3 is not None:
             tstat[2, 0], pval[2, 0] = s.stats.ttest_rel(open_corrs3, shock_corrs3, nan_policy='omit')
-            ax[1].text(0.1, 0.15, group_names[2] + ' ' + label1 + ' v ' + label2 + 'pval=' + "{0:.3g}".format(pval[2, 0]) +
+            ax[1].text(0.1, 0.15, group_names[2] + ' ' + label1 + ' v ' + label2 + ' pval=' + "{0:.3g}".format(pval[2, 0]) +
                        ' tstat=' + "{0:.3g}".format(tstat[2, 0]))
 
     return fig, ax, pval, tstat
