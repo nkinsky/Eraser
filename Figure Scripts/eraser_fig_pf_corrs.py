@@ -26,7 +26,7 @@ arena1 = 'Shock'
 arena2 = 'Shock'
 # arena1 = 'Open'
 # arena2 = 'Open'
-cmice = err.discriminators  #err.control_mice_good
+cmice = err.learners #err.control_mice_good
 amice = err.ani_mice_good
 days = [-2, -1, 0, 4, 1, 2, 7]
 group_desig = 2  # 1 = include days 1,2, AND 7 in after shock group, 2 = include days 1 and 2 only
@@ -109,12 +109,12 @@ for mouse in err.all_mice_good:
 
 ## Plot pf corrs at best rotation or PV1d for each group
 amice = err.ani_mice_good
-lmice = err.discriminators  # NRK todo: update names in eraser reference!
-nlmice = err.generalizers
+lmice = err.learners
+nlmice = err.nonlearners
 days = [-2, -1, 0, 4, 1, 2, 7]
 group_desig = 2
 
-type = 'PV1dboth'  # 'PV1dboth' or 'PV1dall' or 'PF' are valid options
+type = 'PV1dall'  # 'PV1dboth' or 'PV1dall' or 'PF' are valid options
 best_rot = True  # perform PFcorrs at best rotation between session if True, False = no rotation
 
 learn_bestcorr_mean_all = []
@@ -130,7 +130,7 @@ for ida, arena in enumerate(['Open', 'Shock']):
         _, tempa= pfs.get_group_pf_corrs(amice, arena1, arena2, days, best_rot=best_rot)
         prefix = 'PFcorrs'
     elif type == 'PV1dboth':
-        _, tempd = pfs.get_group_PV1d_corrs(lmice, arena1, arena2, days)
+        _, templ = pfs.get_group_PV1d_corrs(lmice, arena1, arena2, days)
         _, tempnl = pfs.get_group_PV1d_corrs(nlmice, arena1, arena2, days)
         _, tempa = pfs.get_group_PV1d_corrs(amice, arena1, arena2, days)
         prefix = 'PV1dcorrs_both'
@@ -193,17 +193,34 @@ for idg, group in enumerate(np.unique(lgroups[~np.isnan(lgroups)]).tolist()):
         savefile = os.path.join(plot_dir, prefix + ' 2x2 All Groups ' + group_labels[idg] + '.pdf')
     fig.savefig(savefile)
 
+##  Plot day-by-day correlations
+titles = ['Learners', 'Non-learners', 'Anisomycin']
+fig, axuse = plt.subplots(3,1)
+fig.set_size_inches([10.1, 9.2])
+for idd, data in enumerate([learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all]):
+    nmice = data[0].shape[0]
+    gps, labels = pfs.get_seq_time_groups(nmice)
+    erp.scatterbar(data[0][~np.isnan(gps)], gps[~np.isnan(gps)], data_label='Neutral', offset=-0.125,
+                           jitter=0.05, color='k', ax=axuse[idd])
+    erp.scatterbar(data[1][~np.isnan(gps)], gps[~np.isnan(gps)], data_label='Shock', offset=0.125,
+                           jitter=0.05, color='r', ax=axuse[idd])
+    axuse[idd].set_title(titles[idd] + ': ' + type)
+    axuse[idd].set_xticks(np.unique(gps[~np.isnan(gps)]))
+    axuse[idd].set_xticklabels(labels)
+    if idd == 2:
+        axuse[idd].legend()
+
 ## Get mean 95% CIs to put in plots manually for SfN, add into code above later. Only works for 2d corrs currently...
 
 # preallocate
-disc_allCI = np.ones((len(dmice), 3, 7, 7))*np.nan
-disc_allCI_open = np.ones((len(dmice), 3, 7, 7))*np.nan
+disc_allCI = np.ones((len(lmice), 3, 7, 7))*np.nan
+disc_allCI_open = np.ones((len(lmice), 3, 7, 7))*np.nan
 ani_allCI = np.ones((len(amice), 3, 7, 7))*np.nan
 ani_allCI_open = np.ones((len(amice), 3, 7, 7))*np.nan
 
 # Get CIs for all session-pairs/mice
 nshuf = 100
-for idm, mouse in enumerate(dmice):
+for idm, mouse in enumerate(lmice):
     disc_allCI[idm, :, :, :] = pfs.get_all_CIshuf(mouse, 'Shock', 'Shock', nshuf=100)
     disc_allCI_open[idm, :, :, :] = pfs.get_all_CIshuf(mouse, 'Open', 'Open', nshuf=100)
 
@@ -216,7 +233,7 @@ CIcomb_shock = np.concatenate((disc_allCI, ani_allCI), 0)
 CIcomb_open = np.concatenate((disc_allCI_open, ani_allCI_open), 0)
 
 # Now estimate them by stage
-groups, group_labels = pfs.get_time_groups(len(dmice) + len(amice), group_desig=group_desig)
+groups, group_labels = pfs.get_time_groups(len(lmice) + len(amice), group_desig=group_desig)
 
 unique_groups = np.unique(groups[~np.isnan(groups)])
 ngroups = len(unique_groups)
@@ -230,22 +247,22 @@ for idg, group in enumerate(unique_groups):
 
 ## Compare best_rot=True to False in specified arena
 amice = err.ani_mice_good
-dmice = err.discriminators
+lmice = err.learners
 days = [-2, -1, 0, 4, 1, 2, 7]
 arena1 = 'Shock'
 arena2 = 'Shock'
 group_desig = 1
 
 prefix = 'PFcorrs'
-_, disc_corrs_norot = pfs.get_group_pf_corrs(dmice, arena1, arena2, days, best_rot=False)
-_, disc_corrs_bestrot = pfs.get_group_pf_corrs(dmice, arena1, arena2, days, best_rot=True)
+_, disc_corrs_norot = pfs.get_group_pf_corrs(lmice, arena1, arena2, days, best_rot=False)
+_, disc_corrs_bestrot = pfs.get_group_pf_corrs(lmice, arena1, arena2, days, best_rot=True)
 _, ani_corrs_norot = pfs.get_group_pf_corrs(amice, arena1, arena2, days, best_rot=False)
 _, ani_corrs_bestrot = pfs.get_group_pf_corrs(amice, arena1, arena2, days, best_rot=True)
 
 # Set up plots
 match_yaxis = True
 match_ylims = [-0.3, 0.6]
-dgroups, group_labels = pfs.get_time_groups(len(dmice), group_desig)
+dgroups, group_labels = pfs.get_time_groups(len(lmice), group_desig)
 agroups, _ = pfs.get_time_groups(len(amice), group_desig)
 
 # Plot them all out

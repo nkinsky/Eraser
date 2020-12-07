@@ -762,24 +762,47 @@ def get_time_groups(nmice, group_desig=1):
     """
 
     # Define groups for scatter plots
+    groups = np.ones((7, 7)) * np.nan
     if group_desig == 1:
-        groups = np.ones((nmice, 7, 7)) * np.nan
-        groups[:, 0:2, 0:2] = 1  # 1 = before shock
-        groups[:, 4:7, 4:7] = 2  # 2 = after shock days 1,2,7
-        groups[:, 0:2, 4:7] = 3  # 3 = before-v-after shock
-        groups[:, 0:2, 3] = 4  # 4 = before-v-STM
-        groups[:, 3, 4:7] = 5  # 5 = STM-v-LTM (4hr to 1,2,7)
+
+        groups[0:2, 0:2] = 1  # 1 = before shock
+        groups[4:7, 4:7] = 2  # 2 = after shock days 1,2,7
+        groups[0:2, 4:7] = 3  # 3 = before-v-after shock
+        groups[0:2, 3] = 4  # 4 = before-v-STM
+        groups[3, 4:7] = 5  # 5 = STM-v-LTM (4hr to 1,2,7)
         group_labels = ['Before', 'After(Days 1-7)', 'Before v After(Days 1-7)',
                         'Before v STM', 'STM v After(Days 1-7)']
     elif group_desig == 2:
-        groups = np.ones((nmice, 7, 7)) * np.nan
-        groups[:, 0:2, 0:2] = 1  # 1 = before shock
-        groups[:, 4:6, 4:6] = 2  # 2 = after shock days 1,2 only
-        groups[:, 0:2, 4:6] = 3  # 3 = before-v-after shock
-        groups[:, 0:2, 3] = 4  # 4 = before-v-STM
-        groups[:, 3, 4:6] = 5  # 5 = STM-v-LTM (days 1 and 2 only)
+        groups[0:2, 0:2] = 1  # 1 = before shock
+        groups[4:6, 4:6] = 2  # 2 = after shock days 1,2 only
+        groups[0:2, 4:6] = 3  # 3 = before-v-after shock
+        groups[0:2, 3] = 4  # 4 = before-v-STM
+        groups[3, 4:6] = 5  # 5 = STM-v-LTM (days 1 and 2 only)
         group_labels = ['Before', 'After (Day 1-2)', 'Before v After(Days1-2)',
                         'Before v STM', 'STM v After(Days1-2)']
+
+    # now keep only values above diagonal, shape and repeat matrix to shape (nmice, 7, 7)
+    groups = np.triu(groups, 1)
+    groups[groups == 0] = np.nan
+    groups = np.moveaxis(np.repeat(groups[:, :, np.newaxis], nmice, 2), 2, 0)
+
+    return groups, group_labels
+
+def get_seq_time_groups(nmice):
+    """
+    Returns groupings for plotting each session versus the next
+    :return: groups: nmice x 7 x 7 array with groupings for pf comparisons
+    """
+
+    # Define groups for scatter plots
+    groups = np.ones((7, 7)) * np.nan
+    group_labels = ['-2 v -1', '-1 v 4hr', '4 hr v 1', '1 v 2', '2 v 7']
+    group_ids = [0, 1, 3, 4, 5]
+    for idd in group_ids:
+        groups[idd, idd+1] = idd
+
+    # now shape and repeat matrix to shape (nmice, 7, 7)
+    groups = np.moveaxis(np.repeat(groups[:, :, np.newaxis], nmice, 2), 2, 0)
 
     return groups, group_labels
 

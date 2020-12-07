@@ -15,9 +15,9 @@ all_mice.extend(ani_mice)
 all_mice_good = control_mice_good.copy()
 all_mice_good.extend(ani_mice_good)
 
-generalizers = ["Marble06", "Marble11", "Marble29"]
+nonlearners = ["Marble06", "Marble11", "Marble29"]
 
-discriminators = ["Marble07", "Marble12", "Marble24", "Marble27"]
+learners = ["Marble07", "Marble12", "Marble24", "Marble27"]
 
 plot_dir = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'  # Plotting folder
 
