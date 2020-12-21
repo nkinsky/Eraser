@@ -1136,28 +1136,19 @@ class GroupPF:
                 arena1 = arena
                 arena2 = arena
                 if type == 'PFsm':
-                    _, templ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=best_rot, pf_file=pf_file)
-                    _, tempnl = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=best_rot, pf_file=pf_file)
-                    _, tempa = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=best_rot, pf_file=pf_file)
-                    _, temp_sh_l = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=False,
-                                                      shuf_map=True, pf_file=pf_file)
-                    _, temp_sh_nl = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=False,
-                                                        shuf_map=True, pf_file=pf_file)
-                    _, temp_sh_a = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=False,
-                                                      shuf_map=True, pf_file=pf_file)
+                    _, templ, _, temp_sh_l = get_group_pf_corrs(self.lmice, arena1, arena2, self.days,
+                                                                best_rot=best_rot, pf_file=pf_file)
+                    _, tempnl, _, temp_sh_nl = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days,
+                                                                  best_rot=best_rot, pf_file=pf_file)
+                    _, tempa, _, temp_sh_a = get_group_pf_corrs(self.amice, arena1, arena2, self.days,
+                                                  best_rot=best_rot, pf_file=pf_file)
                 elif type == 'PFus':
-                    templ, _ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=best_rot,
+                    templ, _, temp_sh_l, _ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=best_rot,
                                                   pf_file=pf_file)
-                    tempnl, _ = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=best_rot,
+                    tempnl, _, temp_sh_nl, _ = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=best_rot,
                                                    pf_file=pf_file)
-                    tempa, _ = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=best_rot,
+                    tempa, _, temp_sh_a, _ = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=best_rot,
                                                   pf_file=pf_file)
-                    temp_sh_l, _ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=False,
-                                                      shuf_map=True, pf_file=pf_file)
-                    temp_sh_nl, _ = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=False,
-                                                        shuf_map=True, pf_file=pf_file)
-                    temp_sh_a, _ = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=False,
-                                                      shuf_map=True, pf_file=pf_file)
                 elif type == 'PV1dboth':
                     _, templ, _, temp_sh_l = get_group_PV1d_corrs(self.lmice, arena1, arena2, self.days, nshuf=nshuf)
                     _, tempnl, _, temp_sh_nl = get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf)
