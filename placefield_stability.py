@@ -917,7 +917,7 @@ def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='plac
     return corr_us_mean_all, corr_sm_mean_all
 
 
-def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7]):
+def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0):
     """
     Assembles a nice matrix of mean correlation values between 1d PVs on days/arenas specified.
     :param mice:
@@ -932,13 +932,14 @@ def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7]):
     # pre-allocate
     ndays = len(days)
     nmice = len(mice)
-    PV1_both_all = np.ones((nmice, ndays, ndays))*np.nan
-    PV1_all_all = np.ones((nmice, ndays, ndays))*np.nan
+    PV1_both_all, PV1_all_all = np.ones((nmice, ndays, ndays))*np.nan, np.ones((nmice, ndays, ndays))*np.nan
+    PV1_both_shuf, PV1_all_shuf = np.ones((nmice, ndays, ndays, nshuf))*np.nan, np.ones((nmice, ndays, ndays, nshuf))*np.nan
 
     for idm, mouse in enumerate(mice):
-        PV1_all_all[idm, :, :], PV1_both_all[idm, :, :], _, _ = get_all_PV1corrs(mouse, arena1, arena2, days)
+        PV1_all_all[idm, :, :], PV1_both_all[idm, :, :], PV1_both_shuf[idm, :, :, :], PV1_all_shuf[idm, :, :, :] = \
+            get_all_PV1corrs(mouse, arena1, arena2, days, nshuf=nshuf)
 
-    return PV1_all_all, PV1_both_all
+    return PV1_all_all, PV1_both_all, PV1_both_shuf, PV1_all_shuf
 
 
 ## Object to map and view placefields for same neuron mapped between different sessions
@@ -1081,6 +1082,51 @@ class ShufMap:
         # dump into pickle file with name
         with open(self.save_file, 'wb') as output:
             dump(self, output)
+
+
+## create a class to construct and keep all group data in a nice format and plot things...
+class GroupPF:
+    def __init__(self):
+        self.amice = err.ani_mice_good
+        self.lmice = err.learners
+        self.nlmice = err.nonlearners
+        self.days = [-2, -1, 0, 4, 1, 2, 7]
+
+    def construct(self, types=['PF', 'PV1dboth', 'PV1dall'], best_rot=True):
+        # perform PFcorrs at best rotation between session if True, False = no rotation
+        groups = ['Learners', 'Nonlearners', 'Ani']
+        group_dict = dict.fromkeys(groups, {'corrs': [], 'shuf': []})
+        self.data = dict.fromkeys(types, group_dict)  # pre-allocate
+        for type in types:
+            learn_bestcorr_mean_all = []
+            nlearn_bestcorr_mean_all = []
+            ani_bestcorr_mean_all = []
+
+            for ida, arena in enumerate(['Open', 'Shock']):
+                arena1 = arena
+                arena2 = arena
+                if type == 'PF':
+                    _, templ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=best_rot)
+                    _, tempnl = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=best_rot)
+                    _, tempa = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=best_rot)
+                    prefix = 'PFcorrs'
+                elif type == 'PV1dboth':
+                    _, templ, _, temp_sh_l = get_group_PV1d_corrs(self.lmice, arena1, arena2, self.days)
+                    _, tempnl, _, temp_sh_nl = get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days)
+                    _, tempa, _, temp_sh_a = get_group_PV1d_corrs(self.amice, arena1, arena2, self.days)
+                    prefix = 'PV1dcorrs_both'
+                elif type == 'PV1dall':
+                    templ, _, temp_sh_l, _ = get_group_PV1d_corrs(self.lmice, arena1, arena2, self.days)
+                    tempnl, _, temp_sh_nl, _= get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days)
+                    tempa, _, temp_sh_a, _ = get_group_PV1d_corrs(self.amice, arena1, arena2, self.days)
+                    prefix = 'PV1dcorrs_all'
+
+                learn_bestcorr_mean_all.append(templ)
+                nlearn_bestcorr_mean_all.append(tempnl)
+                ani_bestcorr_mean_all.append(tempa)
+            data_comb = [learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all]
+            self.data[type] = {group: data for group, data in zip(groups, data_comb)}
+
 
 
 # class PFrotObj:

@@ -60,7 +60,7 @@ def get_PV1(mouse, arena, day, speed_thresh=1.5, session_index=None, pf_file='pl
     # Calculate PV
     nframes = PFthresh.shape[1]
     try:
-        PV1 = PFthresh.sum(axis=1)/nframes*PF.sr_image[0]
+        PV1 = PFthresh.sum(axis=1)/nframes * PF.sr_image[0]
     except TypeError:  # Catch a few errors for mice where sr_image is not properly formatted
         PV1 = PFthresh.sum(axis=1) / nframes * PF.sr_image
     return PV1

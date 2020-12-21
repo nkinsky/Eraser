@@ -26,7 +26,7 @@ arena1 = 'Shock'
 arena2 = 'Shock'
 # arena1 = 'Open'
 # arena2 = 'Open'
-cmice = err.learners #err.control_mice_good
+cmice = err.learners
 amice = err.ani_mice_good
 days = [-2, -1, 0, 4, 1, 2, 7]
 group_desig = 2  # 1 = include days 1,2, AND 7 in after shock group, 2 = include days 1 and 2 only
