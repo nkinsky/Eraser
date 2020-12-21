@@ -423,11 +423,11 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     # Refine map again to only include active neurons after speed thresholding
     good_neurons_base = valid_neurons_base[run_events_bool]
     good_neurons_reg = valid_neurons_reg[run_events_bool].astype(np.int64)
-    ngood = len(good_neurons_base)
 
     # Shuffle mapping between sessions if specified
     if shuf_map:
-        good_map = np.random.permutation(good_neurons_reg)
+        good_neurons_reg = np.random.permutation(good_neurons_reg)
+    ngood = len(good_neurons_base)
 
     corrs_us, corrs_sm = [], []  # Initialize correlation lists
 
@@ -537,7 +537,7 @@ def compare_pf_at_bestrot(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0
 
 
 def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7], batch_map_use=False,
-                 pf_file='placefields_cm1_manlims_1000shuf.pkl', shuf_map=False, best_rot=False):
+                 pf_file='placefields_cm1_manlims_1000shuf.pkl', best_rot=False, nshuf=0):
     """
     Get mean placefield correlations between all sessions. Note that arena1 and arena2 must have the same size occupancy
     maps already ran for each arena (tmap_us and tmap_sm arrays in Placefield object defined in Placefields.py)
@@ -552,8 +552,10 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
 
     # pre-allocate arrays
     ndays = len(days)
-    corr_mean_us = np.ones((ndays, ndays)) * np.nan
-    corr_mean_sm = np.ones((ndays, ndays)) * np.nan
+    if nshuf <= 1:
+        corr_mean_us, corr_mean_sm = np.ones((ndays, ndays)) * np.nan, np.ones((ndays, ndays)) * np.nan
+    else:
+        corr_mean_us, corr_mean_sm = np.ones((ndays, ndays, nshuf)) * np.nan, np.ones((ndays, ndays, nshuf)) * np.nan
 
     # loop through each pair of sessions and get the mean correlation for each session
     for id1, day1 in enumerate(days):
@@ -567,22 +569,30 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
                         corr_mean_us[id1, id2] = corrs_temp[0]
                         corr_mean_sm[id1, id2] = corrs_temp[1]
                     elif not best_rot:
-                        if not shuf_map:
+                        if nshuf == 0:
                             _, _, temp = get_best_rot(mouse, arena1=arena1, day1=day1, arena2=arena2, day2=day2,
                                                       pf_file=pf_file, batch_map_use=batch_map_use)
                             corr_mean_us[id1, id2] = temp[0, 0]
                             corr_mean_sm[id1, id2] = temp[1, 0]
-                        elif shuf_map:
+                        elif nshuf == 1:
                             corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file,
-                                                                 shuf_map=shuf_map, batch_map_use=batch_map_use)
+                                                                 shuf_map=True, batch_map_use=batch_map_use)
                             corr_mean_us[id1, id2] = corrs_us.mean(axis=0)
                             corr_mean_sm[id1, id2] = corrs_sm.mean(axis=0)
-                            if np.isnan(corrs_us.mean(axis=0)):  # This should be obsolete now (fixed in spearman_nan below) - keep just in case!
+                            if np.isnan(corrs_us.mean(
+                                    axis=0)):  # This should be obsolete now (fixed in spearman_nan below) - keep just in case!
                                 print('NaN corrs in ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' vs. '
                                       + arena2 + ' day ' + str(day2) + ': INVESTIGATE!!!')
                                 print('Running with np.nan for now!')
                                 corr_mean_us[id1, id2] = np.nanmean(corrs_us, axis=0)
                                 corr_mean_sm[id1, id2] = np.nanmean(corrs_sm, axis=0)
+                        elif nshuf > 1:
+                            try:
+                                corr_mean_us[id1, id2, :], corr_mean_sm[id1, id2, :] = \
+                                    load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf=nshuf)
+                            except FileNotFoundError:
+                                print('Shuffled data not found or Error in input.')
+
                 except FileNotFoundError:
                     print('Missing pf files for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) +
                           ' to ' + arena2 + ' Day ' + str(day2))
@@ -892,7 +902,7 @@ def load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf):
 
 
 def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='placefields_cm1_manlims_1000shuf.pkl',
-                       batch_map_use=False):
+                       batch_map_use=False, nshuf=0):
     """
     Assembles a nice matrix of mean 2d correlation values between place field maps on days/arenas specified.
     :param mice:
@@ -907,14 +917,26 @@ def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='plac
     # pre-allocate
     ndays = len(days)
     nmice = len(mice)
-    corr_us_mean_all = np.ones((nmice, ndays, ndays))*np.nan
-    corr_sm_mean_all =  np.ones((nmice, ndays, ndays))*np.nan
+    corr_us_mean_all, corr_sm_mean_all = np.ones((nmice, ndays, ndays))*np.nan, np.ones((nmice, ndays, ndays))*np.nan
+    shuf_us_mean_all, shuf_sm_mean_all = np.ones((nmice, ndays, ndays, nshuf)) * np.nan, np.ones(
+        (nmice, ndays, ndays, nshuf)) * np.nan
 
     for idm, mouse in enumerate(mice):
         corr_us_mean_all[idm, :, :], corr_sm_mean_all[idm, :, :] = pf_corr_mean(mouse, arena1, arena2, days,
                                                                                 best_rot=best_rot, pf_file=pf_file,
-                                                                                batch_map_use=batch_map_use)
-    return corr_us_mean_all, corr_sm_mean_all
+                                                                                batch_map_use=batch_map_use,
+                                                                                nshuf=0)
+
+    if nshuf > 0:
+        for idm, mouse in enumerate(mice):
+            try:
+                shuf_us_mean_all[idm, :, :], shuf_sm_mean_all[idm, :, :] = \
+                    pf_corr_mean(mouse, arena1, arena2, days, best_rot=False, pf_file=pf_file,
+                                 batch_map_use=batch_map_use, nshuf=nshuf)
+            except:
+                print('Error in getting shuffled correlations')
+
+    return corr_us_mean_all, corr_sm_mean_all, shuf_us_mean_all, shuf_sm_mean_all
 
 
 def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0):
@@ -1092,40 +1114,71 @@ class GroupPF:
         self.nlmice = err.nonlearners
         self.days = [-2, -1, 0, 4, 1, 2, 7]
 
-    def construct(self, types=['PF', 'PV1dboth', 'PV1dall'], best_rot=True):
+    def _save(self):
+        # NRK todo: make this function
+        return None
+
+    def _load(self):
+        # NRK todo: make this function
+        return None
+
+    def construct(self, types=['PFsm', 'PFus', 'PV1dboth', 'PV1dall'], best_rot=True,
+                  pf_file='placefields_cm1_manlims_1000shuf.pkl', nshuf=1000):
         # perform PFcorrs at best rotation between session if True, False = no rotation
         groups = ['Learners', 'Nonlearners', 'Ani']
-        group_dict = dict.fromkeys(groups, {'corrs': [], 'shuf': []})
-        self.data = dict.fromkeys(types, group_dict)  # pre-allocate
+        # group_dict = dict.fromkeys(groups, {'corrs': [], 'shuf': []})
+        self.data = dict.fromkeys(types, {'data': [], 'shuf': []})  # pre-allocate
         for type in types:
-            learn_bestcorr_mean_all = []
-            nlearn_bestcorr_mean_all = []
-            ani_bestcorr_mean_all = []
+            learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all = [], [], []
+            learn_shuf_all, nlearn_shuf_all, ani_shuf_all = [], [], []
 
             for ida, arena in enumerate(['Open', 'Shock']):
                 arena1 = arena
                 arena2 = arena
-                if type == 'PF':
-                    _, templ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=best_rot)
-                    _, tempnl = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=best_rot)
-                    _, tempa = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=best_rot)
-                    prefix = 'PFcorrs'
+                if type == 'PFsm':
+                    _, templ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=best_rot, pf_file=pf_file)
+                    _, tempnl = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=best_rot, pf_file=pf_file)
+                    _, tempa = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=best_rot, pf_file=pf_file)
+                    _, temp_sh_l = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=False,
+                                                      shuf_map=True, pf_file=pf_file)
+                    _, temp_sh_nl = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=False,
+                                                        shuf_map=True, pf_file=pf_file)
+                    _, temp_sh_a = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=False,
+                                                      shuf_map=True, pf_file=pf_file)
+                elif type == 'PFus':
+                    templ, _ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=best_rot,
+                                                  pf_file=pf_file)
+                    tempnl, _ = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=best_rot,
+                                                   pf_file=pf_file)
+                    tempa, _ = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=best_rot,
+                                                  pf_file=pf_file)
+                    temp_sh_l, _ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=False,
+                                                      shuf_map=True, pf_file=pf_file)
+                    temp_sh_nl, _ = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=False,
+                                                        shuf_map=True, pf_file=pf_file)
+                    temp_sh_a, _ = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=False,
+                                                      shuf_map=True, pf_file=pf_file)
                 elif type == 'PV1dboth':
-                    _, templ, _, temp_sh_l = get_group_PV1d_corrs(self.lmice, arena1, arena2, self.days)
-                    _, tempnl, _, temp_sh_nl = get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days)
-                    _, tempa, _, temp_sh_a = get_group_PV1d_corrs(self.amice, arena1, arena2, self.days)
-                    prefix = 'PV1dcorrs_both'
+                    _, templ, _, temp_sh_l = get_group_PV1d_corrs(self.lmice, arena1, arena2, self.days, nshuf=nshuf)
+                    _, tempnl, _, temp_sh_nl = get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf)
+                    _, tempa, _, temp_sh_a = get_group_PV1d_corrs(self.amice, arena1, arena2, self.days, nshuf=nshuf)
                 elif type == 'PV1dall':
-                    templ, _, temp_sh_l, _ = get_group_PV1d_corrs(self.lmice, arena1, arena2, self.days)
-                    tempnl, _, temp_sh_nl, _= get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days)
-                    tempa, _, temp_sh_a, _ = get_group_PV1d_corrs(self.amice, arena1, arena2, self.days)
-                    prefix = 'PV1dcorrs_all'
+                    templ, _, temp_sh_l, _ = get_group_PV1d_corrs(self.lmice, arena1, arena2, self.days, nshuf=nshuf)
+                    tempnl, _, temp_sh_nl, _= get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf)
+                    tempa, _, temp_sh_a, _ = get_group_PV1d_corrs(self.amice, arena1, arena2, self.days, nshuf=nshuf)
 
                 learn_bestcorr_mean_all.append(templ)
                 nlearn_bestcorr_mean_all.append(tempnl)
                 ani_bestcorr_mean_all.append(tempa)
-            data_comb = [learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all]
-            self.data[type] = {group: data for group, data in zip(groups, data_comb)}
+                learn_shuf_all.append(temp_sh_l)
+                nlearn_shuf_all.append(temp_sh_nl)
+                ani_shuf_all.append(temp_sh_a)
+
+                data_comb = [learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all]
+                shuf_comb = [learn_shuf_all, nlearn_shuf_all, ani_shuf_all]
+                self.data[type]['data'] = {group: data for group, data in zip(groups, data_comb)}
+                self.data[type]['shuf'] = {group: shuf for group, shuf in zip(groups, shuf_comb)}
+                self.cmperbin = pf.load_pf(self.lmice[0], 'Shock', -2, pf_file=pf_file).cmperbin
 
 
 
@@ -1142,7 +1195,8 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    get_neuronmap('Marble11', 'Open', -2, 'Shock', -2, batch_map_use=True)
+    corr_us_mean_all, corr_sm_mean_all, shuf_us_mean_all, shuf_sm_mean_all = \
+        get_group_pf_corrs(['Marble17'], 'Shock', 'Shock', [-2, -1, 1], nshuf=1000)
 
     pass
 
