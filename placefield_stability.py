@@ -1171,8 +1171,6 @@ class GroupPF:
                 self.data[type]['shuf'] = {group: shuf for group, shuf in zip(groups, shuf_comb)}
                 self.cmperbin = pf.load_pf(self.lmice[0], 'Shock', -2, pf_file=pf_file).cmperbin
 
-
-
 # class PFrotObj:
 #     def __init__(self, mouse, arena1, day1, arena2, day2):
 #         self.mouse = mouse

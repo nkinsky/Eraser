@@ -310,7 +310,7 @@ days = [-2, -1, 0, 4, 1, 2, 7]
 name_append = '_bad4'  # super ocd tracking of # times you've had to redo stuff _2 = 2nd, _87 = 87th, etc.
 
 # IMPORTANT - comment out files you don't want to move in code below!
-for mouse in fixed_reg:
+for mouse in err.all_mice_good:
     for arena1 in arenas:
         for arena2 in arenas:
             for id1, day1 in enumerate(days):
@@ -324,8 +324,8 @@ for mouse in fixed_reg:
                             except FileNotFoundError:
                                 print('Error for ' + mouse + ' ' + arena1 + ' day ' + str(day1)
                                       + ' to ' + arena2 + ' day ' + str(day2))
-                        # files_move = glob(os.path.join(dir_use, 'shuffle_map_mean*nshuf1000.pkl'))
-                        files_move = glob(os.path.join(dir_use, 'best_rot*.pkl'))
+                        files_move = glob(os.path.join(dir_use, 'shuffle_map_mean*nshuf1000.pkl'))
+                        # files_move = glob(os.path.join(dir_use, 'best_rot*.pkl'))
                         # files_move.extend(glob(os.path.join(dir_use, 'PV1shuf*nshuf_1000.pkl')))
                         # files_move.extend(glob(os.path.join(dir_use, 'shuffle_map_mean*nshuf100.pkl')))
                         for file in files_move:
@@ -407,7 +407,7 @@ days = [-2, -1, 0, 4, 1, 2, 7]
 nshuf = 1000
 check = []
 # Add in something to not run if save_file already exists!
-for mouse in fixed_reg:
+for mouse in err.all_mice_good:
     # # for arena in ['Shock', 'Open']:
     # arena1 = 'Open'
     # arena2 = 'Shock'
