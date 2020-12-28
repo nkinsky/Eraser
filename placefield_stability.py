@@ -1134,7 +1134,7 @@ class GroupPF:
         # perform PFcorrs at best rotation between session if True, False = no rotation
         groups = ['Learners', 'Nonlearners', 'Ani']
         # group_dict = dict.fromkeys(groups, {'corrs': [], 'shuf': []})
-        self.data = dict.fromkeys(types, {'data': None, 'shuf': None})  # pre-allocate
+        self.data = dict.fromkeys(types)  # pre-allocate
         self.best_rot = best_rot
         self.nshuf = nshuf
         self.cmperbin = pf.load_pf(self.lmice[0], 'Shock', -2, pf_file=pf_file).cmperbin
