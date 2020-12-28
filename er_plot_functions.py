@@ -844,15 +844,13 @@ def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar
     return fig, ax
 
 
-def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, open_corrs3=None, shock_corrs3=None,
-                   group_names=['grp1', 'grp2'], xlabel='', ylabel='', xticklabels = ['Open', 'Shock']):
+def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel='', ylabel='', xticklabels=['Open', 'Shock'],
+                   colors=plt.get_cmap('Set2')):
     """
     Plots comparison of correlations in open v shock arena for two different groups
-    :param open_corrs1: this and the below are 1d ndarrays of correlations values for each condition
-    :param shock_corrs1:
-    :param open_corrs2:
-    :param shock_corrs2:
-    :param open/shock_corrs3: optional 3rd group to compare. Must add in 3rd name to group_names
+    :param open_corrs, shock_corrs: length 2 or 3 list with group correlations for 2 or 3 different groups. Note that this
+    is designed to run a t-test between all groups, so once you add a 3rd while it will calculate and save these it is
+    really just for illustrative purposed because at that point you should probably be running an ANOVA of some sort.
     :param group_names: length 2 or 3 list with str of groups names
     :param group_names: ['grp1', 'grp2'] by default. Colors = 'Set2' (color 1, 3, then 2)
     :param xticklabels: ['Open','Shock'] by default, adjust accordingly if using different groups in corrs above
@@ -860,28 +858,23 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, open_co
     :return: fig, ax, pval, tstat: pval/test are 2x2 np arrays from t-tests:
             [[open1 v open2, shock1 v shock2], [open1 v shock1, open2 v shock2]]
     """
+
+    # Make sure inputs are compatible
+    assert len(open_corrs) == len(shock_corrs) == len(group_names)
+
     fig, ax = plt.subplots(1, 2)
     fig.set_size_inches([12, 5])
 
     # Set up plots
-    if open_corrs3 is None:
+    if len(open_corrs) == 2:
         offsets = [-0.125, 0.125]
-    else: offsets = [-0.25, 0, 0.25]
-    colors = plt.get_cmap('Set2')
+    elif len(open_corrs) == 3:
+        offsets = [-0.25, 0, 0.25]
 
-    scatterbar(np.concatenate((open_corrs1, shock_corrs1)), np.concatenate((np.ones_like(open_corrs1),
-               np.ones_like(shock_corrs1)*2)), ax=ax[0], color=colors(0), offset=offsets[0], data_label=group_names[0],
-               jitter=0.05)
-
-    scatterbar(np.concatenate((open_corrs2, shock_corrs2)), np.concatenate((np.ones_like(open_corrs2),
-               np.ones_like(shock_corrs2)*2)), ax=ax[0], color=colors(2), offset=offsets[1], data_label=group_names[1],
-               jitter=0.05)
-
-    if open_corrs3 is not None:
-        scatterbar(np.concatenate((open_corrs3, shock_corrs3)), np.concatenate((np.ones_like(open_corrs3),
-                                                                                np.ones_like(shock_corrs3) * 2)),
-                   ax=ax[0], color=colors(1), offset=offsets[2], data_label=group_names[2], jitter=0.05)
-
+    for idc, (open, shock) in enumerate(zip(open_corrs, shock_corrs)):
+        scatterbar(np.concatenate((open, shock)), np.concatenate((np.ones_like(open),
+                   np.ones_like(shock)*2)), ax=ax[0], color=colors[idc], offset=offsets[idc], data_label=group_names[idc],
+                   jitter=0.05)
 
     ax[0].set_xticks([1, 2])
     ax[0].set_xticklabels(xticklabels)
@@ -890,13 +883,15 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, open_co
     ax[0].legend()
 
     # Now run t-tests on each
-    tstat, pval = np.ones((3, 2))*np.nan, np.ones((3, 2))*np.nan
-    tstat[0, 0], pval[0, 0] = s.stats.ttest_ind(open_corrs1, open_corrs2, nan_policy='omit')
-    tstat[0, 1], pval[0, 1] = s.stats.ttest_ind(shock_corrs1, shock_corrs2, nan_policy='omit')
-    tstat[1, 0], pval[1, 0] = s.stats.ttest_rel(open_corrs1, shock_corrs1, nan_policy='omit')
-    tstat[1, 1], pval[1, 1] = s.stats.ttest_rel(open_corrs2, shock_corrs2, nan_policy='omit')
+    tstat, pval = np.ones((len(open), len(open), 2, 2))*np.nan, np.ones((3, 2))*np.nan
+    for idg1, (open1, shock1) in enumerate(zip(open_corrs, shock_corrs)):
+        for idg2, (open2, shock2) in enumerate(zip(open_corrs, shock_corrs)):
+                tstat[idg1, idg2, 0, 0], pval[idg1, idg2, 0, 0] = s.stats.ttest_ind(open1, open2, nan_policy='omit')
+                tstat[idg1, idg2, 0, 1], pval[idg1, idg2, 0, 1] = s.stats.ttest_ind(shock1, shock2, nan_policy='omit')
+                tstat[idg1, idg2, 1, 0], pval[idg1, idg2, 1, 0] = s.stats.ttest_rel(open1, shock1, nan_policy='omit')
+                tstat[idg1, idg2, 1, 1], pval[idg1, idg2, 1, 1] = s.stats.ttest_rel(open2, shock2, nan_policy='omit')
 
-    # Plot stats in second subplot if it is there
+    # Plot stats in second subplot if it is there (only for 1st two groups though).
     label1 = xticklabels[0]
     label2 = xticklabels[1]
     if len(ax) == 2:
@@ -908,10 +903,6 @@ def pfcorr_compare(open_corrs1, shock_corrs1, open_corrs2, shock_corrs2, open_co
                    ' tstat=' + "{0:.3g}".format(tstat[1, 0]))
         ax[1].text(0.1, 0.35, group_names[1] + ': ' + label1 + ' v ' + label2 + ' pval=' + "{0:.3g}".format(pval[1, 1]) +
                    ' tstat=' + "{0:.3g}".format(tstat[1, 1]))
-        if open_corrs3 is not None:
-            tstat[2, 0], pval[2, 0] = s.stats.ttest_rel(open_corrs3, shock_corrs3, nan_policy='omit')
-            ax[1].text(0.1, 0.15, group_names[2] + ' ' + label1 + ' v ' + label2 + ' pval=' + "{0:.3g}".format(pval[2, 0]) +
-                       ' tstat=' + "{0:.3g}".format(tstat[2, 0]))
 
     return fig, ax, pval, tstat
 

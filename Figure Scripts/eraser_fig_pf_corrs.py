@@ -33,8 +33,8 @@ group_desig = 2  # 1 = include days 1,2, AND 7 in after shock group, 2 = include
 batch_map = False  #
 
 ndays = len(days)
-_, cont_corr_sm_mean_all = pfs.get_group_pf_corrs(cmice, arena1, arena2, days, batch_map_use=batch_map)
-_, ani_corr_sm_mean_all = pfs.get_group_pf_corrs(amice, arena1, arena2, days, batch_map_use=batch_map)
+_, cont_corr_sm_mean_all, _, _ = pfs.get_group_pf_corrs(cmice, arena1, arena2, days, batch_map_use=batch_map)
+_, ani_corr_sm_mean_all, _, _ = pfs.get_group_pf_corrs(amice, arena1, arena2, days, batch_map_use=batch_map)
 
 # # pre-allocate
 
@@ -419,7 +419,7 @@ for mouse in err.all_mice_good:
                     file_name = 'shuffle_map_mean_corrs_' + arena1 + 'day' + str(day1) + '_' + arena2 + 'day' + \
                                 str(day2) + '_nshuf' + str(nshuf) + '.pkl'
                     save_file = os.path.join(dir_use, file_name)
-                    if id1 <= id2 and arena1 != arena2 or id1 < id2 and arena1 == arena2 and not os.path.exists(save_file):  # Only run for sessions forward in time
+                    if (id1 <= id2 and arena1 != arena2 and arena1 == 'Open') or (id1 < id2 and arena1 == arena2) and not os.path.exists(save_file):  # Only run for sessions forward in time
                         try:
                             ShufMap = pfs.ShufMap(mouse, arena1=arena1, day1=day1, arena2=arena2, day2=day2, nshuf=nshuf)
                             if not os.path.exists(ShufMap.save_file):

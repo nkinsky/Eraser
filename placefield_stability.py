@@ -28,6 +28,10 @@ import skimage as ski
 from skimage.transform import resize as sk_resize
 from pickle import load, dump
 from tqdm import tqdm
+import seaborn as sns
+import er_plot_functions as erp
+
+palette = sns.color_palette('Set2')
 
 
 # Make text save as whole words
@@ -743,7 +747,7 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
         fig = ax.figure
 
     # Plot corrs in scatterplot form
-    ax.scatter(xpts.reshape(-1), corr_mean_mat.reshape(-1), color=color)
+    ascat = ax.scatter(xpts.reshape(-1), corr_mean_mat.reshape(-1), color=color)
     ax.set_xticks(np.arange(1, 6))
     ax.set_xticklabels(group_labels)
 
@@ -753,50 +757,50 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
     corr_means = []
     for group_num in unique_groups:
         corr_means.append(np.nanmean(corr_mean_mat[groups == group_num]))
-    ax.plot(unique_groups, corr_means, color + '-')
+    axl = ax.plot(unique_groups, corr_means, color + '-')
     if save_fig:
         fig.savefig(path.join(err.pathname, prefix + ' ' + arena1 + ' v '
                     + arena2 + ' ' + group_type + 'group_desig' + str(group_desig) + 'best_rot' + str(best_rot) +
                     '.pdf'))
 
-    return fig, ax
+    return fig, ax, ascat, axl
 
 
-def get_time_groups(nmice, group_desig=1):
+def get_time_epochs(nmice, group_desig=1):
     """
     Returns groupings for plotting different time-epochs in group correlation matrices, e.g. BEFORE shock, AFTER shock,
     BEFORE v AFTER shock
     :param nmice:
     :param group_desig: 1: include day 1, 2, AND 7 in AFTER epochs, 2: include day 1 and 2 only in AFTER
-    :return: groups: nmice x 7 x 7 array with groupings for pf comparisons - see below comments for description
+    :return: epochs: nmice x 7 x 7 array with groupings for pf comparisons - see below comments for description
     """
 
-    # Define groups for scatter plots
-    groups = np.ones((7, 7)) * np.nan
+    # Define epochs for scatter plots
+    epochs = np.ones((7, 7)) * np.nan
     if group_desig == 1:
 
-        groups[0:2, 0:2] = 1  # 1 = before shock
-        groups[4:7, 4:7] = 2  # 2 = after shock days 1,2,7
-        groups[0:2, 4:7] = 3  # 3 = before-v-after shock
-        groups[0:2, 3] = 4  # 4 = before-v-STM
-        groups[3, 4:7] = 5  # 5 = STM-v-LTM (4hr to 1,2,7)
-        group_labels = ['Before', 'After(Days 1-7)', 'Before v After(Days 1-7)',
+        epochs[0:2, 0:2] = 1  # 1 = before shock
+        epochs[4:7, 4:7] = 2  # 2 = after shock days 1,2,7
+        epochs[0:2, 4:7] = 3  # 3 = before-v-after shock
+        epochs[0:2, 3] = 4  # 4 = before-v-STM
+        epochs[3, 4:7] = 5  # 5 = STM-v-LTM (4hr to 1,2,7)
+        epoch_labels = ['Before', 'After(Days 1-7)', 'Before v After(Days 1-7)',
                         'Before v STM', 'STM v After(Days 1-7)']
     elif group_desig == 2:
-        groups[0:2, 0:2] = 1  # 1 = before shock
-        groups[4:6, 4:6] = 2  # 2 = after shock days 1,2 only
-        groups[0:2, 4:6] = 3  # 3 = before-v-after shock
-        groups[0:2, 3] = 4  # 4 = before-v-STM
-        groups[3, 4:6] = 5  # 5 = STM-v-LTM (days 1 and 2 only)
-        group_labels = ['Before', 'After (Day 1-2)', 'Before v After(Days1-2)',
+        epochs[0:2, 0:2] = 1  # 1 = before shock
+        epochs[4:6, 4:6] = 2  # 2 = after shock days 1,2 only
+        epochs[0:2, 4:6] = 3  # 3 = before-v-after shock
+        epochs[0:2, 3] = 4  # 4 = before-v-STM
+        epochs[3, 4:6] = 5  # 5 = STM-v-LTM (days 1 and 2 only)
+        epoch_labels = ['Before', 'After (Day 1-2)', 'Before v After(Days1-2)',
                         'Before v STM', 'STM v After(Days1-2)']
 
     # now keep only values above diagonal, shape and repeat matrix to shape (nmice, 7, 7)
-    groups = np.triu(groups, 1)
-    groups[groups == 0] = np.nan
-    groups = np.moveaxis(np.repeat(groups[:, :, np.newaxis], nmice, 2), 2, 0)
+    epochs = np.triu(epochs, 1)
+    epochs[epochs == 0] = np.nan
+    epochs = np.moveaxis(np.repeat(epochs[:, :, np.newaxis], nmice, 2), 2, 0)
 
-    return groups, group_labels
+    return epochs, epoch_labels
 
 def get_seq_time_groups(nmice):
     """
@@ -1124,17 +1128,24 @@ class GroupPF:
 
     def construct(self, types=['PFsm', 'PFus', 'PV1dboth', 'PV1dall'], best_rot=True,
                   pf_file='placefields_cm1_manlims_1000shuf.pkl', nshuf=1000):
+        """Sets up all data in well-organized dictionary: data[type]['data' or 'shuf'][group][arena_type] where
+        arena_type=0 for Open, 1 for Shock, and 2 for Open v Shock"""
         # perform PFcorrs at best rotation between session if True, False = no rotation
         groups = ['Learners', 'Nonlearners', 'Ani']
         # group_dict = dict.fromkeys(groups, {'corrs': [], 'shuf': []})
         self.data = dict.fromkeys(types, {'data': [], 'shuf': []})  # pre-allocate
+        self.best_rot = best_rot
+        self.nshuf = nshuf
+        self.cmperbin = pf.load_pf(self.lmice[0], 'Shock', -2, pf_file=pf_file).cmperbin
         for type in types:
             learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all = [], [], []
             learn_shuf_all, nlearn_shuf_all, ani_shuf_all = [], [], []
 
-            for ida, arena in enumerate(['Open', 'Shock']):
-                arena1 = arena
-                arena2 = arena
+            for ida, arena in enumerate(['Open', 'Shock', ['Open', 'Shock']]):
+                if isinstance(arena, list):
+                    arena1, arena2 = arena[0], arena[1]
+                else:
+                    arena1, arena2 = arena, arena
                 if type == 'PFsm':
                     _, templ, _, temp_sh_l = get_group_pf_corrs(self.lmice, arena1, arena2, self.days,
                                                                 best_rot=best_rot, pf_file=pf_file)
@@ -1169,7 +1180,114 @@ class GroupPF:
                 shuf_comb = [learn_shuf_all, nlearn_shuf_all, ani_shuf_all]
                 self.data[type]['data'] = {group: data for group, data in zip(groups, data_comb)}
                 self.data[type]['shuf'] = {group: shuf for group, shuf in zip(groups, shuf_comb)}
-                self.cmperbin = pf.load_pf(self.lmice[0], 'Shock', -2, pf_file=pf_file).cmperbin
+
+    def scatter_epochs(self, arena1='Shock', arena2='Shock', groups=['Learners', 'Nonlearners', 'Ani'], type='PSsm',
+                       group_desig=2, save_fig=False, ax_use=None):
+        """
+        Scatter plot across all time epochs
+        :param arena1: 'Shock' or 'Open'
+        :param arena2: 'Shock' or 'Open'
+        :param groups: list of ['Learners', 'Nonlearners', 'Ani'] or any combo thereof
+        :param type: 'PFsm', 'PFus', 'PV1dall', 'PV1dboth
+        :param group_desig: 1 = use day 1, 2, & 7 for AFTER, 2 = use 1 & 2 only for AFTER
+        :return:
+        """
+
+        # Set up plots
+        fig, ax = self.figset(ax_use)
+        idc = self.idmat(arena1, arena2)
+        save_flag = False  # Set up saving plots
+
+        ascat, axlines = [], []
+        for idg, group in enumerate(groups):
+            if idg == (len(groups) - 1) and save_fig is True:
+                save_flag = True
+
+            _, _, atemp, axl = plot_pfcorr_bygroup(self.data[type]['data'][group][idc], arena1, arena2,
+                                              type + ' Correlations Across Epochs', ax_use=ax, color=palette[idg],
+                                              offset=-0.1, save_fig=save_flag, group_desig=group_desig)
+            ascat.append(atemp)
+            axlines.append(axl)
+        ax.legend(ascat)
+
+        return fig, ax, ascat, axlines
+
+    def plot_conf(self, arena1='Shock', arena2='Shock', groups=['Learners', 'Nonlearners', 'Ani'], type='PFsm',
+                       save_fig=False, ax_use=None):
+        """Plot confusion matrices across groups - probably not that useful, but maybe?"""
+        ndays = len(self.days)
+
+        # Set up plots
+        fig, ax = self.figset(ax_use, nplots=[1, 3])
+        idc = self.idmat(arena1, arena2)
+        save_flag = False  # Set up saving plots
+
+        ascat, axlines = [], []
+        for idg, (a, group) in enumerate(zip(ax, groups)):
+            plot_confmat(np.nanmean(self.data[type]['data'][group][idc], axis=0), arena1, arena2, group,
+                        ndays=ndays, ax_use=a)
+
+            # Save fig after last plot if specified
+            if idg == (len(groups) - 1) and save_fig is True:
+                fig.savefig(self.gen_savename('Confmat', type, arena1, arena2, self.best_rot))
+
+    def scatterbar_bw_groups(self, groups=['Learners', 'Nonlearners', 'Ani'], type='PFsm',
+                             group_desig=2, save_fig=False, ax_use=None):
+        """Scatterbar plots between groups for all epochs at once?"""
+        match_yaxis = True
+        match_ylims = [-0.3, 0.6]
+
+        # Set up data
+        epoch_mat = []
+        for group in groups:
+            nmice = self.data['PFsm']['data']['Learners'][0].shape[0]
+            etemp, epoch_labels = get_time_epochs(nmice, group_desig)
+            epoch_mat.append(etemp)
+
+        data_use = self.data[type]['data']
+        epoch_nums = np.unique(epoch_mat[0][~np.isnan(epoch_mat[0])]).tolist()
+        for ide, epoch_num in enumerate(epoch_nums):
+            open_corrs = [data_use[group][0][epoch_mat[idg] == epoch_num] for idg, group in enumerate(groups)]
+            shock_corrs = [data_use[group][1][epoch_mat[idg] == epoch_num] for idg, group in enumerate(groups)]
+
+            fig, ax, pval, tstat = erp.pfcorr_compare(open_corrs, shock_corrs, group_names=groups,
+                                                      xlabel=epoch_labels[ide], ylabel=type,
+                                                      xticklabels=['Open', 'Shock'])
+            ax[0].set_ylim(match_ylims)  # NRK todo: automate this.
+            savename = path.join(err.pathname,  type + ' 2x2 All Groups ' + epoch_labels[idg] + '.pdf')
+            fig.savefig(savename)
+
+    def figset(self, ax, nplots=[1, 1]):
+        """Set up figure"""
+        # Set up plots
+        if ax is None:
+            fig, ax = plt.subplots()
+            fig.set_size_inches([9.27, 3.36])
+        else:
+            fig = ax.figure
+
+        return fig, ax
+
+    def idmat(self, arena1, arena2):
+        """Get appropriate index for correlations in list"""
+        ascat, axlines = [], []
+        if arena1 == arena2:
+            if arena1 == 'Open':
+                idc = 0
+            else:
+                idc = 1
+        else:
+            idc = 2
+
+        return idc
+
+    def gen_savename(self, prefix, type, arena1, arena2, append):
+        savename = path.join(err.pathname, prefix + '_' + type + '_' + arena1 + 'v'
+                             + arena2 + '_best_rot=' + str(self.best_rot) + append + '.pdf')
+        return savename
+
+
+
 
 # class PFrotObj:
 #     def __init__(self, mouse, arena1, day1, arena2, day2):

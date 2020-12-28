@@ -270,20 +270,27 @@ def imshow_nan(array, ax=None, cmap='viridis'):
     return ax
 
 
-def align_imaging_to_tracking(pos_cm, speed_cm, time_tracking, PSAbool, sr_imaging):
+def align_imaging_to_tracking(pos_cm, speed_cm, time_tracking, PSAbool, sr_imaging, align_from_end=False):
     """
-    Aligns all tracking data to imaging data and spits out all at the sample rate of the imaging data
+    Aligns all tracking data to imaging data and spits out all at the sample rate of the imaging data. Note that this
+    assumes you have aligned imaging start or end to tracking software externally.
     :param pos_cm:
     :param time_tracking:
     :param sr_imaging:
     :param PSAbool:
+    :param align_from_end: set to True to use last frames of imaging/tracking software for alignment.  Use to cross-validate
+    normal alignment (from start) or in case of faulty triggering at start. Default = False.
     :return: pos_align, speed_align, PSAbool_align, t_imaging - all aligned to t_imaging
     """
 
     # Get timestamps for PSAbool
     _, nframes = np.shape(PSAbool)
-    t_imaging = np.arange(0, nframes/sr_imaging, 1/sr_imaging) + \
-        np.min(time_tracking)  # tracking software starts image capture
+    if not align_from_end:
+        t_imaging = np.arange(0, nframes/sr_imaging, 1/sr_imaging) + \
+            np.min(time_tracking)  # tracking software starts image capture
+    elif align_from_end:
+        t_imaging = np.arange(-nframes/sr_imaging, 0, 1/sr_imaging) + \
+            np.max(time_tracking)  # assume tracking software off ends image capture
     pos_align = np.empty((2, t_imaging.shape[0]))
     pos_align[0, :] = np.interp(t_imaging, time_tracking, pos_cm[0, :])
     pos_align[1, :] = np.interp(t_imaging, time_tracking, pos_cm[1, :])
