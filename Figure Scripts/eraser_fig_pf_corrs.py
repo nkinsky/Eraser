@@ -199,13 +199,13 @@ fig, axuse = plt.subplots(3,1)
 fig.set_size_inches([10.1, 9.2])
 for idd, data in enumerate([learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all]):
     nmice = data[0].shape[0]
-    gps, labels = pfs.get_seq_time_groups(nmice)
-    erp.scatterbar(data[0][~np.isnan(gps)], gps[~np.isnan(gps)], data_label='Neutral', offset=-0.125,
+    pairs, labels = pfs.get_seq_time_pairs(nmice)
+    erp.scatterbar(data[0][~np.isnan(pairs)], pairs[~np.isnan(pairs)], data_label='Neutral', offset=-0.125,
                            jitter=0.05, color='k', ax=axuse[idd])
-    erp.scatterbar(data[1][~np.isnan(gps)], gps[~np.isnan(gps)], data_label='Shock', offset=0.125,
+    erp.scatterbar(data[1][~np.isnan(pairs)], pairs[~np.isnan(pairs)], data_label='Shock', offset=0.125,
                            jitter=0.05, color='r', ax=axuse[idd])
     axuse[idd].set_title(titles[idd] + ': ' + type)
-    axuse[idd].set_xticks(np.unique(gps[~np.isnan(gps)]))
+    axuse[idd].set_xticks(np.unique(pairs[~np.isnan(pairs)]))
     axuse[idd].set_xticklabels(labels)
     if idd == 2:
         axuse[idd].legend()

@@ -16,7 +16,6 @@ import skvideo.io
 from glob import glob
 from session_directory import find_eraser_directory as get_dir
 import session_directory as sd
-# import pickle
 from scipy.signal import decimate
 import Placefields as pf
 from mouse_sessions import make_session_list
@@ -31,7 +30,9 @@ from tqdm import tqdm
 import seaborn as sns
 import er_plot_functions as erp
 
+# Plotting settings
 palette = sns.color_palette('Set2')
+linetypes = ['-', '--', '-.']
 
 
 # Make text save as whole words
@@ -714,7 +715,7 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_fil
 
 def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True,
                         color='b', ax_use=None, offset=0, group_desig=1, best_rot=False,
-                        prefix='PFcorrs'):
+                        prefix='PFcorrs', linetype='-'):
     """
     Scatterplot of correlations before shock, after, and several other groupings
     :param corr_mean_mat: nmice x 7 x 7 array of mean corr values for each mouse
@@ -730,11 +731,11 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
 
     nmice = corr_mean_mat.shape[0]
 
-    # Define groups for scatter plots
-    groups, group_labels = get_time_groups(nmice, group_desig)
+    # Define time epochs for scatter plots
+    epochs, epoch_labels = get_time_epochs(nmice, group_desig)
 
-    # Add in jitter to groups
-    xpts = groups.copy() + 0.1 * np.random.standard_normal(groups.shape)
+    # Add in jitter to epochs
+    xpts = epochs.copy() + 0.1 * np.random.standard_normal(epochs.shape)
 
     # Add in offset
     xpts = xpts + offset
@@ -749,15 +750,15 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
     # Plot corrs in scatterplot form
     ascat = ax.scatter(xpts.reshape(-1), corr_mean_mat.reshape(-1), color=color)
     ax.set_xticks(np.arange(1, 6))
-    ax.set_xticklabels(group_labels)
+    ax.set_xticklabels(epoch_labels)
 
     ax.set_ylabel('Mean Spearman Rho')
     ax.set_title(group_type)
-    unique_groups = np.unique(groups[~np.isnan(groups)])
+    unique_epochs = np.unique(epochs[~np.isnan(epochs)])
     corr_means = []
-    for group_num in unique_groups:
-        corr_means.append(np.nanmean(corr_mean_mat[groups == group_num]))
-    axl = ax.plot(unique_groups, corr_means, color + '-')
+    for epoch_num in unique_epochs:
+        corr_means.append(np.nanmean(corr_mean_mat[epochs == epoch_num]))
+    axl = ax.plot(unique_epochs, corr_means, linetype, color=color)
     if save_fig:
         fig.savefig(path.join(err.pathname, prefix + ' ' + arena1 + ' v '
                     + arena2 + ' ' + group_type + 'group_desig' + str(group_desig) + 'best_rot' + str(best_rot) +
@@ -802,23 +803,23 @@ def get_time_epochs(nmice, group_desig=1):
 
     return epochs, epoch_labels
 
-def get_seq_time_groups(nmice):
+def get_seq_time_pairs(nmice):
     """
-    Returns groupings for plotting each session versus the next
-    :return: groups: nmice x 7 x 7 array with groupings for pf comparisons
+    Returns pairings for plotting each session versus the next
+    :return: pairs: nmice x 7 x 7 array with groupings for pf comparisons
     """
 
-    # Define groups for scatter plots
-    groups = np.ones((7, 7)) * np.nan
-    group_labels = ['-2 v -1', '-1 v 4hr', '4 hr v 1', '1 v 2', '2 v 7']
-    group_ids = [0, 1, 3, 4, 5]
-    for idd in group_ids:
-        groups[idd, idd+1] = idd
+    # Define pairs for scatter plots
+    pairs = np.ones((7, 7)) * np.nan
+    pair_labels = ['-2 v -1', '-1 v 4hr', '4 hr v 1', '1 v 2', '2 v 7']
+    pair_ids = [0, 1, 3, 4, 5]
+    for idd in pair_ids:
+        pairs[idd, idd+1] = idd
 
     # now shape and repeat matrix to shape (nmice, 7, 7)
-    groups = np.moveaxis(np.repeat(groups[:, :, np.newaxis], nmice, 2), 2, 0)
+    pairs = np.moveaxis(np.repeat(pairs[:, :, np.newaxis], nmice, 2), 2, 0)
 
-    return groups, group_labels
+    return pairs, pair_labels
 
 
 def plot_confmat(corr_mean_mat, arena1, arena2, group_type, ndays=7, ax_use=None, save_fig=True):
@@ -1118,13 +1119,13 @@ class GroupPF:
         self.nlmice = err.nonlearners
         self.days = [-2, -1, 0, 4, 1, 2, 7]
 
-    def _save(self):
+    def _save(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser'):
         # NRK todo: make this function
+        dump(self.data, open(path.join(dir, 'group_data.pkl'), 'wb'))
         return None
 
-    def _load(self):
-        # NRK todo: make this function
-        return None
+    def _load(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser'):
+        self.data = load(open(path.join(dir, 'group_data.pkl'), 'rb'))
 
     def construct(self, types=['PFsm', 'PFus', 'PV1dboth', 'PV1dall'], best_rot=True,
                   pf_file='placefields_cm1_manlims_1000shuf.pkl', nshuf=1000):
@@ -1133,7 +1134,7 @@ class GroupPF:
         # perform PFcorrs at best rotation between session if True, False = no rotation
         groups = ['Learners', 'Nonlearners', 'Ani']
         # group_dict = dict.fromkeys(groups, {'corrs': [], 'shuf': []})
-        self.data = dict.fromkeys(types, {'data': [], 'shuf': []})  # pre-allocate
+        self.data = dict.fromkeys(types, {'data': None, 'shuf': None})  # pre-allocate
         self.best_rot = best_rot
         self.nshuf = nshuf
         self.cmperbin = pf.load_pf(self.lmice[0], 'Shock', -2, pf_file=pf_file).cmperbin
@@ -1147,19 +1148,19 @@ class GroupPF:
                 else:
                     arena1, arena2 = arena, arena
                 if type == 'PFsm':
-                    _, templ, _, temp_sh_l = get_group_pf_corrs(self.lmice, arena1, arena2, self.days,
-                                                                best_rot=best_rot, pf_file=pf_file)
+                    a, templ, b, temp_sh_l = get_group_pf_corrs(self.lmice, arena1, arena2, self.days,
+                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
                     _, tempnl, _, temp_sh_nl = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days,
-                                                                  best_rot=best_rot, pf_file=pf_file)
+                                                                  best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
                     _, tempa, _, temp_sh_a = get_group_pf_corrs(self.amice, arena1, arena2, self.days,
-                                                  best_rot=best_rot, pf_file=pf_file)
+                                                  best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
                 elif type == 'PFus':
-                    templ, _, temp_sh_l, _ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days, best_rot=best_rot,
-                                                  pf_file=pf_file)
-                    tempnl, _, temp_sh_nl, _ = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days, best_rot=best_rot,
-                                                   pf_file=pf_file)
-                    tempa, _, temp_sh_a, _ = get_group_pf_corrs(self.amice, arena1, arena2, self.days, best_rot=best_rot,
-                                                  pf_file=pf_file)
+                    templ, _, temp_sh_l, _ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days,
+                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
+                    tempnl, _, temp_sh_nl, _ = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days,
+                                                                  best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
+                    tempa, _, temp_sh_a, _ = get_group_pf_corrs(self.amice, arena1, arena2, self.days,
+                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
                 elif type == 'PV1dboth':
                     _, templ, _, temp_sh_l = get_group_PV1d_corrs(self.lmice, arena1, arena2, self.days, nshuf=nshuf)
                     _, tempnl, _, temp_sh_nl = get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf)
@@ -1176,12 +1177,13 @@ class GroupPF:
                 nlearn_shuf_all.append(temp_sh_nl)
                 ani_shuf_all.append(temp_sh_a)
 
-                data_comb = [learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all]
-                shuf_comb = [learn_shuf_all, nlearn_shuf_all, ani_shuf_all]
-                self.data[type]['data'] = {group: data for group, data in zip(groups, data_comb)}
-                self.data[type]['shuf'] = {group: shuf for group, shuf in zip(groups, shuf_comb)}
+            data_comb = [learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all]
+            shuf_comb = [learn_shuf_all, nlearn_shuf_all, ani_shuf_all]
+            self.data[type] = {'data': [], 'shuf': []}
+            self.data[type]['data'] = {group: data for group, data in zip(groups, data_comb)}
+            self.data[type]['shuf'] = {group: shuf for group, shuf in zip(groups, shuf_comb)}
 
-    def scatter_epochs(self, arena1='Shock', arena2='Shock', groups=['Learners', 'Nonlearners', 'Ani'], type='PSsm',
+    def scatter_epochs(self, arena1='Shock', arena2='Shock', groups=['Learners', 'Nonlearners', 'Ani'], type='PFsm',
                        group_desig=2, save_fig=False, ax_use=None):
         """
         Scatter plot across all time epochs
@@ -1199,16 +1201,18 @@ class GroupPF:
         save_flag = False  # Set up saving plots
 
         ascat, axlines = [], []
+        linetypes = ['-', '--', '-.']
         for idg, group in enumerate(groups):
             if idg == (len(groups) - 1) and save_fig is True:
                 save_flag = True
 
             _, _, atemp, axl = plot_pfcorr_bygroup(self.data[type]['data'][group][idc], arena1, arena2,
-                                              type + ' Correlations Across Epochs', ax_use=ax, color=palette[idg],
-                                              offset=-0.1, save_fig=save_flag, group_desig=group_desig)
+                                                   type + ' Correlations ' + arena1 + ' v ' + arena2,
+                                                   ax_use=ax, color=palette[idg], offset=-0.1, save_fig=save_flag,
+                                                   group_desig=group_desig, linetype=linetypes[idg])
             ascat.append(atemp)
             axlines.append(axl)
-        ax.legend(ascat)
+        ax.legend(groups)
 
         return fig, ax, ascat, axlines
 
@@ -1254,7 +1258,7 @@ class GroupPF:
                                                       xlabel=epoch_labels[ide], ylabel=type,
                                                       xticklabels=['Open', 'Shock'])
             ax[0].set_ylim(match_ylims)  # NRK todo: automate this.
-            savename = path.join(err.pathname,  type + ' 2x2 All Groups ' + epoch_labels[idg] + '.pdf')
+            savename = path.join(err.pathname,  type + ' 2x2 All Groups ' + epoch_labels[ide] + '.pdf')
             fig.savefig(savename)
 
     def figset(self, ax, nplots=[1, 1]):
@@ -1302,8 +1306,8 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    corr_us_mean_all, corr_sm_mean_all, shuf_us_mean_all, shuf_sm_mean_all = \
-        get_group_pf_corrs(['Marble17'], 'Shock', 'Shock', [-2, -1, 1], nshuf=1000)
+    pfg = GroupPF()
+    pfg.construct()
 
     pass
 
