@@ -1119,13 +1119,12 @@ class GroupPF:
         self.nlmice = err.nonlearners
         self.days = [-2, -1, 0, 4, 1, 2, 7]
 
-    def _save(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser'):
-        # NRK todo: make this function
-        dump(self.data, open(path.join(dir, 'group_data.pkl'), 'wb'))
+    def _save(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser', best_rot=True):
+        dump(self.data, open(path.join(dir, 'group_data_rot=' + str(best_rot) + '.pkl'), 'wb'))
         return None
 
-    def _load(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser'):
-        self.data = load(open(path.join(dir, 'group_data.pkl'), 'rb'))
+    def _load(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser', best_rot=True):
+        self.data = load(open(path.join(dir, 'group_data_rot=' + str(best_rot) + '.pkl'), 'rb'))
 
     def construct(self, types=['PFsm', 'PFus', 'PV1dboth', 'PV1dall'], best_rot=True,
                   pf_file='placefields_cm1_manlims_1000shuf.pkl', nshuf=1000):
@@ -1167,7 +1166,7 @@ class GroupPF:
                     _, tempa, _, temp_sh_a = get_group_PV1d_corrs(self.amice, arena1, arena2, self.days, nshuf=nshuf)
                 elif type == 'PV1dall':
                     templ, _, temp_sh_l, _ = get_group_PV1d_corrs(self.lmice, arena1, arena2, self.days, nshuf=nshuf)
-                    tempnl, _, temp_sh_nl, _= get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf)
+                    tempnl, _, temp_sh_nl, _ = get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf)
                     tempa, _, temp_sh_a, _ = get_group_PV1d_corrs(self.amice, arena1, arena2, self.days, nshuf=nshuf)
 
                 learn_bestcorr_mean_all.append(templ)
@@ -1222,7 +1221,7 @@ class GroupPF:
         ndays = len(self.days)
 
         # Set up plots
-        fig, ax = self.figset(ax_use, nplots=[1, 3])
+        fig, ax = self.figset(ax_use, nplots=[1, 3], size=[16.25, 4.65])
         idc = self.idmat(arena1, arena2)
         save_flag = False  # Set up saving plots
 
@@ -1235,7 +1234,7 @@ class GroupPF:
             if idg == (len(groups) - 1) and save_fig is True:
                 fig.savefig(self.gen_savename('Confmat', type, arena1, arena2, self.best_rot))
 
-    def scatterbar_bw_groups(self, groups=['Learners', 'Nonlearners', 'Ani'], type='PFsm',
+    def scatterbar_bw_groups(self, groups=['Learners', 'Ani', 'Nonlearners'], type='PFsm',
                              group_desig=2, save_fig=False, ax_use=None):
         """Scatterbar plots between groups for all epochs at once?"""
         match_yaxis = True
@@ -1244,7 +1243,7 @@ class GroupPF:
         # Set up data
         epoch_mat = []
         for group in groups:
-            nmice = self.data['PFsm']['data']['Learners'][0].shape[0]
+            nmice = self.data[type]['data'][group][0].shape[0]
             etemp, epoch_labels = get_time_epochs(nmice, group_desig)
             epoch_mat.append(etemp)
 
@@ -1261,12 +1260,12 @@ class GroupPF:
             savename = path.join(err.pathname,  type + ' 2x2 All Groups ' + epoch_labels[ide] + '.pdf')
             fig.savefig(savename)
 
-    def figset(self, ax, nplots=[1, 1]):
+    def figset(self, ax=None, nplots=[1, 1], size=[9.27, 3.36]):
         """Set up figure"""
         # Set up plots
         if ax is None:
-            fig, ax = plt.subplots()
-            fig.set_size_inches([9.27, 3.36])
+            fig, ax = plt.subplots(nplots[0], nplots[1])
+            fig.set_size_inches(size)
         else:
             fig = ax.figure
 
@@ -1277,11 +1276,11 @@ class GroupPF:
         ascat, axlines = [], []
         if arena1 == arena2:
             if arena1 == 'Open':
-                idc = 0
+                idc = 0  # Open v Open
             else:
-                idc = 1
+                idc = 1  # Shock v Shock
         else:
-            idc = 2
+            idc = 2  # Open v Shock
 
         return idc
 
@@ -1289,8 +1288,6 @@ class GroupPF:
         savename = path.join(err.pathname, prefix + '_' + type + '_' + arena1 + 'v'
                              + arena2 + '_best_rot=' + str(self.best_rot) + append + '.pdf')
         return savename
-
-
 
 
 # class PFrotObj:
@@ -1307,7 +1304,8 @@ class GroupPF:
 
 if __name__ == '__main__':
     pfg = GroupPF()
-    pfg.construct()
+    pfg._load()
+    pfg.scatterbar_bw_groups()
 
     pass
 

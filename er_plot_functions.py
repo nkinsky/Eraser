@@ -6,6 +6,7 @@ Created on Thu Apr 05 11:06:20 2018
 """
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 import csv
 import pandas as pd
 from os import path
@@ -845,7 +846,7 @@ def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar
 
 
 def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel='', ylabel='', xticklabels=['Open', 'Shock'],
-                   colors=plt.get_cmap('Set2')):
+                   colors=sns.color_palette('Set2')):
     """
     Plots comparison of correlations in open v shock arena for two different groups
     :param open_corrs, shock_corrs: length 2 or 3 list with group correlations for 2 or 3 different groups. Note that this
@@ -855,8 +856,8 @@ def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel
     :param group_names: ['grp1', 'grp2'] by default. Colors = 'Set2' (color 1, 3, then 2)
     :param xticklabels: ['Open','Shock'] by default, adjust accordingly if using different groups in corrs above
     :param ax: custom axes to plot into.
-    :return: fig, ax, pval, tstat: pval/test are 2x2 np arrays from t-tests:
-            [[open1 v open2, shock1 v shock2], [open1 v shock1, open2 v shock2]]
+    :return: fig, ax, pval, tstat: pval/test are ngrp x ngrp x 3 np arrays from t-tests where the last dimension is:
+    0 = open v open (across groups only), 1 = shock v shock (across groups only), 2 = open v shock (within group only).
     """
 
     # Make sure inputs are compatible
@@ -883,26 +884,27 @@ def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel
     ax[0].legend()
 
     # Now run t-tests on each
-    tstat, pval = np.ones((len(open), len(open), 2, 2))*np.nan, np.ones((3, 2))*np.nan
+    tstat, pval = np.ones((len(open_corrs), len(open_corrs), 3))*np.nan, \
+                  np.ones((len(open_corrs), len(open_corrs), 3))*np.nan
     for idg1, (open1, shock1) in enumerate(zip(open_corrs, shock_corrs)):
         for idg2, (open2, shock2) in enumerate(zip(open_corrs, shock_corrs)):
-                tstat[idg1, idg2, 0, 0], pval[idg1, idg2, 0, 0] = s.stats.ttest_ind(open1, open2, nan_policy='omit')
-                tstat[idg1, idg2, 0, 1], pval[idg1, idg2, 0, 1] = s.stats.ttest_ind(shock1, shock2, nan_policy='omit')
-                tstat[idg1, idg2, 1, 0], pval[idg1, idg2, 1, 0] = s.stats.ttest_rel(open1, shock1, nan_policy='omit')
-                tstat[idg1, idg2, 1, 1], pval[idg1, idg2, 1, 1] = s.stats.ttest_rel(open2, shock2, nan_policy='omit')
+                tstat[idg1, idg2, 0], pval[idg1, idg2, 0] = s.stats.ttest_ind(open1, open2, nan_policy='omit')
+                tstat[idg1, idg2, 1], pval[idg1, idg2, 1] = s.stats.ttest_ind(shock1, shock2, nan_policy='omit')
+                tstat[idg1, idg2, 2], pval[idg1, idg2, 2] = s.stats.ttest_rel(open1, shock1, nan_policy='omit')
 
     # Plot stats in second subplot if it is there (only for 1st two groups though).
     label1 = xticklabels[0]
     label2 = xticklabels[1]
     if len(ax) == 2:
-        ax[1].text(0.1, 0.9, label1 + ': ' + group_names[0] + ' v ' + group_names[1] + ' pval=' + "{0:.3g}".format(pval[0, 0]) +
-                   ' tstat=' + "{0:.3g}".format(tstat[0, 0]))
-        ax[1].text(0.1, 0.75, label2 + ': ' + group_names[0] + ' v ' + group_names[1] + ' pval=' + "{0:.3g}".format(pval[0, 1]) +
-                   ' tstat=' + "{0:.3g}".format(tstat[0, 1]))
-        ax[1].text(0.1, 0.50, group_names[0] + ': ' + label1 + 'v ' + label2 + ' pval=' + "{0:.3g}".format(pval[1, 0]) +
-                   ' tstat=' + "{0:.3g}".format(tstat[1, 0]))
-        ax[1].text(0.1, 0.35, group_names[1] + ': ' + label1 + ' v ' + label2 + ' pval=' + "{0:.3g}".format(pval[1, 1]) +
-                   ' tstat=' + "{0:.3g}".format(tstat[1, 1]))
+        # Plot across group stats in each arena
+        ax[1].text(0.1, 0.9, label1 + ': ' + group_names[0] + ' v ' + group_names[1] + ' pval=' +
+                   "{0:.3g}".format(pval[0, 1, 0]) + ' tstat=' + "{0:.3g}".format(tstat[0, 1, 0]))
+        ax[1].text(0.1, 0.75, label2 + ': ' + group_names[0] + ' v ' + group_names[1] + ' pval=' +
+                   "{0:.3g}".format(pval[0, 1, 1]) + ' tstat=' + "{0:.3g}".format(tstat[0, 1, 1]))
+        # Plot within group stats between arenas...
+        for idg, group_name in enumerate(group_names):
+            ax[1].text(0.1, 0.50-0.15*idg, group_name + ': ' + label1 + 'v ' + label2 + ' pval=' +
+                       "{0:.3g}".format(pval[idg, idg, 2]) + ' tstat=' + "{0:.3g}".format(tstat[idg, idg, 2]))
 
     return fig, ax, pval, tstat
 
