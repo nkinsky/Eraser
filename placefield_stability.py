@@ -29,7 +29,7 @@ from pickle import load, dump
 from tqdm import tqdm
 import seaborn as sns
 import er_plot_functions as erp
-from helpers import match_ax_lims
+from helpers import match_ax_lims, get_CI, mean_CI
 
 # Plotting settings
 palette = sns.color_palette('Set2')
@@ -1120,12 +1120,13 @@ class GroupPF:
         self.nlmice = err.nonlearners
         self.days = [-2, -1, 0, 4, 1, 2, 7]
 
-    def _save(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser', best_rot=True):
-        dump(self.data, open(path.join(dir, 'group_data_rot=' + str(best_rot) + '.pkl'), 'wb'))
+    def _save(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser'):
+        dump(self.data, open(path.join(dir, 'group_data_rot=' + str(self.best_rot) + '.pkl'), 'wb'))
         return None
 
     def _load(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser', best_rot=True):
         self.data = load(open(path.join(dir, 'group_data_rot=' + str(best_rot) + '.pkl'), 'rb'))
+        self.best_rot = best_rot
 
     def construct(self, types=['PFsm', 'PFus', 'PV1dboth', 'PV1dall'], best_rot=True,
                   pf_file='placefields_cm1_manlims_1000shuf.pkl', nshuf=1000):
@@ -1179,9 +1180,12 @@ class GroupPF:
 
             data_comb = [learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all]
             shuf_comb = [learn_shuf_all, nlearn_shuf_all, ani_shuf_all]
+
+            # Now organize everything nicely into a dictionary.
             self.data[type] = {'data': [], 'shuf': []}
             self.data[type]['data'] = {group: data for group, data in zip(groups, data_comb)}
             self.data[type]['shuf'] = {group: shuf for group, shuf in zip(groups, shuf_comb)}
+            self.data['best_rot'] = best_rot
 
     def scatter_epochs(self, arena1='Shock', arena2='Shock', groups=['Learners', 'Nonlearners', 'Ani'], type='PFsm',
                        group_desig=2, save_fig=False, ax_use=None):
@@ -1236,10 +1240,8 @@ class GroupPF:
                 fig.savefig(self.gen_savename('Confmat', type, arena1, arena2, self.best_rot))
 
     def scatterbar_bw_groups(self, groups=['Learners', 'Ani', 'Nonlearners'], type='PFsm',
-                             group_desig=2, save_fig=False, ax_use=None):
+                             group_desig=2, save_fig=False, match_yaxis=True):
         """Scatterbar plots between groups for all epochs at once?"""
-        match_yaxis = True
-        match_ylims = [-0.3, 0.6]
 
         # Set up data
         epoch_mat = []
@@ -1248,24 +1250,41 @@ class GroupPF:
             etemp, epoch_labels = get_time_epochs(nmice, group_desig)
             epoch_mat.append(etemp)
 
-        data_use = self.data[type]['data']
+        plot_title = 'No rotation'
+        if self.best_rot:
+            plot_title = 'Optimum rotation'
+
+
+        data_use, shuf_use = self.data[type]['data'], self.data[type]['shuf']
         epoch_nums = np.unique(epoch_mat[0][~np.isnan(epoch_mat[0])]).tolist()
-        axes, figs, savenames = []
+        axes, figs, savenames = [], [], []
+        nshuf = shuf_use[groups[0]][0].shape[3]
         for ide, epoch_num in enumerate(epoch_nums):
+            # Assemble actual data
             open_corrs = [data_use[group][0][epoch_mat[idg] == epoch_num] for idg, group in enumerate(groups)]
             shock_corrs = [data_use[group][1][epoch_mat[idg] == epoch_num] for idg, group in enumerate(groups)]
 
+            # Assemble shuffled data and get mean CIs for each group
+            open_CIs = [mean_CI(shuf_use[group][0].reshape(-1, nshuf)[epoch_mat[idg].reshape(-1) == epoch_num])
+                         for idg, group in enumerate(groups)]
+            shock_CIs = [mean_CI(shuf_use[group][1].reshape(-1, nshuf)[epoch_mat[idg].reshape(-1) == epoch_num])
+                         for idg, group in enumerate(groups)]
+
             fig, ax, pval, tstat = erp.pfcorr_compare(open_corrs, shock_corrs, group_names=groups,
                                                       xlabel=epoch_labels[ide], ylabel=type,
-                                                      xticklabels=['Open', 'Shock'])
+                                                      xticklabels=['Open', 'Shock'],
+                                                      CIs=[open_CIs, shock_CIs])
+
+            ax[0].set_title(plot_title)  # label plot
             # Track figure/axes handles and save names
-            axes.append(ax)
+            axes.append(ax[0])
             figs.append(fig)
             savename = path.join(err.pathname, type + ' 2x2 All Groups ' + epoch_labels[ide] + '.pdf')
             savenames.append(savename)
 
         # Now adjust axes to all have the same min/max values.
-        match_ax_lims(axes, type='y')
+        if match_yaxis:
+            match_ax_lims(axes, type='y')
 
         # Save all if indicated
         if save_fig:
@@ -1299,7 +1318,6 @@ class GroupPF:
         savename = path.join(err.pathname, prefix + '_' + type + '_' + arena1 + 'v'
                              + arena2 + '_best_rot=' + str(self.best_rot) + append + '.pdf')
         return savename
-
 
 # class PFrotObj:
 #     def __init__(self, mouse, arena1, day1, arena2, day2):

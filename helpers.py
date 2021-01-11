@@ -8,6 +8,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def get_CI(data, pct=95):
+    """Get mean and confidence intervals (at pct specified by input) for input data (size= n,).
+    :returns: ndarray of [CIbottom, mean, CItop]"""
+    qtop = 1 - (100 - pct) / 2 / 100
+    qbot = (100 - pct) / 2 / 100
+    return np.quantile(data, [qbot, 0.5, qtop])
+
+
+def mean_CI(data_list, pct=95):
+    """Get means of mean and upper/lower confidence interval for all data in data_list
+    e.g. if len(data_list)=4, spits out the mean of those 4 data arrays.
+    """
+    CIall = [get_CI(data, pct=pct) for data in data_list]
+
+    return np.nanmean(np.vstack(CIall), 0)
+
+
 def match_ax_lims(axes, type='y'):
     """Match axis limits across a list of different figure axes"""
     # Set up everything

@@ -846,7 +846,7 @@ def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar
 
 
 def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel='', ylabel='', xticklabels=['Open', 'Shock'],
-                   colors=sns.color_palette('Set2')):
+                   colors=sns.color_palette('Set2'), CIs=None):
     """
     Plots comparison of correlations in open v shock arena for two different groups
     :param open_corrs, shock_corrs: length 2 or 3 list with group correlations for 2 or 3 different groups. Note that this
@@ -856,6 +856,8 @@ def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel
     :param group_names: ['grp1', 'grp2'] by default. Colors = 'Set2' (color 1, 3, then 2)
     :param xticklabels: ['Open','Shock'] by default, adjust accordingly if using different groups in corrs above
     :param ax: custom axes to plot into.
+    :param CIs: if not None (default), plots mean and top/bottom CI for shuffled data for each group
+        input = length 2 list of [bottomCI, mean, topCI], 0th entry = open, 1st entry = Shock
     :return: fig, ax, pval, tstat: pval/test are ngrp x ngrp x 3 np arrays from t-tests where the last dimension is:
     0 = open v open (across groups only), 1 = shock v shock (across groups only), 2 = open v shock (within group only).
     """
@@ -876,6 +878,13 @@ def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel
         scatterbar(np.concatenate((open, shock)), np.concatenate((np.ones_like(open),
                    np.ones_like(shock)*2)), ax=ax[0], color=colors[idc], offset=offsets[idc], data_label=group_names[idc],
                    jitter=0.05)
+
+    if CIs is not None:
+        for group_num in [0, 1]:
+            lines = ax[0].plot(np.matlib.repmat(offsets, 3, 1).transpose() + group_num + 1,
+                               np.asarray(CIs[group_num]), 'k--')
+            lines[1].set_linestyle('-')  # set mean to solid line.
+        print('fill in CIplotting here')
 
     ax[0].set_xticks([1, 2])
     ax[0].set_xticklabels(xticklabels)
