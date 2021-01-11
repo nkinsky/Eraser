@@ -29,6 +29,7 @@ from pickle import load, dump
 from tqdm import tqdm
 import seaborn as sns
 import er_plot_functions as erp
+from helpers import match_ax_lims
 
 # Plotting settings
 palette = sns.color_palette('Set2')
@@ -1249,6 +1250,7 @@ class GroupPF:
 
         data_use = self.data[type]['data']
         epoch_nums = np.unique(epoch_mat[0][~np.isnan(epoch_mat[0])]).tolist()
+        axes, figs, savenames = []
         for ide, epoch_num in enumerate(epoch_nums):
             open_corrs = [data_use[group][0][epoch_mat[idg] == epoch_num] for idg, group in enumerate(groups)]
             shock_corrs = [data_use[group][1][epoch_mat[idg] == epoch_num] for idg, group in enumerate(groups)]
@@ -1256,9 +1258,18 @@ class GroupPF:
             fig, ax, pval, tstat = erp.pfcorr_compare(open_corrs, shock_corrs, group_names=groups,
                                                       xlabel=epoch_labels[ide], ylabel=type,
                                                       xticklabels=['Open', 'Shock'])
-            ax[0].set_ylim(match_ylims)  # NRK todo: automate this.
-            savename = path.join(err.pathname,  type + ' 2x2 All Groups ' + epoch_labels[ide] + '.pdf')
-            fig.savefig(savename)
+            # Track figure/axes handles and save names
+            axes.append(ax)
+            figs.append(fig)
+            savename = path.join(err.pathname, type + ' 2x2 All Groups ' + epoch_labels[ide] + '.pdf')
+            savenames.append(savename)
+
+        # Now adjust axes to all have the same min/max values.
+        match_ax_lims(axes, type='y')
+
+        # Save all if indicated
+        if save_fig:
+            [fig.savefig(savename) for fig, savename in zip(figs, savenames)]
 
     def figset(self, ax=None, nplots=[1, 1], size=[9.27, 3.36]):
         """Set up figure"""

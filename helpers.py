@@ -8,6 +8,31 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
+def match_ax_lims(axes, type='y'):
+    """Match axis limits across a list of different figure axes"""
+    # Set up everything
+    get_funcs, set_funcs = ['get_xlim', 'get_ylim'], ['set_xlim', 'set_ylim']
+    assert type in ['x', 'y']
+    getfuncstr = get_funcs[np.where([type == _ for _ in ['x', 'y']])[0][0]]
+    setfuncstr = set_funcs[np.where([type == _ for _ in ['x', 'y']])[0][0]]
+
+    # Now aggregate all min/max limits
+    mins, maxs = [], []
+    for ax in axes:
+        func_use = getattr(ax, getfuncstr)  # pull out appropriate axis limit function
+
+        mins.append(func_use()[0])
+        maxs.append(func_use()[1])
+
+    alims = [np.min(mins), np.max(maxs)]
+
+    # Now set limits for all axes
+    for ax in axes:
+        func_use = getattr(ax, setfuncstr)  # pull out appropriate axis limit function
+        func_use(alims)
+
+    return alims
+
 def find_epochs(timeseries, thresh=np.finfo(float).eps, omitends=False):
     """
     Get continuous epochs in timeseries that are above a threshold
