@@ -347,11 +347,11 @@ def get_pos(dir_use):
     try:  # look in either freezeframe directory or base directory
         pos_file = path.join(dir_use + '\FreezeFrame', 'pos.csv')
         temp = pd.read_csv(pos_file, header=None)
-        pos = temp.as_matrix()
+        pos = temp.values
     except IOError:  # look in base directory if above is missing # FileNotFoundError is IOError in earlier versions
         pos_file = path.join(dir_use, 'pos.csv')
         temp = pd.read_csv(pos_file, header=None)
-        pos = temp.as_matrix()
+        pos = temp.values
 
     return pos
 
