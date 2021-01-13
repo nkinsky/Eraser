@@ -195,7 +195,7 @@ for idg, group in enumerate(np.unique(lgroups[~np.isnan(lgroups)]).tolist()):
 
 ##  Plot day-by-day correlations
 titles = ['Learners', 'Non-learners', 'Anisomycin']
-fig, axuse = plt.subplots(3,1)
+fig, axuse = plt.subplots(3, 1)
 fig.set_size_inches([10.1, 9.2])
 for idd, data in enumerate([learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all]):
     nmice = data[0].shape[0]
