@@ -66,7 +66,7 @@ def get_PV1(mouse, arena, day, speed_thresh=1.5, session_index=None, pf_file='pl
     return PV1
 
 
-def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5,
+def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, half=None,
                 lims_method='auto', save_file='placefields_cm1.pkl', list_dir=master_directory):
     """
     Make placefields of each neuron. Ported over from Will Mau's/Dave Sullivan's MATLAB
@@ -134,8 +134,15 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5,
     xrun = pos_align[0, isrunning]
     yrun = pos_align[1, isrunning]
     PSAboolrun = PSAbool_align[:, isrunning]
-    # xBinrun = xBin[isrunning]
-    # yBinrun = yBin[isrunning]
+
+    # Break up session into halves if necessary.
+    if half is not None:
+        half_id = np.floor(len(xrun) / 2).astype('int')
+        if half == 1:
+            xrun, yrun, PSAboolrun = xrun[:half_id], yrun[:half_id], PSAboolrun[:, :half_id]
+        elif half == 2:
+            xrun, yrun, PSAboolrun = xrun[half_id:], yrun[half_id:], PSAboolrun[:, half_id:]
+
     nGood = len(xrun)
 
     # Construct place field and compute mutual information
