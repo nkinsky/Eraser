@@ -714,7 +714,7 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_fil
     return best_corr_mean, best_rot, corr_mean_all
 
 
-def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True,
+def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, shuf_mat=None, save_fig=True,
                         color='b', ax_use=None, offset=0, group_desig=1, best_rot=False,
                         prefix='PFcorrs', linetype='-'):
     """
@@ -723,6 +723,7 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
     :param arena1: 'Shock' or 'Neutral'
     :param arena2:
     :param group_type: e.g. 'Control' or 'Anisomycin'
+    :param shuf_mat: if supplied, calculated 95% CIs and plots on figure.
     :param save_fig: default = 'True' to save to eraser figures folder
     :param group_desig: 1 = include day 7 in post-shock plots, 2 = do not include day 7
     :param best_rot: True/False/Nan: add to title if 2d pf corrs performed at best rotation between arenas
@@ -757,15 +758,30 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, save_fig=True
     ax.set_title(group_type)
     unique_epochs = np.unique(epochs[~np.isnan(epochs)])
     corr_means = []
+
+    # Plot data for each epoch
     for epoch_num in unique_epochs:
         corr_means.append(np.nanmean(corr_mean_mat[epochs == epoch_num]))
     axl = ax.plot(unique_epochs, corr_means, linetype, color=color)
+
+    # Plot CIs if shuffled data provided
+    aCI = None
+    CIs = []
+    if shuf_mat is not None:
+        nshuf = shuf_mat.shape[3]
+        for epoch_num in unique_epochs:
+            CIs.append(mean_CI(shuf_mat.reshape(-1, nshuf)[epochs.reshape(-1) == epoch_num]))
+        aCI = ax.plot(np.matlib.repmat(unique_epochs, 3, 1).transpose(), np.asarray(CIs), 'k--')
+        aCI[1].set_linestyle('-')
+        [a.set_color([0, 0, 0, 0.5]) for a in aCI]
+
+
     if save_fig:
         fig.savefig(path.join(err.pathname, prefix + ' ' + arena1 + ' v '
                     + arena2 + ' ' + group_type + 'group_desig' + str(group_desig) + 'best_rot' + str(best_rot) +
                     '.pdf'))
 
-    return fig, ax, ascat, axl
+    return fig, ax, ascat, axl, aCI
 
 
 def get_time_epochs(nmice, group_desig=1):
@@ -1201,7 +1217,7 @@ class GroupPF:
 
         # Set up plots
         fig, ax = self.figset(ax_use)
-        idc = self.idmat(arena1, arena2)
+        idc = self.idmat(arena1, arena2)  # pick out correct index for correlation matrix...
         save_flag = False  # Set up saving plots
 
         ascat, axlines = [], []
@@ -1209,16 +1225,17 @@ class GroupPF:
         for idg, group in enumerate(groups):
             if idg == (len(groups) - 1) and save_fig is True:
                 save_flag = True
-
-            _, _, atemp, axl = plot_pfcorr_bygroup(self.data[type]['data'][group][idc], arena1, arena2,
+            shuf_use = self.data[type]['shuf'][group][idc]
+            _, _, atemp, axl, aCI = plot_pfcorr_bygroup(self.data[type]['data'][group][idc], arena1, arena2,
                                                    type + ' Correlations ' + arena1 + ' v ' + arena2,
+                                                   best_rot=self.best_rot, shuf_mat=shuf_use,
                                                    ax_use=ax, color=palette[idg], offset=-0.1, save_fig=save_flag,
                                                    group_desig=group_desig, linetype=linetypes[idg])
             ascat.append(atemp)
             axlines.append(axl)
         ax.legend(groups)
 
-        return fig, ax, ascat, axlines
+        return fig, ax, ascat, axlines, aCI
 
     def plot_conf(self, arena1='Shock', arena2='Shock', groups=['Learners', 'Nonlearners', 'Ani'], type='PFsm',
                        save_fig=False, ax_use=None):
@@ -1334,7 +1351,7 @@ class GroupPF:
 if __name__ == '__main__':
     pfg = GroupPF()
     pfg._load()
-    pfg.scatterbar_bw_groups()
+    pfg.scatter_epochs()
 
     pass
 
