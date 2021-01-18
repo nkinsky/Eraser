@@ -829,7 +829,7 @@ def get_seq_time_pairs(nmice):
     # Define pairs for scatter plots
     pairs = np.ones((7, 7)) * np.nan
     pair_labels = ['-2 v -1', '-1 v 4hr', '4 hr v 1', '1 v 2', '2 v 7']
-    pair_ids = [0, 1, 3, 4, 5]
+    pair_ids = [0, 1, 2, 3, 4]
     for idd in pair_ids:
         pairs[idd, idd+1] = idd
 
@@ -1202,6 +1202,41 @@ class GroupPF:
             self.data[type]['data'] = {group: data for group, data in zip(groups, data_comb)}
             self.data[type]['shuf'] = {group: shuf for group, shuf in zip(groups, shuf_comb)}
             self.data['best_rot'] = best_rot
+
+    def scatterbar_bw_days(self, type='PFsm', ax_use=None):
+        # Set up plots
+        fig, ax = self.figset(ax_use, nplots=[3, 1], size=[10.1, 9.2])
+        save_flag = False  # Set up saving plots
+        data_dict, shuf_dict = self.data[type]['data'], self.data[type]['shuf']
+        titles = list(data_dict.keys())
+        for idd, (data, shuf) in enumerate(zip(data_dict.values(), shuf_dict.values())):
+            nmice = data[0].shape[0]
+            pairs, labels = get_seq_time_pairs(nmice)
+
+            # Plot data
+            erp.scatterbar(data[0][~np.isnan(pairs)], pairs[~np.isnan(pairs)], data_label='Neutral', offset=-0.125,
+                           jitter=0.05, color='k', ax=ax[idd])
+            erp.scatterbar(data[1][~np.isnan(pairs)], pairs[~np.isnan(pairs)], data_label='Shock', offset=0.125,
+                           jitter=0.05, color='r', ax=ax[idd])
+
+            # Plot shuffled CIs
+            nshuf = shuf[0].shape[3]
+            if nshuf > 0:
+                unique_pairs = np.unique(pairs[~np.isnan(pairs)])
+                for id, lstyle in enumerate(['k--', 'r--']):  # plot each CI independently for now, will need to take average if things all look the same
+                    CI = np.asarray([mean_CI(shuf[id].reshape(-1, nshuf)[pairs.reshape(-1) == pair_id])
+                                            for pair_id in unique_pairs])
+                    CIlines = ax[idd].plot(np.matlib.repmat(unique_pairs, 3, 1).transpose(), CI, lstyle)
+                    CIlines[1].set_linestyle('-')
+
+            ax[idd].set_title(titles[idd] + ': ' + type)
+            ax[idd].set_xticks(np.unique(pairs[~np.isnan(pairs)]))
+            ax[idd].set_xticklabels(labels)
+            if idd == 2:
+                ax[idd].legend()
+
+        return ax
+
 
     def scatter_epochs(self, arena1='Shock', arena2='Shock', groups=['Learners', 'Nonlearners', 'Ani'], type='PFsm',
                        group_desig=2, save_fig=False, ax_use=None):
