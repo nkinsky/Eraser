@@ -884,7 +884,6 @@ def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel
             lines = ax[0].plot(np.matlib.repmat(offsets, 3, 1).transpose() + group_num + 1,
                                np.asarray(CIs[group_num]), 'k--')
             lines[1].set_linestyle('-')  # set mean to solid line.
-        print('fill in CIplotting here')
 
     ax[0].set_xticks([1, 2])
     ax[0].set_xticklabels(xticklabels)
