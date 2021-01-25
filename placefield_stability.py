@@ -680,6 +680,7 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, pf_fil
             corr_mean_all[0, idr] = corrs_us.mean(axis=0)
             corr_mean_all[1, idr] = corrs_sm.mean(axis=0)
 
+        corr_mean_all[np.isnan(corr_mean_all)] = -1  # Set all nan-values to -1 (occurs when there is NO overlap bw occupancy).
         best_rot = np.array(rots)[corr_mean_all.argmax(axis=1)]
         best_corr_mean = corr_mean_all.max(axis=1)
 
@@ -1009,7 +1010,7 @@ class PFCombineObject:
         reg_session = sd.find_eraser_session(mouse, arena2, day2)
         good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
         good_map = neuron_map[good_map_bool].astype(np.int64)
-        good_map_ind, _ = np.where(good_map_bool)
+        good_map_ind = np.where(good_map_bool)[0]
         self.nneurons = len(good_map_ind)
 
         # For loop to dump all PFs into matching lists for easy later scrolling!
@@ -1175,7 +1176,7 @@ class GroupPF:
                     _, tempnl, _, temp_sh_nl = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days,
                                                                   best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
                     _, tempa, _, temp_sh_a = get_group_pf_corrs(self.amice, arena1, arena2, self.days,
-                                                  best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
+                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
                 elif type == 'PFus':
                     templ, _, temp_sh_l, _ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days,
                                                                 best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
@@ -1389,9 +1390,8 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    pfg = GroupPF()
-    pfg._load()
-    pfg.scatter_epochs()
+    get_best_rot('Marble29', 'Shock', 1, 'Shock', 2)
+    pfc = PFCombineObject('Marble29', 'Shock', 1, 'Shock', 2)
 
     pass
 
