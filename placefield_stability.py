@@ -829,9 +829,14 @@ def get_seq_time_pairs(nmice):
     # Define pairs for scatter plots
     pairs = np.ones((7, 7)) * np.nan
     pair_labels = ['-2 v -1', '-1 v 4hr', '4 hr v 1', '1 v 2', '2 v 7']
-    pair_ids = [0, 1, 2, 3, 4]
-    for idd in pair_ids:
-        pairs[idd, idd+1] = idd
+    pairs[0, 1] = 0  # Day -2 v -1
+    pairs[1, 3] = 1  # -1 v 4hr
+    pairs[3, 4] = 2  # 4hr v 1
+    pairs[4, 5] = 3  # 1 v 2
+    pairs[5, 6] = 4  # 2 v 7
+    # pair_ids, grps = [0, 1, 3, 4, 5], [0, 1, 2, 3, 4]
+    # for ind, idd in enumerate(pair_ids):
+    #     pairs[idd, idd+1] = grps[ind]
 
     # now shape and repeat matrix to shape (nmice, 7, 7)
     pairs = np.moveaxis(np.repeat(pairs[:, :, np.newaxis], nmice, 2), 2, 0)
