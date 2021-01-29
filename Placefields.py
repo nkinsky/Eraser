@@ -67,7 +67,8 @@ def get_PV1(mouse, arena, day, speed_thresh=1.5, session_index=None, pf_file='pl
 
 
 def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, half=None,
-                lims_method='auto', save_file='placefields_cm1.pkl', list_dir=master_directory):
+                lims_method='auto', save_file='placefields_cm1.pkl', list_dir=master_directory,
+                save=True, align_from_end=False):
     """
     Make placefields of each neuron. Ported over from Will Mau's/Dave Sullivan's MATLAB
     function
@@ -81,6 +82,9 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
     :param nshuf: number of shuffles to perform for determining significance
     :param speed_thresh: speed threshold in cm/s
     :param save_file: default = 'placefields_cm1.pkl'
+    :param save: True (default) = save file above, False = do not save
+    :param align_from_end: False (default) align data assuming start of neural/behavioral data acquisition was
+    synchronized, True = use end time-points to align (in case of bad triggering at beginning but good at end).
     :return:
     """
 
@@ -109,7 +113,7 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
 
     # Align imaging and position data
     pos_align, speed_align, PSAbool_align, time_interp = \
-        align_imaging_to_tracking(pos_cm, speed_cm, t_track, PSAbool, sr_image)
+        align_imaging_to_tracking(pos_cm, speed_cm, t_track, PSAbool, sr_image, align_from_end=align_from_end)
 
     # Smooth speed data for legitimate thresholding, get limits of data
     speed_sm = np.convolve(speed_align, np.ones(2*int(sr))/(2*sr), mode='same')  # smooth speed
@@ -184,9 +188,11 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
     PFobj = PlaceFieldObject(tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
                  xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
                  speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, list_dir, nshuf, sr_image)
-    PFobj.save_data(filename=save_file)
 
-    return occmap, runoccmap, xEdges, yEdges, xBin, yBin, tmap_us, tmap_gauss, tcounts, xrun, yrun, PSAboolrun, pval
+    if save:
+        PFobj.save_data(filename=save_file)
+
+    return PFobj
 
 
 def makeoccmap(pos_cm, lims, good, isrunning, cmperbin):

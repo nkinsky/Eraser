@@ -31,7 +31,7 @@ import eraser_reference as err
 #             print('Error for ' + mouse_use + ' day ' + str(day))
 
 # 1st plot all trajectories for a mouse and then manually align them with the same range of x/y values
-mouse_use = 'Marble25'
+mouse_use = 'Marble06'
 day_des = [-2, -1, 0, 4, 1, 2, 7]  # keep this as-is or lots of code will break
 arenas_use = ['Open', 'Shock']
 
