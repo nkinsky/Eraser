@@ -394,7 +394,8 @@ def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
 
 
 def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl',
-                    rot_deg=0, shuf_map=False, debug=False, batch_map_use=False, speed_threshold=True):
+                    rot_deg=0, shuf_map=False, debug=False, batch_map_use=False, speed_threshold=True,
+                    keep_poor_overlap=False):
     """
     Gets placefield correlations between sessions. Note that
     :param mouse:
@@ -466,11 +467,12 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
 
         # exclude any correlations that would throw a scipy.stats.spearmanr RuntimeWarning due to
         # # poor overlap after rotation...
-        # NRK Note: can't implement this because if messes up PFCombine.pfscroll()
-        # if not poor_overlap_us: corrs_us.append(corr_us)
-        # if not poor_overlap_sm: corrs_sm.append(corr_sm)
-        corrs_us.append(corr_us)
-        corrs_sm.append(corr_sm)
+        if keep_poor_overlap: # This is necessary to make pfscroll work
+            corrs_us.append(corr_us)
+            corrs_sm.append(corr_sm)
+        elif not keep_poor_overlap:
+            if not poor_overlap_us: corrs_us.append(corr_us)
+            if not poor_overlap_sm: corrs_sm.append(corr_sm)
 
     corrs_us, corrs_sm = np.asarray(corrs_us), np.asarray(corrs_sm)
 
@@ -1038,7 +1040,8 @@ class PFCombineObject:
 
         # Get correlations between sessions! Note these are not speed-thresholded (quick bug fix).
         self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
-                                                       pf_file=pf_file, debug=debug, speed_threshold=False)
+                                                       pf_file=pf_file, debug=debug, speed_threshold=False,
+                                                       keep_poor_overlap=True)
 
     def pfscroll(self, current_position=0, pval_thresh=1, best_rot=False):
         """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
@@ -1400,7 +1403,7 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    pfc = PFCombineObject('Marble29', 'Shock', 1, 'Shock', 2)
+    pfc = PFCombineObject('Marble06', 'Shock', -2, 'Shock', -1)
     pfc.pfscroll()
 
     pass
