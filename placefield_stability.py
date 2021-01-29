@@ -394,7 +394,7 @@ def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
 
 
 def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl',
-                    rot_deg=0, shuf_map=False, debug=False, batch_map_use=False):
+                    rot_deg=0, shuf_map=False, debug=False, batch_map_use=False, speed_threshold=True):
     """
     Gets placefield correlations between sessions. Note that
     :param mouse:
@@ -422,13 +422,16 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     valid_neurons_reg = neuron_map[valid_map_bool].astype(np.int64)
     valid_neurons_base = np.where(valid_map_bool)[0]
 
-    # Identify mapped neurons with least one calcium event after speed thresholding
-    run_events_bool = np.bitwise_and(PF1.PSAboolrun[valid_neurons_base, :].sum(axis=1) > 0,
-                                     PF2.PSAboolrun[valid_neurons_reg, :].sum(axis=1) > 0)
+    if speed_threshold:
+        # Identify mapped neurons with least one calcium event after speed thresholding
+        run_events_bool = np.bitwise_and(PF1.PSAboolrun[valid_neurons_base, :].sum(axis=1) > 0,
+                                         PF2.PSAboolrun[valid_neurons_reg, :].sum(axis=1) > 0)
 
-    # Refine map again to only include active neurons after speed thresholding
-    good_neurons_base = valid_neurons_base[run_events_bool]
-    good_neurons_reg = valid_neurons_reg[run_events_bool].astype(np.int64)
+        # Refine map again to only include active neurons after speed thresholding
+        good_neurons_base = valid_neurons_base[run_events_bool]
+        good_neurons_reg = valid_neurons_reg[run_events_bool].astype(np.int64)
+    elif not speed_threshold:
+        good_neurons_base, good_neurons_reg = valid_neurons_base, valid_neurons_reg
 
     # Shuffle mapping between sessions if specified
     if shuf_map:
@@ -463,8 +466,11 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
 
         # exclude any correlations that would throw a scipy.stats.spearmanr RuntimeWarning due to
         # # poor overlap after rotation...
-        if not poor_overlap_us: corrs_us.append(corr_us)
-        if not poor_overlap_sm: corrs_sm.append(corr_sm)
+        # NRK Note: can't implement this because if messes up PFCombine.pfscroll()
+        # if not poor_overlap_us: corrs_us.append(corr_us)
+        # if not poor_overlap_sm: corrs_sm.append(corr_sm)
+        corrs_us.append(corr_us)
+        corrs_sm.append(corr_sm)
 
     corrs_us, corrs_sm = np.asarray(corrs_us), np.asarray(corrs_sm)
 
@@ -1030,9 +1036,9 @@ class PFCombineObject:
         self.PSAalign2 = self.PF2.PSAbool_align[good_map, :]
         self.pval1_reg = [self.PF1.pval[a] for a in good_map_ind]
 
-        # Get correlations between sessions!
+        # Get correlations between sessions! Note these are not speed-thresholded (quick bug fix).
         self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
-                                                       pf_file=pf_file, debug=debug)
+                                                       pf_file=pf_file, debug=debug, speed_threshold=False)
 
     def pfscroll(self, current_position=0, pval_thresh=1, best_rot=False):
         """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
@@ -1235,7 +1241,11 @@ class GroupPF:
                     CIlines = ax[idd].plot(np.matlib.repmat(unique_pairs, 3, 1).transpose(), CI, lstyle)
                     CIlines[1].set_linestyle('-')
 
-            ax[idd].set_title(titles[idd] + ': ' + type)
+            if self.best_rot:
+                title_append = ' at optimal rotation'
+            elif not self.best_rot:
+                title_append= ' no rotation'
+            ax[idd].set_title(titles[idd] + ': ' + type + title_append)
             ax[idd].set_xticks(np.unique(pairs[~np.isnan(pairs)]))
             ax[idd].set_xticklabels(labels)
             if idd == 2:
@@ -1390,8 +1400,8 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    get_best_rot('Marble29', 'Shock', 1, 'Shock', 2)
     pfc = PFCombineObject('Marble29', 'Shock', 1, 'Shock', 2)
+    pfc.pfscroll()
 
     pass
 
