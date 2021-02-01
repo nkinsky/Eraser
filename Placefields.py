@@ -20,6 +20,7 @@ from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos, p
 # from progressbar import ProgressBar  # NK need a better version of this
 from tqdm import tqdm
 from pickle import dump, load
+from matplotlib import get_backend
 
 # Might want these later
 # import csv
@@ -85,6 +86,8 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
     :param save: True (default) = save file above, False = do not save
     :param align_from_end: False (default) align data assuming start of neural/behavioral data acquisition was
     synchronized, True = use end time-points to align (in case of bad triggering at beginning but good at end).
+    :param half: None (default) = run whole session, 1 = run 1st half only, 2 = run 2nd half only, (odd/even not yet
+    implemented as of 2021_02_01).
     :return:
     """
 
@@ -130,6 +133,14 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
     isrunning = good
     isrunning[speed_sm < speed_thresh] = False
 
+    # Break up session into halves if necessary.
+    if half is not None:
+        half_id = np.floor(len(isrunning) / 2).astype('int')
+        if half == 1:
+            isrunning[half_id:] = False
+        elif half == 2:
+            isrunning[:half_id] = False
+
     # Get the mouse's occupancy in each spatial bin
     occmap, runoccmap, xEdges, yEdges, xBin, yBin = \
         makeoccmap(pos_align, lims, good, isrunning, cmperbin)
@@ -139,13 +150,13 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
     yrun = pos_align[1, isrunning]
     PSAboolrun = PSAbool_align[:, isrunning]
 
-    # Break up session into halves if necessary.
-    if half is not None:
-        half_id = np.floor(len(xrun) / 2).astype('int')
-        if half == 1:
-            xrun, yrun, PSAboolrun = xrun[:half_id], yrun[:half_id], PSAboolrun[:, :half_id]
-        elif half == 2:
-            xrun, yrun, PSAboolrun = xrun[half_id:], yrun[half_id:], PSAboolrun[:, half_id:]
+    # Break up session into halves if specified.
+    # if half is not None:
+    #     half_id = np.floor(len(xrun) / 2).astype('int')
+    #     if half == 1:
+    #         xrun, yrun, PSAboolrun = xrun[:half_id], yrun[:half_id], PSAboolrun[:, :half_id]
+    #     elif half == 2:
+    #         xrun, yrun, PSAboolrun = xrun[half_id:], yrun[half_id:], PSAboolrun[:, half_id:]
 
     nGood = len(xrun)
 
@@ -497,7 +508,7 @@ class PlaceFieldObject:
         with open(save_file, 'wb') as output:
             dump(self, output)
 
-    def pfscroll(self, current_position=0, pval_thresh=1, plot_xy=False):
+    def pfscroll(self, current_position=0, pval_thresh=1, plot_xy=False, link_PFO=None):
         """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
         and unsmoothed tmaps in another
 
@@ -506,11 +517,15 @@ class PlaceFieldObject:
         :param pval_thresh: default = 1. Only scroll through neurons with pval (based on mutual information scores
         calculated after circularly permuting calcium traces/events) < pval_thresh
         :param plot_xy: plot x and y position versus time with calcium activity indicated in red.
+        :param link_PFO: placefield object to link to for matched scrolling.
         :return:
         """
 
         # Get only spatially tuned neurons: those with mutual spatial information pval < pval_thresh
-        spatial_neurons = np.where([a < pval_thresh for a in self.pval])[0]
+        if self.nshuf > 0:
+            spatial_neurons = np.where([a < pval_thresh for a in self.pval])[0]
+        elif self.nshuf == 0:
+            spatial_neurons = np.arange(0, self.nneurons, 1)
 
         # Plot frame and position of mouse.
         titles = ["Neuron " + str(n) for n in spatial_neurons]  # set up array of neuron numbers
@@ -525,7 +540,7 @@ class PlaceFieldObject:
                                 traj_lims=lims, PSAbool=self.PSAboolrun[spatial_neurons, :],
                                 tmap_us=[self.tmap_us[a] for a in spatial_neurons],
                                 tmap_sm=[self.tmap_sm[a] for a in spatial_neurons],
-                                mouse=self.mouse, arena=self.arena, day=self.day)
+                                mouse=self.mouse, arena=self.arena, day=self.day, link_obj=link_PFO)
         elif plot_xy:
             self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm, plot_psax, plot_psay),
                                 current_position=current_position, n_neurons=len(spatial_neurons),
@@ -534,7 +549,26 @@ class PlaceFieldObject:
                                 traj_lims=lims, PSAbool=self.PSAboolrun[spatial_neurons, :],
                                 tmap_us=[self.tmap_us[a] for a in spatial_neurons],
                                 tmap_sm=[self.tmap_sm[a] for a in spatial_neurons],
-                                mouse=self.mouse, arena=self.arena, day=self.day, sample_rate=self.sr_image[0][0])
+                                mouse=self.mouse, arena=self.arena, day=self.day, sample_rate=self.sr_image[0][0],
+                                link_obj=link_PFO)
+
+
+class PlaceFieldHalf:
+    def __init__(self, mouse, arena, day, nshuf=0):
+        self.PF1 = placefields(mouse, arena, day, nshuf=nshuf, half=1)
+        self.PF2 = placefields(mouse, arena, day, nshuf=nshuf, half=2)
+
+    def pfscroll(self):
+        self.PF1.pfscroll()
+        if get_backend() == 'Qt5Agg':
+            plt.get_current_fig_manager().window.setGeometry(145, 45, 1245, 420)
+        else:
+            self.PF1.f.fig.set_size_inches([12.4, 3.6])
+        self.PF2.pfscroll(link_PFO=self.PF1.f)
+        if get_backend() == 'Qt5Agg':
+            plt.get_current_fig_manager().window.setGeometry(145, 525, 1245, 420)
+        else:
+            self.PF2.f.fig.set_size_inches([12.4, 3.6])
 
 
 if __name__ == '__main__':
