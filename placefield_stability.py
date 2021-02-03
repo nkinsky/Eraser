@@ -423,6 +423,8 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     valid_neurons_reg = neuron_map[valid_map_bool].astype(np.int64)
     valid_neurons_base = np.where(valid_map_bool)[0]
 
+    # Eliminate neurons that are only active during immobility - will encounter errors trying to calculate correlations
+    # using their all-zero transient maps.
     if speed_threshold:
         # Identify mapped neurons with least one calcium event after speed thresholding
         run_events_bool = np.bitwise_and(PF1.PSAboolrun[valid_neurons_base, :].sum(axis=1) > 0,
@@ -445,22 +447,52 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     rot = int(rot_deg/90)
     no_run_events_bool = np.ones(ngood, dtype=bool)
 
+    # First get rid of any non-validly mapped neurons
+    tmaps1_us_valid = [PF1.tmap_us[neuron] for neuron in good_neurons_base]
+    tmaps1_sm_valid = [PF1.tmap_sm[neuron] for neuron in good_neurons_base]
+    tmaps2_us_valid = [PF2.tmap_us[rneuron] for rneuron in good_neurons_reg]
+    tmaps2_sm_valid = [PF2.tmap_sm[rneuron] for rneuron in good_neurons_reg]
+
+    # Next rotate session 2 maps if specified
+    if rot_deg != 0:
+        tmaps2_us_rot = rotate_tmaps(tmaps2_us_valid, rot_deg)
+        tmaps2_sm_rot = rotate_tmaps(tmaps2_sm_valid, rot_deg)
+    elif rot_deg == 0:
+        tmaps2_us_rot, tmaps2_sm_rot = tmaps2_us_valid, tmaps2_sm_valid
+
+    # Next, reshape tmaps from session 2 if doing across arena comparisons
+    if rot == 0 and arena1 == arena2:
+        tmaps2_us_use, tmaps2_sm_use = tmaps2_us_rot, tmaps2_sm_rot
+    else:
+        tmap1_shape = tmaps1_us_valid[0].shape
+        tmaps2_us_use = rescale_tmaps(tmaps2_us_rot, tmap1_shape)
+        tmaps2_sm_use = rescale_tmaps(tmaps2_sm_rot, tmap1_shape)
+
+    # Finally do your correlations!
+    corrs_us = get_pf_corrs(tmaps1_us_valid, tmaps2_us_use, keep_poor_overlap=keep_poor_overlap)
+    corrs_sm = get_pf_corrs(tmaps1_sm_valid, tmaps2_sm_use, keep_poor_overlap=keep_poor_overlap)
+
+    # Old, overly dense code below
     for base_neuron, reg_neuron in zip(good_neurons_base, good_neurons_reg):
 
         # if debug and base_neuron == 364:  # for debugging nans in sstats.spearmanr
         try:
             if rot == 0 and arena1 == arena2:  # Do correlations directly if possible
-                corr_us, p_us, poor_overlap_us = spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1), PF2.tmap_us[reg_neuron].reshape(-1))
+                corr_us, p_us, poor_overlap_us = spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1),
+                                                               PF2.tmap_us[reg_neuron].reshape(-1))
 
-                corr_sm, p_sm, poor_overlap_sm = spearmanr_nan(PF1.tmap_sm[base_neuron].reshape(-1), PF2.tmap_sm[reg_neuron].reshape(-1))
+                corr_sm, p_sm, poor_overlap_sm = spearmanr_nan(PF1.tmap_sm[base_neuron].reshape(-1),
+                                                               PF2.tmap_sm[reg_neuron].reshape(-1))
 
             else:  # rotate and resize PF2 before doing corrs if rotations are specified
                 PF1_size = PF1.tmap_us[0].shape
-                corr_us, p_us, poor_overlap_us = spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1), np.reshape(sk_resize(np.rot90(
-                    PF2.tmap_us[reg_neuron], rot), PF1_size, anti_aliasing=True), -1))
+                corr_us, p_us, poor_overlap_us = spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1),
+                                                               np.reshape(sk_resize(np.rot90(PF2.tmap_us[reg_neuron], rot),
+                                                                                    PF1_size, anti_aliasing=True), -1))
 
-                corr_sm, p_sm, poor_overlap_sm = spearmanr_nan(np.reshape(PF1.tmap_sm[base_neuron], -1), np.reshape(sk_resize(np.rot90(
-                    PF2.tmap_sm[reg_neuron], rot), PF1_size, anti_aliasing=True), -1))
+                corr_sm, p_sm, poor_overlap_sm = spearmanr_nan(np.reshape(PF1.tmap_sm[base_neuron], -1),
+                                                               np.reshape(sk_resize(np.rot90(PF2.tmap_sm[reg_neuron], rot),
+                                                                                    PF1_size, anti_aliasing=True), -1))
         except RuntimeWarning:  # Note you will have to enable warnings for this to work a la >> import warnings, >>warnings.filterwarnings('error', category=RuntimeWarning)
             print('RunTimeWarning Encountered in some basic scipy/numpy functions - should probably debug WHY this is happening')
             print('Base_neuron = ' + str(base_neuron))
@@ -477,6 +509,64 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     corrs_us, corrs_sm = np.asarray(corrs_us), np.asarray(corrs_sm)
 
     return corrs_us, corrs_sm
+
+
+def get_pf_corrs(tmaps1, tmaps2, keep_poor_overlap=False):
+    """
+    get correlations between matching transient event maps in lists
+    :param tmaps1: list of 2d or 1d transient event maps from 1st session, each an ndarray
+    :param tmaps2: list of event maps for session2 for the same neurons as in tmaps1
+    :param keep_poor_overlap: boolean, True = keep all corrs, even if Nan, False(default) = exclude those where the
+    animal does not occupy any of the same spatial bins from session 1 to session 2
+    :return:
+    """
+
+    corrs = []
+    for tmap1, tmap2 in zip(tmaps1, tmaps2):
+        try:
+            corr, p, poor_overlap = spearmanr_nan(tmap1.reshape(-1), tmap2.reshape(-1))
+
+        except RuntimeWarning:  # Note you will have to enable warnings for this to work a la >> import warnings, >>warnings.filterwarnings('error', category=RuntimeWarning)
+            print('RunTimeWarning Encountered in some basic scipy/numpy functions in ""get_pf_corrs" - should probably debug WHY this is happening')
+
+        # exclude any correlations that would throw a scipy.stats.spearmanr RuntimeWarning due to
+        # # poor overlap after rotation...
+        if keep_poor_overlap: # This is necessary to make pfscroll work
+            corrs.append(corr)
+        elif not keep_poor_overlap:
+            if not poor_overlap:
+                corrs.append(corr)
+
+    return corrs
+
+
+def rescale_tmaps(tmaps, new_size):
+    """
+    Resize all transient maps in tmaps to roughly match the shape specified in new_size
+    :param tmaps: list of tmaps
+    :param new_size: shape = (2,) list or tuple with shape to rescale to
+    :return: list of reshaped tmaps
+    """
+    tmaps_rescale = []
+    for tmap in tmaps:
+            tmaps_rescale.append(sk_resize(tmap, new_size, anti_aliasing=True))
+
+    return tmaps_rescale
+
+
+def rotate_tmaps(tmaps, rot_deg):
+    """
+        Rotate all transient maps in tmaps in 90 degree increments
+        :param tmaps: list of tmaps
+        :param rot_deg: int, # degrees to rotate map, must be 90 degree increments
+        :return: list of rotated tmaps
+        """
+    rot = int(rot_deg / 90)
+    tmaps_rot = []
+    for tmap in tmaps:
+        tmaps_rot.append(np.rot90(tmap, rot))
+
+    return tmaps_rot
 
 
 def compare_pf_at_bestrot(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7],
@@ -998,6 +1088,29 @@ def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nsh
             get_all_PV1corrs(mouse, arena1, arena2, days, nshuf=nshuf)
 
     return PV1_all_all, PV1_both_all, PV1_both_shuf, PV1_all_shuf
+
+
+class PlaceFieldHalf:
+    def __init__(self, mouse, arena, day, nshuf=0):
+        self.PF1 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=1)
+        self.PF2 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=2)
+
+    def pfscroll(self):
+        self.PF1.pfscroll()
+        if plt.get_backend() == 'Qt5Agg':
+            plt.get_current_fig_manager().window.setGeometry(145, 45, 1245, 420)
+        else:
+            self.PF1.f.fig.set_size_inches([12.4, 3.6])
+        self.PF2.pfscroll(link_PFO=self.PF1.f)
+        if plt.get_backend() == 'Qt5Agg':
+            plt.get_current_fig_manager().window.setGeometry(145, 525, 1245, 420)
+        else:
+            self.PF2.f.fig.set_size_inches([12.4, 3.6])
+
+    def calc_half_corrs(self):
+        self.tmap_us_corrs = get_pf_corrs(self.PF1.tmap_us, self.PF2.tmap_us)
+        self.tmap_sm_corrs = get_pf_corrs(self.PF1.tmap_sm, self.PF2.tmap_sm)
+
 
 
 ## Object to map and view placefields for same neuron mapped between different sessions
