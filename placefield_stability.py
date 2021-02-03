@@ -441,8 +441,6 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
         good_neurons_reg = np.random.permutation(good_neurons_reg)
     ngood = len(good_neurons_base)
 
-    corrs_us, corrs_sm = [], []  # Initialize correlation lists
-
     # Step through each mapped neuron and get corrs between each
     rot = int(rot_deg/90)
     no_run_events_bool = np.ones(ngood, dtype=bool)
@@ -473,6 +471,7 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     corrs_sm = get_pf_corrs(tmaps1_sm_valid, tmaps2_sm_use, keep_poor_overlap=keep_poor_overlap)
 
     # Old, overly dense code below
+    corrs_us_old, corrs_sm_old = [], []  # Initialize correlation lists
     for base_neuron, reg_neuron in zip(good_neurons_base, good_neurons_reg):
 
         # if debug and base_neuron == 364:  # for debugging nans in sstats.spearmanr
@@ -500,13 +499,13 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
         # exclude any correlations that would throw a scipy.stats.spearmanr RuntimeWarning due to
         # # poor overlap after rotation...
         if keep_poor_overlap: # This is necessary to make pfscroll work
-            corrs_us.append(corr_us)
-            corrs_sm.append(corr_sm)
+            corrs_us_old.append(corr_us)
+            corrs_sm_old.append(corr_sm)
         elif not keep_poor_overlap:
-            if not poor_overlap_us: corrs_us.append(corr_us)
-            if not poor_overlap_sm: corrs_sm.append(corr_sm)
+            if not poor_overlap_us: corrs_us_old.append(corr_us)
+            if not poor_overlap_sm: corrs_sm_old.append(corr_sm)
 
-    corrs_us, corrs_sm = np.asarray(corrs_us), np.asarray(corrs_sm)
+    corrs_us_old, corrs_sm_old = np.asarray(corrs_us_old), np.asarray(corrs_sm_old)
 
     return corrs_us, corrs_sm
 
@@ -518,7 +517,7 @@ def get_pf_corrs(tmaps1, tmaps2, keep_poor_overlap=False):
     :param tmaps2: list of event maps for session2 for the same neurons as in tmaps1
     :param keep_poor_overlap: boolean, True = keep all corrs, even if Nan, False(default) = exclude those where the
     animal does not occupy any of the same spatial bins from session 1 to session 2
-    :return:
+    :return: ndarray of spearman correlations
     """
 
     corrs = []
@@ -537,7 +536,7 @@ def get_pf_corrs(tmaps1, tmaps2, keep_poor_overlap=False):
             if not poor_overlap:
                 corrs.append(corr)
 
-    return corrs
+    return np.asarray(corrs)
 
 
 def rescale_tmaps(tmaps, new_size):
@@ -1516,8 +1515,7 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    pfc = PFCombineObject('Marble06', 'Shock', -2, 'Shock', -1)
-    pfc.pfscroll()
+    pf_corr_bw_sesh('Marble06', 'Shock', -2, 'Shock', -1, rot_deg=90)
 
     pass
 
