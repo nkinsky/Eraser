@@ -20,7 +20,6 @@ from er_gen_functions import plot_tmap_us, plot_tmap_sm, plot_events_over_pos, p
 # from progressbar import ProgressBar  # NK need a better version of this
 from tqdm import tqdm
 from pickle import dump, load
-from matplotlib import get_backend
 
 # Might want these later
 # import csv
@@ -551,24 +550,6 @@ class PlaceFieldObject:
                                 tmap_sm=[self.tmap_sm[a] for a in spatial_neurons],
                                 mouse=self.mouse, arena=self.arena, day=self.day, sample_rate=self.sr_image[0][0],
                                 link_obj=link_PFO)
-
-
-class PlaceFieldHalf:
-    def __init__(self, mouse, arena, day, nshuf=0):
-        self.PF1 = placefields(mouse, arena, day, nshuf=nshuf, half=1)
-        self.PF2 = placefields(mouse, arena, day, nshuf=nshuf, half=2)
-
-    def pfscroll(self):
-        self.PF1.pfscroll()
-        if get_backend() == 'Qt5Agg':
-            plt.get_current_fig_manager().window.setGeometry(145, 45, 1245, 420)
-        else:
-            self.PF1.f.fig.set_size_inches([12.4, 3.6])
-        self.PF2.pfscroll(link_PFO=self.PF1.f)
-        if get_backend() == 'Qt5Agg':
-            plt.get_current_fig_manager().window.setGeometry(145, 525, 1245, 420)
-        else:
-            self.PF2.f.fig.set_size_inches([12.4, 3.6])
 
 
 if __name__ == '__main__':
