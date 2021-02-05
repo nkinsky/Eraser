@@ -1091,10 +1091,15 @@ def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nsh
 
 class PlaceFieldHalf:
     def __init__(self, mouse, arena, day, nshuf=0):
+        # Create PF object for each hald
         self.PF1 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=1)
         self.PF2 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=2)
 
+        # Get correlations between 1st and 2nd half
+        self.calc_half_corrs()
+
     def pfscroll(self):
+        """Scroll through 1st and 2nd half placefields simultaneously"""
         self.PF1.pfscroll()
         if plt.get_backend() == 'Qt5Agg':
             plt.get_current_fig_manager().window.setGeometry(145, 45, 1245, 420)
@@ -1107,9 +1112,40 @@ class PlaceFieldHalf:
             self.PF2.f.fig.set_size_inches([12.4, 3.6])
 
     def calc_half_corrs(self):
+        """Calculate placefield correlations between 1st and 2nd half of session"""
         self.tmap_us_corrs = get_pf_corrs(self.PF1.tmap_us, self.PF2.tmap_us)
         self.tmap_sm_corrs = get_pf_corrs(self.PF1.tmap_sm, self.PF2.tmap_sm)
 
+    def calc_shuffled_corrs(self, nshuf=1000, plot=False):
+        """Calculate meancorrelations between placefields after shuffling unit id between halves"""
+        nneurons = len(self.tmap_us_corrs)
+
+        def mean_shuf_corrs(tmaps1, tmaps2, shuf_ids):
+            """sub-function to calculately mean shuffled correlations in one-line below """
+            tmaps2_shuf = [tmaps2[id] for id in shuf_ids]
+            shuf_corrs = get_pf_corrs(tmaps1, tmaps2_shuf)
+
+            return np.mean(shuf_corrs)
+
+        shuf_us_mean, shuf_sm_mean = [], []
+        for shuf in tqdm(range(nshuf)):
+            shuf_ids = np.random.permutation(nneurons)  # shuffle unit ids
+            shuf_us_mean.append(mean_shuf_corrs(self.PF1.tmap_us, self.PF2.tmap_us, shuf_ids))
+            shuf_sm_mean.append(mean_shuf_corrs(self.PF1.tmap_us, self.PF2.tmap_sm, shuf_ids))
+
+        self.shuf_us_mean = np.asarray(shuf_us_mean)
+        self.shuf_sm_mean = np.asarray(shuf_sm_mean)
+
+        if plot:
+            with sns.axes_style('white'):
+                sns.set_context('notebook')
+                fig, ax = plt.subplots()
+                sns.histplot(self.shuf_sm_mean, ax=ax)
+                sns.despine()
+                ax.axvline(self.tmap_sm_corrs.mean(), color='k', linestyle='--')
+                ax.set_xlabel('Mean Spearman Corr')
+                ax.legend(['Data', 'Shuffled'])
+                ax.set_title('1st vs 2nd half')
 
 
 ## Object to map and view placefields for same neuron mapped between different sessions
