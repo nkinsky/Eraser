@@ -9,6 +9,7 @@ import numpy as np
 import scipy.io as sio
 import scipy.stats as sstats
 import matplotlib.pyplot as plt
+from matplotlib import axes
 import csv
 import pandas as pd
 from os import path
@@ -1090,10 +1091,13 @@ def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nsh
 
 
 class PlaceFieldHalf:
-    def __init__(self, mouse, arena, day, nshuf=0):
-        # Create PF object for each hald
-        self.PF1 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=1)
-        self.PF2 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=2)
+    """Class to visualize and quantify wihin-session stability"""
+    def __init__(self, mouse, arena, day, ncircshuf=0):
+        # Create PF object for each half - only shuffle spike train in second half of session
+        self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=1)
+        self.PF2 = pf.placefields(mouse, arena, day, nshuf=ncircshuf, half=2, keep_shuffled=True)
+        self.nneurons = len(self.PF1.tmap_sm)
+        self.ncircshuf = ncircshuf
 
         # Get correlations between 1st and 2nd half
         self.calc_half_corrs()
@@ -1116,36 +1120,71 @@ class PlaceFieldHalf:
         self.tmap_us_corrs = get_pf_corrs(self.PF1.tmap_us, self.PF2.tmap_us)
         self.tmap_sm_corrs = get_pf_corrs(self.PF1.tmap_sm, self.PF2.tmap_sm)
 
-    def calc_shuffled_corrs(self, nshuf=1000, plot=False):
-        """Calculate meancorrelations between placefields after shuffling unit id between halves"""
-        nneurons = len(self.tmap_us_corrs)
+    def calc_idshuffled_corrs(self, nidshuf=1000, ax=False):
+        """Calculate mean correlations between placefields after shuffling unit id between halves.
+        Set ax to True or an existing figure axes to plot results"""
+        # nneurons = len(self.tmap_us_corrs)
+        self.nidshuf = nidshuf
 
-        def mean_shuf_corrs(tmaps1, tmaps2, shuf_ids):
+        def mean_idshuf_corrs(tmaps1, tmaps2, shuf_ids):
             """sub-function to calculately mean shuffled correlations in one-line below """
             tmaps2_shuf = [tmaps2[id] for id in shuf_ids]
             shuf_corrs = get_pf_corrs(tmaps1, tmaps2_shuf)
 
             return np.mean(shuf_corrs)
 
-        shuf_us_mean, shuf_sm_mean = [], []
-        for shuf in tqdm(range(nshuf)):
-            shuf_ids = np.random.permutation(nneurons)  # shuffle unit ids
-            shuf_us_mean.append(mean_shuf_corrs(self.PF1.tmap_us, self.PF2.tmap_us, shuf_ids))
-            shuf_sm_mean.append(mean_shuf_corrs(self.PF1.tmap_us, self.PF2.tmap_sm, shuf_ids))
+        idshuf_us_mean, idshuf_sm_mean = [], []
+        for shuf in tqdm(range(nidshuf)):
+            shuf_ids = np.random.permutation(self.nneurons)  # shuffle unit ids
+            idshuf_sm_mean.append(mean_idshuf_corrs(self.PF1.tmap_us, self.PF2.tmap_us, shuf_ids))
+            idshuf_sm_mean.append(mean_idshuf_corrs(self.PF1.tmap_us, self.PF2.tmap_sm, shuf_ids))
 
-        self.shuf_us_mean = np.asarray(shuf_us_mean)
-        self.shuf_sm_mean = np.asarray(shuf_sm_mean)
+        self.idshuf_us_mean = np.asarray(idshuf_us_mean)
+        self.idshuf_sm_mean = np.asarray(idshuf_sm_mean)
 
-        if plot:
-            with sns.axes_style('white'):
-                sns.set_context('notebook')
+        if ax:
+            self.plot_shuffled_corrs(ax, self.tmap_sm_corrs.mean(), self.idshuf_sm_mean,
+                                     names=['Data', 'Id Shuffle'])
+            # with sns.axes_style('white'):
+            #     sns.set_context('notebook')
+            #     if not isinstance(ax, axes.Axes):
+            #         fig, ax = plt.subplots()
+            #     sns.histplot(self.idshuf_sm_mean, ax=ax)
+            #     sns.despine()
+            #     ax.axvline(self.tmap_sm_corrs.mean(), color='k', linestyle='--')
+            #     ax.set_xlabel('Mean Spearman Corr')
+            #     ax.legend(['Data', 'Shuffled'])
+            #     ax.set_title('1st vs 2nd half')
+
+    def calc_circshuffled_corrs(self, ax=False):
+        """Calculate and plot correlations where spike trains have been shuffled in second half of session"""
+        circshuf_corrs = np.ones((self.nneurons, self.ncircshuf))*np.nan
+        print('Calculating circuarly shuffled correlations')
+        for idn in tqdm(range(self.nneurons)):
+            circcorrs, _, _ = zip(*[spearmanr_nan(self.PF1.tmap_sm[idn].reshape(-1), pf2shuf.reshape(-1)) for pf2shuf in
+                             self.PF2.tmap_sm_shuf[idn]])
+            circshuf_corrs[idn, :] = np.asarray(circcorrs)
+
+        self.circshuf_sm_mean = np.nanmean(circshuf_corrs, axis=0)
+
+        if ax:
+            self.plot_shuffled_corrs(ax, self.tmap_sm_corrs.mean(), self.circshuf_sm_mean,
+                                     names=['Data', 'Circ Shuffle'])
+
+
+    def plot_shuffled_corrs(self, ax, corrs_mean, shuf_mean_corrs, names=['Data', 'Shuffled']):
+        with sns.axes_style('white'):
+            sns.set_context('notebook')
+            if not isinstance(ax, axes.Axes):
                 fig, ax = plt.subplots()
-                sns.histplot(self.shuf_sm_mean, ax=ax)
-                sns.despine()
-                ax.axvline(self.tmap_sm_corrs.mean(), color='k', linestyle='--')
-                ax.set_xlabel('Mean Spearman Corr')
-                ax.legend(['Data', 'Shuffled'])
-                ax.set_title('1st vs 2nd half')
+            sns.histplot(shuf_mean_corrs, ax=ax)
+            sns.despine()
+            ax.axvline(corrs_mean, color='k', linestyle='--')
+            ax.set_xlabel('Mean Spearman Corr')
+            ax.legend(names)
+            ax.set_title('1st vs 2nd half')
+
+        return ax
 
 
 ## Object to map and view placefields for same neuron mapped between different sessions

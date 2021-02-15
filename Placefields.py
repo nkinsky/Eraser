@@ -68,7 +68,7 @@ def get_PV1(mouse, arena, day, speed_thresh=1.5, session_index=None, pf_file='pl
 
 def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, half=None,
                 lims_method='auto', save_file='placefields_cm1.pkl', list_dir=master_directory,
-                save=True, align_from_end=False):
+                save=True, align_from_end=False, keep_shuffled=False):
     """
     Make placefields of each neuron. Ported over from Will Mau's/Dave Sullivan's MATLAB
     function
@@ -87,6 +87,7 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
     synchronized, True = use end time-points to align (in case of bad triggering at beginning but good at end).
     :param half: None (default) = run whole session, 1 = run 1st half only, 2 = run 2nd half only, (odd/even not yet
     implemented as of 2021_02_01).
+    :param keep_shuffled: True = keep shuffled smoothed tmaps (saved as .tmap_sm_shuf). False = default.
     :return:
     """
 
@@ -161,9 +162,7 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
 
     # Construct place field and compute mutual information
     neurons = list(range(0, nneurons))
-    tmap_us = []
-    tcounts = []
-    tmap_gauss = []
+    tmap_us, tcounts, tmap_gauss = [], [], []
     for idn, neuron in enumerate(neurons):
         tmap_us_temp, tcounts_temp, tmap_gauss_temp = \
             makeplacefield(PSAboolrun[neuron, :], xrun, yrun, xEdges, yEdges, runoccmap,
@@ -176,17 +175,18 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
     mi, _, _, _, _ = spatinfo(tmap_us, runoccmap, PSAboolrun)
 
     # Shuffle to get p-value!
-    pval = []
+    pval, tmap_sm_shuf = [], []
     print('Shuffling to get placefield p-values')
     for neuron in tqdm(np.arange(nneurons)):
-        rtmap = []
+        rtmap, rtmap_sm = [], []
         shifts = np.random.randint(0, nGood, nshuf)
         for ns in np.arange(nshuf):
             # circularly shift PSAbool to disassociate transients from mouse location
             shuffled = np.roll(PSAboolrun[neuron, :], shifts[ns])
-            map_temp, _, _ = makeplacefield(shuffled, xrun, yrun, xEdges, yEdges, runoccmap,
+            map_temp, _, sm_map_temp = makeplacefield(shuffled, xrun, yrun, xEdges, yEdges, runoccmap,
                                       cmperbin=cmperbin)
             rtmap.append(map_temp)
+            rtmap_sm.append(sm_map_temp)
 
         # Calculate mutual information of randomized vectors
         rmi, _, _, _, _ = spatinfo(rtmap, runoccmap, repmat(PSAboolrun[neuron, :], nshuf, 1))
@@ -194,10 +194,15 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
         # Calculate p-value
         pval.append(1 - np.sum(mi[neuron] > rmi) / nshuf)
 
+        # Aggregate shuffled maps if specified (worried this might kill memory)
+        if keep_shuffled:
+            tmap_sm_shuf.append(rtmap_sm)
+
     # save variables to working dirs as .pkl files in PFobject
     PFobj = PlaceFieldObject(tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
                  xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
-                 speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, list_dir, nshuf, sr_image)
+                 speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, list_dir,
+                             nshuf, sr_image, tmap_sm_shuf)
 
     if save:
         PFobj.save_data(filename=save_file)
@@ -471,7 +476,7 @@ class PlaceFieldObject:
     def __init__(self, tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
                  xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
                  speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day,
-                 list_dir, nshuf, sr_image):
+                 list_dir, nshuf, sr_image, tmap_sm_shuf):
         self.tmap_us = tmap_us
         self.tmap_sm = tmap_gauss
         self.xrun = xrun
@@ -499,6 +504,7 @@ class PlaceFieldObject:
         self.list_dir = list_dir
         self.nshuf = nshuf
         self.sr_image = sr_image
+        self.tmap_sm_shuf = tmap_sm_shuf
 
     def save_data(self, filename='placefields_cm1.pkl'):
         dir_use = get_dir(self.mouse, self.arena, self.day, self.list_dir)
