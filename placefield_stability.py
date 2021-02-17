@@ -231,8 +231,8 @@ def get_overlap(mouse, arena1, day1, arena2, day2):
     return overlap_ratio1, overlap_ratio2, overlap_ratio_both, overlap_ratio_min, overlap_ratio_max
 
 
-def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5,
-                    pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=0, shuf_map=False):
+def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, batch_map_use=False,
+                    pf_file='placefields_cm1_manlims_1000shuf.pkl', shuf_map=False):
     """
     Gets 1-d population vector correlations between sessions.
     :param mouse:
@@ -242,14 +242,13 @@ def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5,
     :param day2:
     :param speed_thresh: speed threshold to use (default = 1.5cm/s). Not
     :param pf_file: string. Defauls = 'placefields_cm1_manlims_1000shuf.pkl'
-    :param rot_deg: indicates how much to rotate day2 tmaps before calculating corrs. 0=default, 0/90/180/270 = options
     :param shuf_map: randomly shuffle neuron_map to get shuffled correlations
     :return: PVcorr_all, PVcorr_both: spearman correlation between PVs. Includes ALL neurons active in either session or
     only neurons active in both sessions
     """
 
     # Get mapping between sessions
-    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2)
+    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map_use)
     reg_session = sd.find_eraser_session(mouse, arena2, day2)
 
     # Gets PVs
@@ -308,7 +307,7 @@ def registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=False):
     return PV1all, PV2allreg, PV1both, PV2bothreg
 
 
-def get_all_PV1corrs(mouse, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0):
+def get_all_PV1corrs(mouse, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0, batch_map_use=False):
     """
     Gets PV1 corrs for all sessions occurring between arena1 and arena2 for a given mouse.
     :param mouse:
@@ -331,7 +330,7 @@ def get_all_PV1corrs(mouse, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=
             # Don't run any backward registrations
             if (arena1 == arena2 and id2 > id1) or (arena1 != arena2 and id2 >= id1):
                 try:
-                    PVall, PVboth = PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2)
+                    PVall, PVboth = PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map_use)
                     corrs_both[id1, id2] = PVboth
                     corrs_all[id1, id2] = PVall
                     shuf_all[id1, id2], shuf_both[id1, id2] = PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf)
@@ -1065,7 +1064,7 @@ def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='plac
     return corr_us_mean_all, corr_sm_mean_all, shuf_us_mean_all, shuf_sm_mean_all
 
 
-def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0):
+def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0, batch_map_use=False):
     """
     Assembles a nice matrix of mean correlation values between 1d PVs on days/arenas specified.
     :param mice:
@@ -1085,7 +1084,7 @@ def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nsh
 
     for idm, mouse in enumerate(mice):
         PV1_all_all[idm, :, :], PV1_both_all[idm, :, :], PV1_both_shuf[idm, :, :, :], PV1_all_shuf[idm, :, :, :] = \
-            get_all_PV1corrs(mouse, arena1, arena2, days, nshuf=nshuf)
+            get_all_PV1corrs(mouse, arena1, arena2, days, nshuf=nshuf, batch_map_use=batch_map_use)
 
     return PV1_all_all, PV1_both_all, PV1_both_shuf, PV1_all_shuf
 
@@ -1347,7 +1346,7 @@ class GroupPF:
         self.best_rot = best_rot
 
     def construct(self, types=['PFsm', 'PFus', 'PV1dboth', 'PV1dall'], best_rot=True,
-                  pf_file='placefields_cm1_manlims_1000shuf.pkl', nshuf=1000):
+                  pf_file='placefields_cm1_manlims_1000shuf.pkl', nshuf=1000, batch_map=False):
         """Sets up all data in well-organized dictionary: data[type]['data' or 'shuf'][group][arena_type] where
         arena_type=0 for Open, 1 for Shock, and 2 for Open v Shock"""
         # perform PFcorrs at best rotation between session if True, False = no rotation
@@ -1368,18 +1367,24 @@ class GroupPF:
                     arena1, arena2 = arena, arena
                 if type == 'PFsm':
                     a, templ, b, temp_sh_l = get_group_pf_corrs(self.lmice, arena1, arena2, self.days,
-                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
+                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf,
+                                                                batch_map_use=batch_map)
                     _, tempnl, _, temp_sh_nl = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days,
-                                                                  best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
+                                                                  best_rot=best_rot, pf_file=pf_file, nshuf=nshuf,
+                                                                  batch_map_use=batch_map)
                     _, tempa, _, temp_sh_a = get_group_pf_corrs(self.amice, arena1, arena2, self.days,
-                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
+                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf,
+                                                                batch_map_use=batch_map)
                 elif type == 'PFus':
                     templ, _, temp_sh_l, _ = get_group_pf_corrs(self.lmice, arena1, arena2, self.days,
-                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
+                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf,
+                                                                batch_map_use=batch_map)
                     tempnl, _, temp_sh_nl, _ = get_group_pf_corrs(self.nlmice, arena1, arena2, self.days,
-                                                                  best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
+                                                                  best_rot=best_rot, pf_file=pf_file, nshuf=nshuf,
+                                                                  batch_map_use=batch_map)
                     tempa, _, temp_sh_a, _ = get_group_pf_corrs(self.amice, arena1, arena2, self.days,
-                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf)
+                                                                best_rot=best_rot, pf_file=pf_file, nshuf=nshuf,
+                                                                batch_map_use=batch_map)
                 elif type == 'PV1dboth':
                     _, templ, _, temp_sh_l = get_group_PV1d_corrs(self.lmice, arena1, arena2, self.days, nshuf=nshuf)
                     _, tempnl, _, temp_sh_nl = get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf)
