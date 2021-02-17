@@ -445,38 +445,27 @@ for mouse in err.all_mice_good:
         plt.close('all')
 
 
-##
-# Define groups for scatter plots
-# groups = np.ones_like(corr_sm_mean_all)*np.nan
-# groups[:, 0:2, 0:2] = 1  # 1 = before shock
-# groups[:, 4:7, 4:7] = 2  # 2 = after shock
-# groups[:, 0:2, 4:7] = 3  # 3 = before-v-after shock
-# groups[:, 0:2, 3] = 4  # 4 = before-v-STM
-# groups[:, 3, 4:7] = 5  # 5 = STM-v-LTM
-#
-# # Plot corrs in scatterplot form
-# fig, ax = plt.subplots()
-# ax.scatter(groups.reshape(-1), corr_sm_mean_all.reshape(-1))
-# ax.set_xticks(np.arange(1, 6))
-# ax.set_xticklabels(['Before Shk', 'After Shk', 'Bef-Aft', 'Bef-STM', 'STM-Aft'])
-# ax.set_ylabel('Mean Spearmman Rho')
-# ax.set_title(group_type)
-# unique_groups = np.unique(groups[~np.isnan(groups)])
-# corr_means = []
-# for group_num in unique_groups:
-#     corr_means.append(np.nanmean(corr_sm_mean_all[groups == group_num]))
-# ax.plot(unique_groups, corr_means, 'b-')
-# fig.savefig(os.path.join(err.pathname, 'PFcorrs ' + arena1 + ' v ' + arena2 + ' ' + group_type + '.pdf'))
+## Calculate PF stability across days with two different metrics and save them
+from eraser_reference import all_mice_good
+import session_directory as sd
+import pickle
+ncircshuf, nidshuf = 100, 100
+days = [-2, -1, 0, 4, 1, 2, 7]
+boxes = ['Open', 'Shock']
+for mouse in all_mice_good:
+    for day in days:
+        for box in boxes:
+            print(mouse + ' ' + box + ' Day ' + str(day))
+            # Create placefield half class and calculate real and shuffled correlations.
+            PFh = pfs.PlaceFieldHalf(mouse, box, days, ncircshuf=ncircshuf)
+            PFh.calc_half_corrs()
+            PFh.calc_idshuffled_corrs(nidshuf=nidshuf)
+            PFh.calc_circshuffled_corrs()
 
-# Plot corrs in confusion matrix
-# fig2, ax2 = plt.subplots()
-# ax2.imshow(np.nanmean(corr_sm_mean_all, axis=0))
-# ax2.set_xlim((0.5, ndays - 0.5))
-# ax2.set_ylim((ndays-1.5, -0.5))
-# ax2.set_xticklabels(['-2', '-1', '0', '4hr', '1', '2', '7'])
-# ax2.set_yticklabels([' ', '-2', '-1', '0', '4hr', '1', '2', '7'])
-# ax2.set_xlabel(arena2 + ' Day #')
-# ax2.set_ylabel(arena1 + ' Day #')
-# ax2.set_title(' Mean Spearman Rho: ' + group_type)
-# fig2.savefig(os.path.join(err.pathname, 'PFcorr Matrices ' + arena1 + ' v ' + arena2 + ' ' + group_type + '.pdf'))
-
+            # now save.
+            half_corrs = {'mouse': mouse, 'arena': arena, 'day': day, 'ncircshuf': ncircshuf, 'nidshuf': nidshuf,
+                          'idshuf_mean': PFh.idshuf_sm_mean, 'circshuf_sm_mean': PFh.circshuf_sm_mean,
+                          'tmap_sm_corrs' : PFh.tmap_sm_corrs}
+            save_name = sd.find_eraser_session(mouse, box, day)['Location'] + "\\pfhalfcorrs_" + str(ncircshuf) + 'shuf.pkl'
+            with open(save_name, 'wb') as f:
+                pickle.dump(half_corrs, f)
