@@ -1544,7 +1544,7 @@ class GroupPF:
             figs.append(fig)
             savename = path.join(err.pathname, type + ' 2x2 All Groups ' + epoch_labels[ide] + '.pdf')
             savenames.append(savename)
-            
+
 
         # Now adjust axes to all have the same min/max values.
         if match_yaxis:
