@@ -68,7 +68,7 @@ def get_PV1(mouse, arena, day, speed_thresh=1.5, session_index=None, pf_file='pl
 
 def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, half=None,
                 lims_method='auto', save_file='placefields_cm1.pkl', list_dir=master_directory,
-                save=True, align_from_end=False, keep_shuffled=False):
+                align_from_end=False, keep_shuffled=False):
     """
     Make placefields of each neuron. Ported over from Will Mau's/Dave Sullivan's MATLAB
     function
@@ -81,8 +81,7 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
             you can enter in [[xmin, ymin], [xmax, ymax]] manually
     :param nshuf: number of shuffles to perform for determining significance
     :param speed_thresh: speed threshold in cm/s
-    :param save_file: default = 'placefields_cm1.pkl'
-    :param save: True (default) = save file above, False = do not save
+    :param save_file: default = 'placefields_cm1.pkl'. None = do not save
     :param align_from_end: False (default) align data assuming start of neural/behavioral data acquisition was
     synchronized, True = use end time-points to align (in case of bad triggering at beginning but good at end).
     :param half: None (default) = run whole session, 1 = run 1st half only, 2 = run 2nd half only, (odd/even not yet
@@ -204,7 +203,7 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
                  speed_sm, isrunning, cmperbin, speed_thresh, mouse, arena, day, list_dir,
                              nshuf, sr_image, tmap_sm_shuf)
 
-    if save:
+    if save_file is not None:
         PFobj.save_data(filename=save_file)
 
     return PFobj

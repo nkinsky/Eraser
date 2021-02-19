@@ -447,15 +447,15 @@ for mouse in err.all_mice_good:
 
 ## Calculate PF stability across days with two different metrics and save them
 from eraser_reference import all_mice_good
-import placefield_stability as pfs
+import placefield_stability
 import session_directory as sd
 import pickle
 import os
 ncircshuf, nidshuf = 100, 100
-days = [-2]  #[-2, -1, 0, 4, 1, 2, 7]
-boxes = ['Open']  # ['Open', 'Shock']
-mice_use = ['Marble06', 'Marble07']  #all_mice_good
-for mouse in all_mice_good:
+days = [2]  #[-2, -1, 0, 4, 1, 2, 7]
+boxes = ['Shock']  # ['Open', 'Shock']
+mice_use = ['Marble06']  #all_mice_good
+for mouse in mice_use:  #all_mice_good:
     for day in days:
         for box in boxes:
             save_name = sd.find_eraser_session(mouse, box, day)['Location'] + "\\pfhalfcorrs_" + str(
@@ -464,7 +464,7 @@ for mouse in all_mice_good:
                 break
             print(mouse + ' ' + box + ' Day ' + str(day))
             # Create placefield half class and calculate real and shuffled correlations.
-            PFh = pfs.PlaceFieldHalf(mouse, box, days, ncircshuf=ncircshuf)
+            PFh = placefield_stability.PlaceFieldHalf(mouse, box, days, ncircshuf=ncircshuf)
             PFh.calc_half_corrs()
             PFh.calc_idshuffled_corrs(nidshuf=nidshuf)
             PFh.calc_circshuffled_corrs()

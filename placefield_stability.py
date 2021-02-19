@@ -1093,8 +1093,8 @@ class PlaceFieldHalf:
     """Class to visualize and quantify wihin-session stability"""
     def __init__(self, mouse, arena, day, ncircshuf=0):
         # Create PF object for each half - only shuffle spike train in second half of session
-        self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=1)
-        self.PF2 = pf.placefields(mouse, arena, day, nshuf=ncircshuf, half=2, keep_shuffled=True)
+        self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=1, save_file=None)
+        self.PF2 = pf.placefields(mouse, arena, day, nshuf=ncircshuf, half=2, keep_shuffled=True, save_file=None)
         self.nneurons = len(self.PF1.tmap_sm)
         self.ncircshuf = ncircshuf
 
@@ -1135,8 +1135,8 @@ class PlaceFieldHalf:
         idshuf_us_mean, idshuf_sm_mean = [], []
         for shuf in tqdm(range(nidshuf)):
             shuf_ids = np.random.permutation(self.nneurons)  # shuffle unit ids
-            idshuf_sm_mean.append(mean_idshuf_corrs(self.PF1.tmap_us, self.PF2.tmap_us, shuf_ids))
-            idshuf_sm_mean.append(mean_idshuf_corrs(self.PF1.tmap_us, self.PF2.tmap_sm, shuf_ids))
+            idshuf_sm_mean.append(mean_idshuf_corrs(self.PF1.tmap_sm, self.PF2.tmap_sm, shuf_ids))
+            idshuf_us_mean.append(mean_idshuf_corrs(self.PF1.tmap_us, self.PF2.tmap_us, shuf_ids))
 
         self.idshuf_us_mean = np.asarray(idshuf_us_mean)
         self.idshuf_sm_mean = np.asarray(idshuf_sm_mean)
