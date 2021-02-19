@@ -447,14 +447,21 @@ for mouse in err.all_mice_good:
 
 ## Calculate PF stability across days with two different metrics and save them
 from eraser_reference import all_mice_good
+import placefield_stability as pfs
 import session_directory as sd
 import pickle
+import os
 ncircshuf, nidshuf = 100, 100
-days = [-2, -1, 0, 4, 1, 2, 7]
-boxes = ['Open', 'Shock']
+days = [-2]  #[-2, -1, 0, 4, 1, 2, 7]
+boxes = ['Open']  # ['Open', 'Shock']
+mice_use = ['Marble06', 'Marble07']  #all_mice_good
 for mouse in all_mice_good:
     for day in days:
         for box in boxes:
+            save_name = sd.find_eraser_session(mouse, box, day)['Location'] + "\\pfhalfcorrs_" + str(
+                ncircshuf) + 'shuf.pkl'
+            if os.path.exists(save_name):  # Move on if file has already been saved
+                break
             print(mouse + ' ' + box + ' Day ' + str(day))
             # Create placefield half class and calculate real and shuffled correlations.
             PFh = pfs.PlaceFieldHalf(mouse, box, days, ncircshuf=ncircshuf)
@@ -463,9 +470,9 @@ for mouse in all_mice_good:
             PFh.calc_circshuffled_corrs()
 
             # now save.
-            half_corrs = {'mouse': mouse, 'arena': arena, 'day': day, 'ncircshuf': ncircshuf, 'nidshuf': nidshuf,
+            half_corrs = {'mouse': mouse, 'arena': box, 'day': day, 'ncircshuf': ncircshuf, 'nidshuf': nidshuf,
                           'idshuf_mean': PFh.idshuf_sm_mean, 'circshuf_sm_mean': PFh.circshuf_sm_mean,
-                          'tmap_sm_corrs' : PFh.tmap_sm_corrs}
+                          'tmap_sm_corrs': PFh.tmap_sm_corrs}
             save_name = sd.find_eraser_session(mouse, box, day)['Location'] + "\\pfhalfcorrs_" + str(ncircshuf) + 'shuf.pkl'
             with open(save_name, 'wb') as f:
                 pickle.dump(half_corrs, f)

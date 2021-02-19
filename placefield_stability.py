@@ -1158,7 +1158,7 @@ class PlaceFieldHalf:
     def calc_circshuffled_corrs(self, ax=False):
         """Calculate and plot correlations where spike trains have been shuffled in second half of session"""
         circshuf_corrs = np.ones((self.nneurons, self.ncircshuf))*np.nan
-        print('Calculating circuarly shuffled correlations')
+        print('Calculating circularly shuffled correlations')
         for idn in tqdm(range(self.nneurons)):
             circcorrs, _, _ = zip(*[spearmanr_nan(self.PF1.tmap_sm[idn].reshape(-1), pf2shuf.reshape(-1)) for pf2shuf in
                              self.PF2.tmap_sm_shuf[idn]])
