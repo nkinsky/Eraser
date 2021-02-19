@@ -452,9 +452,9 @@ import session_directory as sd
 import pickle
 import os
 ncircshuf, nidshuf = 100, 100
-days = [2]  #[-2, -1, 0, 4, 1, 2, 7]
-boxes = ['Shock']  # ['Open', 'Shock']
-mice_use = ['Marble06']  #all_mice_good
+days = [-2, -1, 0, 4, 1, 2, 7]
+boxes = ['Open', 'Shock']
+mice_use = all_mice_good
 for mouse in mice_use:  #all_mice_good:
     for day in days:
         for box in boxes:
