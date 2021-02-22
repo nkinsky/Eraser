@@ -41,21 +41,27 @@ def load_pf(mouse, arena, day, session_index=None, pf_file='placefields_cm1_manl
     return PF
 
 
-def get_PV1(mouse, arena, day, speed_thresh=1.5, session_index=None, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+def get_PV1(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
     """
     Gets PV for each session with no spatial bins
     :param mouse:
     :param arena:
     :param day:
     :param speed_thresh: exclude data points where mouse's smoothed speed is below this (1.5cm/s default)
-    :param session_index: not-used
     :param pf_file: default = 'placefields_cm1_manlims_1000shuf.pkl'_
     :return: PV1: nneurons long 1-d np array of event rates for each neuron across the whole session
     """
-    PF = load_pf(mouse, arena, day, pf_file=pf_file)
-
-    # Speed threshold PSAbool
-    PFthresh = PF.PSAbool_align[:, PF.speed_sm > speed_thresh]
+    try:
+        PF = load_pf(mouse, arena, day, pf_file=pf_file)
+        # Speed threshold PSAbool
+        PFthresh = PF.PSAbool_align[:, PF.speed_sm > speed_thresh]
+    except FileNotFoundError:
+        print('No placefields file found - creating PV1 from neural data only - NO SPEED THRESHOLDING')
+        dir_use = get_dir(mouse, arena, day)
+        im_data_file = path.join(dir_use, 'FinalOutput.mat')
+        im_data = sio.loadmat(im_data_file)
+        PSAbool = im_data['PSAbool']
+        PFthresh = PSAbool
 
     # Calculate PV
     nframes = PFthresh.shape[1]

@@ -1596,7 +1596,7 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    pf_corr_bw_sesh('Marble06', 'Shock', -2, 'Shock', -1, rot_deg=90)
+    PlaceFieldHalf('Marble14', 'Open', 0, ncircshuf=100)
 
     pass
 
