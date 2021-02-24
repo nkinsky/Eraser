@@ -417,7 +417,7 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
 
     # get probability of spiking and not spiking
     p_k1 = np.sum(PSAbool, 1)/nframes  # probability of spiking
-    p_k0 = 1 - p_k1
+    p_k0 = 1 - p_k1  # probability of NOT spiking
 
     # Compute information metrics
     p_1x = []
@@ -427,19 +427,22 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
     isec = []
     ispk = []
     for neuron in np.arange(nneurons):
+        if neuron in [0, 88]:
+            print('Debugging neuron ' + str(neuron))
         # Get probability of spike given location, tmap, only taking good pixels
         try:
             p1xtemp = tmap_us[neuron].flatten()
         except (IndexError, AttributeError):
             p1xtemp = tmap_us[neuron].flatten()
         p1xtemp = p1xtemp[okpix]
-        p_1x.append(p1xtemp)
+        # p_1x.append(p1xtemp)  # NRK not sure why these were here in the first place - not necessary to keep!
         p0xtemp = 1 - p1xtemp
-        p_0x.append(p0xtemp)
+        # p_0x.append(p0xtemp)
 
         # compute positional information for k=1 and k=0
-        i_k1 = p1xtemp * np.log(p1xtemp / p_k1[neuron])
-        i_k0 = p0xtemp * np.log(p0xtemp / p_k0[neuron])
+        # NRK Note - lots of RunTimeWarnings due to the arrays being mostly zero. Look into Olypher - is this ok? Must be!
+        i_k1 = p1xtemp * np.log(p1xtemp / p_k1[neuron])  # Lots of nans - why?
+        i_k0 = p0xtemp * np.log(p0xtemp / p_k0[neuron])  # All good values
 
         # sum these to make true positional information - NK follow up here to understand this
         ipostemp = i_k1 + i_k0
@@ -566,5 +569,5 @@ class PlaceFieldObject:
 
 
 if __name__ == '__main__':
-    placefields('Marble07', 'Open', -2)
+    placefields('Marble07', 'Shock', -2)
     pass
