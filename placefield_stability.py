@@ -868,7 +868,8 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, shuf_mat=None
     if shuf_mat is not None:
         nshuf = shuf_mat.shape[3]
         for epoch_num in unique_epochs:
-            CIs.append(mean_CI(shuf_mat.reshape(-1, nshuf)[epochs.reshape(-1) == epoch_num]))
+            # CIs.append(mean_CI(shuf_mat.reshape(-1, nshuf)[epochs.reshape(-1) == epoch_num]))
+            CIs.append(get_CI(np.nanmean(shuf_mat.reshape(-1, nshuf)[epochs.reshape(-1) == epoch_num], axis=0)))
         aCI = ax.plot(np.matlib.repmat(unique_epochs, 3, 1).transpose(), np.asarray(CIs), 'k--')
         aCI[1].set_linestyle('-')
         [a.set_color([0, 0, 0, 0.5]) for a in aCI]
@@ -1431,8 +1432,11 @@ class GroupPF:
             if nshuf > 0:
                 unique_pairs = np.unique(pairs[~np.isnan(pairs)])
                 for id, lstyle in enumerate(['k--', 'r--']):  # plot each CI independently for now, will need to take average if things all look the same
-                    CI = np.asarray([mean_CI(shuf[id].reshape(-1, nshuf)[pairs.reshape(-1) == pair_id])
-                                            for pair_id in unique_pairs])
+                    # More conservative CIs here for legacy purposes
+                    # CI = np.asarray([mean_CI(shuf[id].reshape(-1, nshuf)[pairs.reshape(-1) == pair_id])
+                    #                         for pair_id in unique_pairs])
+                    CI = np.asarray([get_CI(np.nanmean(shuf[id].reshape(-1, nshuf)[pairs.reshape(-1) == pair_id],
+                                                       axis=0)) for pair_id in unique_pairs])
                     CIlines = ax[idd].plot(np.matlib.repmat(unique_pairs, 3, 1).transpose(), CI, lstyle)
                     CIlines[1].set_linestyle('-')
 
@@ -1528,10 +1532,10 @@ class GroupPF:
             shock_corrs = [data_use[group][1][epoch_mat[idg] == epoch_num] for idg, group in enumerate(groups)]
 
             # Assemble shuffled data and get mean CIs for each group
-            open_CIs = [mean_CI(shuf_use[group][0].reshape(-1, nshuf)[epoch_mat[idg].reshape(-1) == epoch_num])
-                         for idg, group in enumerate(groups)]
-            shock_CIs = [mean_CI(shuf_use[group][1].reshape(-1, nshuf)[epoch_mat[idg].reshape(-1) == epoch_num])
-                         for idg, group in enumerate(groups)]
+            open_CIs = [get_CI(np.nanmean(shuf_use[group][0].reshape(-1, nshuf)[epoch_mat[idg].reshape(-1) == epoch_num],
+                                       axis=0)) for idg, group in enumerate(groups)]
+            shock_CIs = [get_CI(np.nanmean(shuf_use[group][1].reshape(-1, nshuf)[epoch_mat[idg].reshape(-1) == epoch_num],
+                                        axis=0)) for idg, group in enumerate(groups)]
 
             fig, ax, pval, tstat = erp.pfcorr_compare(open_corrs, shock_corrs, group_names=groups,
                                                       xlabel=epoch_labels[ide], ylabel=type,
