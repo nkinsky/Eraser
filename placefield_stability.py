@@ -265,22 +265,70 @@ def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, batch_
     return PVcorr_all, PVcorr_both
 
 
-def registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=False):
+def PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, batch_map_use=False,
+                    pf_file='placefields_cm1_manlims_1000shuf.pkl', shuf_map=False):
+    """
+    Gets 2-d population vector correlations between sessions.
+    :param mouse:
+    :param arena1:
+    :param day1:
+    :param arena2:
+    :param day2:
+    :param speed_thresh: speed threshold to use (default = 1.5cm/s). Not
+    :param pf_file: string. Defauls = 'placefields_cm1_manlims_1000shuf.pkl'
+    :param shuf_map: randomly shuffle neuron_map to get shuffled correlations
+    :return: PVcorr_all, PVcorr_both: spearman correlation between PVs. Includes ALL neurons active in either session or
+    only neurons active in both sessions
     """
 
-    :param PV1: 1-d population vector of event rates for all neurons in session 1
+    # Get mapping between sessions
+    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map_use)
+    reg_session = sd.find_eraser_session(mouse, arena2, day2)
+
+    # Gets PVs
+    PV1 = pf.get_PV1(mouse, arena1, day1, speed_thresh=speed_thresh, pf_file=pf_file)
+    PV2 = pf.get_PV1(mouse, arena2, day2, speed_thresh=speed_thresh, pf_file=pf_file)
+
+    # Now register between sessions
+    PV1all, PV2all, PV1both, PV2both = registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=shuf_map)
+
+    # Now get ALL corrs and BOTH corrs
+    PV2dcorr_all, all_p = sstats.spearmanr(PV1all, PV2all, nan_policy='omit')
+    PV2dcorr_both, both_p = sstats.spearmanr(PV1both, PV2both, nan_policy='omit')
+
+    return PV2dcorr_all, PV2dcorr_both
+
+
+def registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=False, speed_thresh=False, PSAboolrun):
+    """
+
+    :param PV1: 1-d or 2-d population vector of event rates for all neurons in session 1
     :param PV2: same as above for session 2
     :param neuron_map: map between sessions obtained from SharpWave/Tenaspis github code
     :param reg_session: 2nd session id in session_list
+    :param (optional kwargs): if 'speed_threshold=True' is specified then you also need to add in
+    PSAboolrun1 and PSAboolrun2 to identify neurons to eliminate neurons that aren't active after
+    speed thresholding.
     :return: PV1all, PV2allreg: PVs for ALL neurons active in EITHER session registered to each other -
              includes silent/new cells
              PV1both, PV2bothreg: PVs for neurons active in BOTH sessions registered to each other -
              no silent/new cells
     """
 
+    # Identify if you are working with a 1d or 2d population vector
+    if len(PV1.shape) == 1:
+        type = '1d'
+    elif len(PV1.shape) == 2:
+        type = '2d'
+        nbins1, nbins2 = PV1[0].shape  # get shape of placefield map
+
     # Identify neurons with good map
     good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
     good_map = neuron_map[good_map_bool].astype(np.int64)
+
+    # NRK TODO: add in speed thresholding here!
+    if type == '2d' and speed_thresh:
+        pass
 
     # Shuffle neuron_map if specified
     if shuf_map:
@@ -295,8 +343,12 @@ def registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=False):
     nnew = len(new_ind)
 
     # Construct PVs with ALL neurons detected in EITHER session
-    PV1all = np.concatenate((PV1, np.zeros(nnew)))
-    PV2allreg = np.concatenate((np.zeros(PV1.shape), np.zeros(nnew)))
+    if type == '1d':
+        PV1all = np.concatenate((PV1, np.zeros(nnew)))
+        PV2allreg = np.concatenate((np.zeros(PV1.shape), np.zeros(nnew)))
+    elif type == '2d':
+        PV1all = np.concatenate((PV1, np.zeros(nnew, nbins1, nbins2)))
+        PV2allreg = np.concatenate((np.zeros(PV1.shape), np.zeros(nnew, nbins1, nbins2)))
     PV2allreg[good_map_ind] = PV2[good_map]
     PV2allreg[len(PV1):] = PV2[new_ind]  # These needs checking!!!
 
@@ -426,13 +478,15 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     # Eliminate neurons that are only active during immobility - will encounter errors trying to calculate correlations
     # using their all-zero transient maps.
     if speed_threshold:
-        # Identify mapped neurons with least one calcium event after speed thresholding
-        run_events_bool = np.bitwise_and(PF1.PSAboolrun[valid_neurons_base, :].sum(axis=1) > 0,
-                                         PF2.PSAboolrun[valid_neurons_reg, :].sum(axis=1) > 0)
-
-        # Refine map again to only include active neurons after speed thresholding
-        good_neurons_base = valid_neurons_base[run_events_bool]
-        good_neurons_reg = valid_neurons_reg[run_events_bool].astype(np.int64)
+        good_neurons_base, good_neurons_reg = eliminate_immobile_neurons(PF1.PSAboolrun, PF2.PSAboolrun,
+                                                                         valid_neurons_base, valid_neurons_reg)
+        # # Identify mapped neurons with least one calcium event after speed thresholding
+        # run_events_bool = np.bitwise_and(PF1.PSAboolrun[valid_neurons_base, :].sum(axis=1) > 0,
+        #                                  PF2.PSAboolrun[valid_neurons_reg, :].sum(axis=1) > 0)
+        #
+        # # Refine map again to only include active neurons after speed thresholding
+        # good_neurons_base = valid_neurons_base[run_events_bool]
+        # good_neurons_reg = valid_neurons_reg[run_events_bool].astype(np.int64)
     elif not speed_threshold:
         good_neurons_base, good_neurons_reg = valid_neurons_base, valid_neurons_reg
 
@@ -509,6 +563,20 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
 
     return corrs_us, corrs_sm
 
+
+def eliminate_immobile_neurons(PSAboolrun1, PSAboolrun2, valid_neurons1, valid_neurons2):
+    """Eliminate neurons that are only active during immobility - will encounter errors trying to calculate
+    correlations using their all-zero transient maps."""
+
+    # Identify mapped neurons with least one calcium event after speed thresholding
+    run_events_bool = (PSAboolrun1[valid_neurons1, :].sum(axis=1) > 0) & \
+                      (PSAboolrun2[valid_neurons2, :].sum(axis=1) > 0)
+
+    # Refine map again to only include active neurons after speed thresholding
+    good_neurons_base = valid_neurons1[run_events_bool].astype(np.int64)
+    good_neurons_reg = valid_neurons2[run_events_bool].astype(np.int64)
+
+    return good_neurons_base, good_neurons_reg
 
 def get_pf_corrs(tmaps1, tmaps2, keep_poor_overlap=False):
     """

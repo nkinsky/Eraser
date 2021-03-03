@@ -74,6 +74,16 @@ def get_PV1(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlim
     return PV1
 
 
+def get_PV2(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+    """Gets a 2-d population vector of activity.  Basically just stack up all placefield maps.
+    :param mouse:
+    :param arena:
+    :param day:
+    :param speed_thresh:
+    :param pf_file:
+    :return:
+    """
+
 def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, half=None,
                 lims_method='auto', save_file='placefields_cm1.pkl', list_dir=master_directory,
                 align_from_end=False, keep_shuffled=False):
