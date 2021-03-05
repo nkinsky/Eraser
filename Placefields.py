@@ -74,7 +74,7 @@ def get_PV1(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlim
     return PV1
 
 
-def get_PV2(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+def get_PV2(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=0):
     """Gets a 2-d population vector of activity.  Basically just stack up all placefield maps.
     :param mouse:
     :param arena:
@@ -83,6 +83,39 @@ def get_PV2(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlim
     :param pf_file:
     :return:
     """
+    try:
+        PF = load_pf(mouse, arena, day, pf_file=pf_file)
+        # Speed threshold PSAbool
+        if speed_thresh != PF.speed_thresh:  # Re-run placefields if using a different speed threshold
+            print('Speed threshold for 2-d PVs does not match previous run - re-calculating placefields')
+            PF = placefields(mouse, arena, day, speed_thresh=speed_thresh)
+    except FileNotFoundError:
+        print('No placefields file found - can''t create 2d population vector')
+
+    if rot_deg == 0:
+        PV2sm = np.asarray(PF.tmap_sm).reshape(PF.nneurons, -1)
+        PV2us = np.asarray(PF.tmap_us).reshape(PF.nneurons, -1)
+    elif rot_deg in [90, 180, 270]:
+        PV2sm = np.asarray(rotate_tmaps(PF.tmap_sm, rot_deg)).reshape(PF.nneurons, -1)
+        PV2us = np.asarray(rotate_tmaps(PF.tmap_us, rot_deg)).reshape(PF.nneurons, -1)
+
+    return PV2us, PV2sm
+
+
+def rotate_tmaps(tmaps, rot_deg):
+    """
+        Rotate all transient maps in tmaps in 90 degree increments
+        :param tmaps: list of tmaps
+        :param rot_deg: int, # degrees to rotate map, must be 90 degree increments
+        :return: list of rotated tmaps
+        """
+    rot = int(rot_deg / 90)
+    tmaps_rot = []
+    for tmap in tmaps:
+        tmaps_rot.append(np.rot90(tmap, rot))
+
+    return tmaps_rot
+
 
 def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, half=None,
                 lims_method='auto', save_file='placefields_cm1.pkl', list_dir=master_directory,
