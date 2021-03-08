@@ -1373,6 +1373,42 @@ class PlaceFieldHalf:
 
         return ax
 
+    def _save(self):
+        save_name = path.join(sd.find_eraser_session(self.mouse, self.arena, self.day)['Location'],
+                              "pfhalfcorrs_" + str(self.ncircshuf) + 'shuf.pkl')
+        half_corrs = {'mouse': self.mouse, 'arena': self.areba, 'day': self.day, 'ncircshuf': self.ncircshuf,
+                      'nidshuf': self.nidshuf, 'idshuf_mean': self.idshuf_sm_mean,
+                      'circshuf_sm_mean': self.circshuf_sm_mean, 'tmap_sm_corrs': self.tmap_sm_corrs}
+        with open(save_name, 'wb') as f:
+            dump(half_corrs, f)
+
+    def _load(self):
+        save_name = path.join(sd.find_eraser_session(self.mouse, self.arena, self.day)['Location'],
+                              "pfhalfcorrs_" + str(self.ncircshuf) + 'shuf.pkl')
+        with open(save_name, 'rb') as f:
+            load(f)
+
+
+class SessionStability:
+    """Class to easily look at within session stability across all mice"""
+    def __init__(self):
+        self.mice = {'learners': err.learners, 'nonlearners': err.nonlearners, 'ani': err.ani_mice_good}
+        # self.amice = err.ani_mice_good
+        # self.lmice = err.learners
+        # self.nlmice = err.nonlearners
+        self.arenas = ['Open', 'Shock']
+        self.days = [-2, -1, 0, 4, 1, 2, 7]
+        self.half_corrs = {}
+        for arena in self.arenas:
+            for day in self.days:
+                for item in self.mice.items():
+                    group_name, mouse_list = item[0], item[1]
+                    session_corrs = []
+                    for mouse in mouse_list:
+                        pfh = PlaceFieldHalf(mouse=mouse, arena=arena, day=day)
+                        pfh._load()
+                        session_corrs.append(pfh.tmap_us_corrs)
+
 
 ## Object to map and view placefields for same neuron mapped between different sessions
 class PFCombineObject:
