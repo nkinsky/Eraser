@@ -356,7 +356,7 @@ for mouse in fixed_reg:
                         try:
                             print('Running shuffled PV1 corrs for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' +
                                   arena2 + ' day ' + str(day2))
-                            pfs.PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf=nshuf)
+                            pfs.PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf=nshuf, batch_map=True)
                         except FileNotFoundError:
                             print('FileNotFoundError for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' +
                                   str(day2))

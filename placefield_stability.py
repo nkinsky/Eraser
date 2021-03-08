@@ -456,6 +456,93 @@ def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
     return shuf_all, shuf_both
 
 
+def get_all_PV2d_corrs(mouse, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0, batch_map_use=False, best_rot=False):
+    """
+    Gets PV1 corrs for all sessions occurring between arena1 and arena2 for a given mouse.
+    :param mouse:
+    :param arena1:
+    :param arena2:
+    :param days: default = [-2, -1, 0, 4, 1, 2, 7]
+    :param nshuf: # shuffles (default = 0).
+    :return: corrs_all, corrs_both: 7x7 np-array with PV corrs between all possible session-pairs.
+             shuf_all, shuf_both: 7x7xnshuf np-array with shuffled correlations.
+    """
+
+    # Pre-allocate
+    corrs_both = np.ones((7, 7)) * np.nan
+    corrs_all = np.ones((7, 7)) * np.nan
+    shuf_both = np.ones((7, 7, nshuf)) * np.nan
+    shuf_all = np.ones((7, 7, nshuf)) * np.nan
+    for id1, day1 in enumerate(days):
+        for id2, day2 in enumerate(days):
+
+            # Don't run any backward registrations
+            if (arena1 == arena2 and id2 > id1) or (arena1 != arena2 and id2 >= id1):
+                try:
+                    PVall, PVboth = PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
+                                                     batch_map_use=batch_map_use, best_rot=best_rot)
+                    corrs_both[id1, id2] = PVboth
+                    corrs_all[id1, id2] = PVall
+                    shuf_all[id1, id2], shuf_both[id1, id2] = PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf)
+                except FileNotFoundError:
+                    print('File Not Found for ' + mouse + ': ' + arena1 + str(day1) + ' to ' + arena2 + str(day2))
+
+    return corrs_all, corrs_both, shuf_all, shuf_both
+
+
+def PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
+    """
+    Gets correlations for 1-d PVs between arenas/days with neuron mapping shuffled between sessions.
+    :param mouse:
+    :param arena1: 'Shock' or 'Open'
+    :param day1: [-2, -1, 0, 4, 1, 2, 7]
+    :param arena2:
+    :param day2:
+    :param nshuf: int
+    :return: shuf_all, shuf_both: (nshuf,) nd-arrays with shuffled corrs using ALL neurons or only those recorded in
+    BOTH sessions
+    """
+
+    # pre-allocate lists
+    temp_all = []
+    temp_both = []
+
+    # Put in something here to check for saved data if this takes too long!
+    save_name = 'PV2shuf_corrs_' + arena2 + str(day2) + '_nshuf_' + str(nshuf) + '.pkl'
+    dir_use = get_dir(mouse, arena1, day1)
+    save_file = path.join(dir_use, save_name)
+
+    if not path.exists(save_file):
+        print('Getting shuffled 2-d PV corrs')
+        for n in tqdm(np.arange(nshuf)):
+            corr_all, corr_both = PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2, shuf_map=True)
+            temp_all.append(corr_all)
+            temp_both.append(corr_both)
+
+        shuf_all = np.asarray(temp_all)
+        shuf_both = np.asarray(temp_both)
+
+        # pickle data for later use
+        dump([['mouse', 'arena1', 'day1', 'arena2', 'day2', 'shuf_all', 'shuf_both', 'nshuf'],
+              [mouse, arena1, day1, arena2, day2, shuf_all, shuf_both, nshuf]],
+             open(save_file, 'wb'))
+    elif path.exists(save_file):  # load previously pickled data
+        print('Loading previously saved shuffled files')
+        names, save_data = load(open(save_file, 'rb'))  # load it
+
+        # Check that data matches inputs
+        if save_data[0] == mouse and save_data[1] == arena1 and save_data[2] == day1 and save_data[3] == arena2 and \
+                save_data[4] == day2:
+            shuf_all = save_data[5]
+            shuf_both = save_data[6]
+        else:
+            print('Previously saved data does not match inputs')
+            shuf_all = np.nan
+            shuf_both = np.nan
+
+    return shuf_all, shuf_both
+
+
 def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl',
                     rot_deg=0, shuf_map=False, debug=False, batch_map_use=True, speed_threshold=True,
                     keep_poor_overlap=False):
@@ -859,7 +946,7 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1,
               [mouse, [arena1, arena2], day1, day2, best_corr_mean, best_rot, corr_mean_all]],
              open(save_file, "wb"))
     elif path.exists(save_file):  # Load previous run and let user know
-        print('Loading previous analysis for ' + mouse + ' ' + arena1 + ' day ' + str(day1) +
+        print('Loading previous 2d placefield analysis for ' + mouse + ' ' + arena1 + ' day ' + str(day1) +
               ' to ' + arena2 + ' day ' + str(day2))
         temp = load(open(save_file, 'rb'))
 
@@ -1143,7 +1230,8 @@ def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nsh
     :param arena1:
     :param arena2:
     :param days:
-    :param best_rot:
+    :param nshuf:
+    :param batch_map_use
     :param pf_file:
     :return:
     """
@@ -1159,6 +1247,34 @@ def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nsh
             get_all_PV1corrs(mouse, arena1, arena2, days, nshuf=nshuf, batch_map_use=batch_map_use)
 
     return PV1_all_all, PV1_both_all, PV1_both_shuf, PV1_all_shuf
+
+
+def get_group_PV2d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0, batch_map_use=False,
+                         best_rot=False):
+    """
+    Assembles a nice matrix of mean correlation values between 1d PVs on days/arenas specified.
+    :param mice:
+    :param arena1:
+    :param arena2:
+    :param days:
+    :param nshuf:
+    :param batch_map_use:
+    :param best_rot:
+    :param pf_file:
+    :return:
+    """
+
+    # pre-allocate
+    ndays = len(days)
+    nmice = len(mice)
+    PV2d_both_all, PV2d_all_all = np.ones((nmice, ndays, ndays))*np.nan, np.ones((nmice, ndays, ndays))*np.nan
+    PV2d_both_shuf, PV2d_all_shuf = np.ones((nmice, ndays, ndays, nshuf))*np.nan, np.ones((nmice, ndays, ndays, nshuf))*np.nan
+
+    for idm, mouse in enumerate(mice):
+        PV2d_all_all[idm, :, :], PV2d_both_all[idm, :, :], PV2d_both_shuf[idm, :, :, :], PV2d_all_shuf[idm, :, :, :] = \
+            get_all_PV2d_corrs(mouse, arena1, arena2, days, nshuf=nshuf, batch_map_use=batch_map_use, best_rot=best_rot)
+
+    return PV2d_all_all, PV2d_both_all, PV2d_both_shuf, PV2d_all_shuf
 
 
 class PlaceFieldHalf:
@@ -1410,15 +1526,18 @@ class GroupPF:
         self.days = [-2, -1, 0, 4, 1, 2, 7]
 
     def _save(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser'):
-        dump(self.data, open(path.join(dir, 'group_data_rot=' + str(self.best_rot) + '.pkl'), 'wb'))
+        dump(self.data, open(path.join(dir, 'group_data_rot=' + str(self.best_rot) + '_batch_map=' +
+                                       str(self.batch_map) + '.pkl'), 'wb'))
         return None
 
-    def _load(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser', best_rot=True):
-        self.data = load(open(path.join(dir, 'group_data_rot=' + str(best_rot) + '.pkl'), 'rb'))
+    def _load(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser', best_rot=True, batch_map=True):
+        self.data = load(open(path.join(dir, 'group_data_rot=' + str(best_rot) + '_batch_map=' +
+                                        str(batch_map) + '.pkl'), 'rb'))
         self.best_rot = best_rot
+        self.batch_map = batch_map
 
-    def construct(self, types=['PFsm', 'PFus', 'PV1dboth', 'PV1dall'], best_rot=True,
-                  pf_file='placefields_cm1_manlims_1000shuf.pkl', nshuf=1000, batch_map=False):
+    def construct(self, types=['PFsm', 'PFus', 'PV1dboth', 'PV1dall', 'PV2dboth', 'PV2dall'], best_rot=True,
+                  pf_file='placefields_cm1_manlims_1000shuf.pkl', nshuf=1000, batch_map=True):
         """Sets up all data in well-organized dictionary: data[type]['data' or 'shuf'][group][arena_type] where
         arena_type=0 for Open, 1 for Shock, and 2 for Open v Shock"""
         # perform PFcorrs at best rotation between session if True, False = no rotation
@@ -1427,6 +1546,7 @@ class GroupPF:
         self.data = dict.fromkeys(types)  # pre-allocate
         self.best_rot = best_rot
         self.nshuf = nshuf
+        self.batch_map = batch_map
         self.cmperbin = pf.load_pf(self.lmice[0], 'Shock', -2, pf_file=pf_file).cmperbin
         for type in types:
             learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all = [], [], []
@@ -1465,6 +1585,20 @@ class GroupPF:
                     templ, _, temp_sh_l, _ = get_group_PV1d_corrs(self.lmice, arena1, arena2, self.days, nshuf=nshuf)
                     tempnl, _, temp_sh_nl, _ = get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf)
                     tempa, _, temp_sh_a, _ = get_group_PV1d_corrs(self.amice, arena1, arena2, self.days, nshuf=nshuf)
+                elif type == 'PV2dboth':
+                    _, templ, _, temp_sh_l = get_group_PV2d_corrs(self.lmice, arena1, arena2, self.days, nshuf=nshuf,
+                                                                  best_rot=best_rot)
+                    _, tempnl, _, temp_sh_nl = get_group_PV2d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf,
+                                                                    best_rot=best_rot)
+                    _, tempa, _, temp_sh_a = get_group_PV2d_corrs(self.amice, arena1, arena2, self.days, nshuf=nshuf,
+                                                                  best_rot=best_rot)
+                elif type == 'PV2dall':
+                    templ, _, temp_sh_l, _ = get_group_PV2d_corrs(self.lmice, arena1, arena2, self.days, nshuf=nshuf,
+                                                                  best_rot=best_rot)
+                    tempnl, _, temp_sh_nl, _ = get_group_PV2d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf,
+                                                                    best_rot=best_rot)
+                    tempa, _, temp_sh_a, _ = get_group_PV2d_corrs(self.amice, arena1, arena2, self.days, nshuf=nshuf,
+                                                                  best_rot=best_rot)
 
                 learn_bestcorr_mean_all.append(templ)
                 nlearn_bestcorr_mean_all.append(tempnl)
@@ -1481,6 +1615,7 @@ class GroupPF:
             self.data[type]['data'] = {group: data for group, data in zip(groups, data_comb)}
             self.data[type]['shuf'] = {group: shuf for group, shuf in zip(groups, shuf_comb)}
             self.data['best_rot'] = best_rot
+            self.data['batch_map'] = batch_map
 
     def scatterbar_bw_days(self, type='PFsm', ax_use=None):
         # Set up plots
