@@ -301,18 +301,18 @@ def PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, corr_t
     PV1us, PV1sm = pf.get_PV2(mouse, arena1, day1, speed_thresh=speed_thresh, pf_file=pf_file)
     PV2us, PV2sm = pf.get_PV2(mouse, arena2, day2, speed_thresh=speed_thresh, pf_file=pf_file, rot_deg=rot_deg)
 
-    # Get the correct maps (smoothed vs. unsmoothed) and flatten them
+    # Get the correct maps (smoothed vs. unsmoothed)
     if corr_type == 'sm':
-        PV1, PV2 = PV1sm.reshape(-1), PV2sm.reshape(-1)
+        PV1, PV2 = PV1sm, PV2sm
     elif corr_type == 'us':
-        PV1, PV2 = PV1us.reshape(-1), PV2us.reshape(-1)
+        PV1, PV2 = PV1us, PV2us
 
     # Now register between sessions
     PV1all, PV2all, PV1both, PV2both = registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=shuf_map)
 
-    # Now get ALL corrs and BOTH corrs
-    PV2dcorr_all, all_p = sstats.spearmanr(PV1all, PV2all, nan_policy='omit')
-    PV2dcorr_both, both_p = sstats.spearmanr(PV1both, PV2both, nan_policy='omit')
+    # Now flatten PV arrays and get ALL corrs and BOTH corrs
+    PV2dcorr_all, all_p = sstats.spearmanr(PV1all.reshape(-1), PV2all.reshape(-1), nan_policy='omit')
+    PV2dcorr_both, both_p = sstats.spearmanr(PV1both.reshape(-1), PV2both.reshape(-1), nan_policy='omit')
 
     return PV2dcorr_all, PV2dcorr_both
 

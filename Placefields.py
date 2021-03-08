@@ -68,10 +68,10 @@ def get_PV1(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlim
     # Calculate PV
     nframes = PFthresh.shape[1]
     try:
-        PV1 = PFthresh.sum(axis=1)/nframes * sr_image[0]
+        PV1d = PFthresh.sum(axis=1)/nframes * sr_image[0]
     except TypeError:  # Catch a few errors for mice where sr_image is not properly formatted
-        PV1 = PFthresh.sum(axis=1) / nframes * sr_image
-    return PV1
+        PV1d = PFthresh.sum(axis=1) / nframes * sr_image
+    return PV1d
 
 
 def get_PV2(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlims_1000shuf.pkl', rot_deg=0):
@@ -81,7 +81,7 @@ def get_PV2(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlim
     :param day:
     :param speed_thresh:
     :param pf_file:
-    :return:
+    :return: PV an nneurons x # spatial bins ndarray of calcium event activity
     """
     try:
         PF = load_pf(mouse, arena, day, pf_file=pf_file)
@@ -92,14 +92,15 @@ def get_PV2(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlim
     except FileNotFoundError:
         print('No placefields file found - can''t create 2d population vector')
 
+    # Rotate maps and flatten them
     if rot_deg == 0:
-        PV2sm = np.asarray(PF.tmap_sm).reshape(PF.nneurons, -1)
-        PV2us = np.asarray(PF.tmap_us).reshape(PF.nneurons, -1)
+        PVsm = np.asarray(PF.tmap_sm).reshape(PF.nneurons, -1)
+        PVus = np.asarray(PF.tmap_us).reshape(PF.nneurons, -1)
     elif rot_deg in [90, 180, 270]:
-        PV2sm = np.asarray(rotate_tmaps(PF.tmap_sm, rot_deg)).reshape(PF.nneurons, -1)
-        PV2us = np.asarray(rotate_tmaps(PF.tmap_us, rot_deg)).reshape(PF.nneurons, -1)
+        PVsm = np.asarray(rotate_tmaps(PF.tmap_sm, rot_deg)).reshape(PF.nneurons, -1)
+        PVus = np.asarray(rotate_tmaps(PF.tmap_us, rot_deg)).reshape(PF.nneurons, -1)
 
-    return PV2us, PV2sm
+    return PVus, PVsm
 
 
 def rotate_tmaps(tmaps, rot_deg):
