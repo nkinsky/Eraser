@@ -89,16 +89,18 @@ def get_PV2(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlim
         if speed_thresh != PF.speed_thresh:  # Re-run placefields if using a different speed threshold
             print('Speed threshold for 2-d PVs does not match previous run - re-calculating placefields')
             PF = placefields(mouse, arena, day, speed_thresh=speed_thresh)
+
+        # Rotate maps and flatten them
+        if rot_deg == 0:
+            PVsm = np.asarray(PF.tmap_sm).reshape(PF.nneurons, -1)
+            PVus = np.asarray(PF.tmap_us).reshape(PF.nneurons, -1)
+        elif rot_deg in [90, 180, 270]:
+                PVsm = np.asarray(rotate_tmaps(PF.tmap_sm, rot_deg)).reshape(PF.nneurons, -1)
+                PVus = np.asarray(rotate_tmaps(PF.tmap_us, rot_deg)).reshape(PF.nneurons, -1)
+
     except FileNotFoundError:
         print('No placefields file found - can''t create 2d population vector')
-
-    # Rotate maps and flatten them
-    if rot_deg == 0:
-        PVsm = np.asarray(PF.tmap_sm).reshape(PF.nneurons, -1)
-        PVus = np.asarray(PF.tmap_us).reshape(PF.nneurons, -1)
-    elif rot_deg in [90, 180, 270]:
-        PVsm = np.asarray(rotate_tmaps(PF.tmap_sm, rot_deg)).reshape(PF.nneurons, -1)
-        PVus = np.asarray(rotate_tmaps(PF.tmap_us, rot_deg)).reshape(PF.nneurons, -1)
+        PVus, PVsm = np.nan, np.nan
 
     return PVus, PVsm
 
