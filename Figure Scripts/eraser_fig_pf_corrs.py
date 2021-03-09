@@ -352,11 +352,13 @@ for mouse in err.all_mice_good:
         for arena2 in arenas:
             for id1, day1 in enumerate(days):
                 for id2, day2 in enumerate(days):
-                    if id1 <= id2 and arena1 != arena2 or id1 < id2 and arena1 == arena2:
+                    # if id1 <= id2 and arena1 != arena2 or id1 < id2 and arena1 == arena2:
+                    if id1 < id2 and arena1 == arena2:
                         try:
-                            print('Running shuffled PV1 corrs for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' +
+                            print('Running shuffled PV2 corrs for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' +
                                   arena2 + ' day ' + str(day2))
-                            pfs.PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf=nshuf, batch_map=True)
+                            if arena1 == arena2:
+                                pfs.PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf=nshuf, batch_map=True)
                         except FileNotFoundError:
                             print('FileNotFoundError for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' +
                                   str(day2))

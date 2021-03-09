@@ -266,7 +266,8 @@ def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, batch_
 
 
 def PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, corr_type='sm', batch_map_use=True,
-                    pf_file='placefields_cm1_manlims_1000shuf.pkl', best_rot=False, shuf_map=False):
+                     pf_file='placefields_cm1_manlims_1000shuf.pkl', best_rot=False, shuf_map=False,
+                     perform_corr=True):
     """
     Gets 2-d population vector correlations between sessions.
     :param mouse:
@@ -280,6 +281,8 @@ def PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, corr_t
     :param best_rot: boolean, False(default) = leave maps as is, True = rotate 2nd session the amount that produces the
     best correlation.
     :param shuf_map: randomly shuffle neuron_map to get shuffled correlations
+    :param perform_corr: False = don't do corr. If False, spits out PVcorr_all as (PV1all, PV2all) and PVcorr_both as
+    (PV1both, PV2both) for easy re-shuffling later on. True = default.
     :return: PVcorr_all, PVcorr_both: spearman correlation between PVs. Includes ALL neurons active in either session or
     only neurons active in both sessions
     """
@@ -313,9 +316,12 @@ def PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, corr_t
         # Now register between sessions
         PV1all, PV2all, PV1both, PV2both = registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=shuf_map)
 
-        # Now flatten PV arrays and get ALL corrs and BOTH corrs
-        PV2dcorr_all, all_p = sstats.spearmanr(PV1all.reshape(-1), PV2all.reshape(-1), nan_policy='omit')
-        PV2dcorr_both, both_p = sstats.spearmanr(PV1both.reshape(-1), PV2both.reshape(-1), nan_policy='omit')
+        if perform_corr:  # Now flatten PV arrays and get ALL corrs and BOTH corrs
+            PV2dcorr_all, all_p = sstats.spearmanr(PV1all.reshape(-1), PV2all.reshape(-1), nan_policy='omit')
+            PV2dcorr_both, both_p = sstats.spearmanr(PV1both.reshape(-1), PV2both.reshape(-1), nan_policy='omit')
+        else:  # Dump these registered PVs into arrays for easy later re-shuffling
+            PV2dcorr_all = (PV1all, PV2all)
+            PV2dcorr_both = (PV1both, PV2both)
 
     return PV2dcorr_all, PV2dcorr_both
 
@@ -517,9 +523,24 @@ def PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf, batch_map=True):
 
     if not path.exists(save_file):
         print('Getting shuffled 2-d PV corrs')
+        # First get the population vectors and register them to one another.
+        PVall, PVboth = PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2, shuf_map=True,
+                                         batch_map_use=batch_map, perform_corr=False)
+
+        PV1all, PV2all = PVall[0], PVall[1]
+        nall = PV1all.shape[0]
+        PV1both, PV2both = PVboth[0], PVboth[1]
+        nboth = PV1both.shape[0]
+
+        # Now shuffle things up and calculate!
         for n in tqdm(np.arange(nshuf)):
-            corr_all, corr_both = PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2, shuf_map=True,
-                                                   batch_map_use=batch_map)
+            corr_all, all_p = sstats.spearmanr(PV1all.reshape(-1),
+                                                   PV2all[np.random.permutation(nall)].reshape(-1),
+                                                   nan_policy='omit')
+            corr_both, both_p = sstats.spearmanr(PV1both.reshape(-1),
+                                                     PV2both[np.random.permutation(nboth)].reshape(-1),
+                                                     nan_policy='omit')
+
             temp_all.append(corr_all)
             temp_both.append(corr_both)
 
@@ -1846,7 +1867,7 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    PV2_corr_bw_sesh('Marble06', 'Shock', -2, 'Shock', -1)
+    PV2_shuf_corrs('Marble06', 'Shock', -2, 'Shock', -1, 100, batch_map=True)
 
     pass
 
