@@ -532,6 +532,8 @@ def PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf, batch_map=True):
         PV1both, PV2both = PVboth[0], PVboth[1]
         nboth = PV1both.shape[0]
 
+        # NRK - eliminate ALL entries with nans in both here to cut down on computation time below...
+
         # Now shuffle things up and calculate!
         for n in tqdm(np.arange(nshuf)):
             corr_all, all_p = sstats.spearmanr(PV1all.reshape(-1),
@@ -1304,15 +1306,25 @@ def get_group_PV2d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nsh
 
 class PlaceFieldHalf:
     """Class to visualize and quantify wihin-session stability"""
-    def __init__(self, mouse, arena, day, ncircshuf=0):
-        # Create PF object for each half - only shuffle spike train in second half of session
-        self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=1, save_file=None)
-        self.PF2 = pf.placefields(mouse, arena, day, nshuf=ncircshuf, half=2, keep_shuffled=True, save_file=None)
-        self.nneurons = len(self.PF1.tmap_sm)
-        self.ncircshuf = ncircshuf
+    def __init__(self, mouse, arena, day, nshuf=100):
+        self.mouse = mouse
+        self.arena = arena
+        self.day = day
+        self.ncircshuf = nshuf
+        try:  # load in existing file if there.
+            self._load()
+        except FileNotFoundError:
+            try:
+                # Create PF object for each half - only shuffle spike train in second half of session
+                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=1, save_file=None)
+                self.PF2 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=2, keep_shuffled=True, save_file=None)
+                self.nneurons = len(self.PF1.tmap_sm)
 
-        # Get correlations between 1st and 2nd half
-        self.calc_half_corrs()
+                # Get correlations between 1st and 2nd half
+                self.calc_half_corrs()
+            except FileNotFoundError:
+                self.half_corrs = {}  # Make empty if not you can't load in
+
 
     def pfscroll(self):
         """Scroll through 1st and 2nd half placefields simultaneously"""
@@ -1411,7 +1423,7 @@ class PlaceFieldHalf:
         save_name = path.join(sd.find_eraser_session(self.mouse, self.arena, self.day)['Location'],
                               "pfhalfcorrs_" + str(self.ncircshuf) + 'shuf.pkl')
         with open(save_name, 'rb') as f:
-            load(f)
+            self.half_corrs = load(f)
 
 
 class SessionStability:
@@ -1423,17 +1435,29 @@ class SessionStability:
         # self.nlmice = err.nonlearners
         self.arenas = ['Open', 'Shock']
         self.days = [-2, -1, 0, 4, 1, 2, 7]
-        self.half_corrs = {}
-        for arena in self.arenas:
-            for day in self.days:
-                for item in self.mice.items():
-                    group_name, mouse_list = item[0], item[1]
-                    session_corrs = []
+        self.half_corrs
+        for item in self.mice.items():
+            group_name, mouse_list = item[0], item[1]
+            self.half_corrs[group_name] = {}
+            for arena in self.arenas:
+                self.half_corrs[group_name][arena] = {}
+                session_corrs = []
+                for day in self.days:
+                    mouse_corrs, circ_shuf, id_shuf = []
                     for mouse in mouse_list:
                         pfh = PlaceFieldHalf(mouse=mouse, arena=arena, day=day)
-                        pfh._load()
-                        session_corrs.append(pfh.tmap_us_corrs)
+                        if 'tmap_sm_corrs' in pfh.half_corrs:
+                            mouse_corrs.append(pfh.half_corrs['tmap_sm_corrs'].mean())
+                        if 'circshuf_sm_mean' in pfh.half_corrs:
+                            circ_shuf.append(pfh.half_corrs['circshuf_sm_mean'])
+                        if 'idshuf_mean' in pfh.half_corrs:
+                            id_shuf.append(pfh.half_corrs['idshuf'])
+                    # Now append values to list above and calculate 95% CIs from mean shuffled data
+                    session_corrs.append(mouse_corrs)
+                    self.half_corrs[group_name][arena]['circshufCI'] = get_CI(np.asarray(circ_shuf, axis=1))
+                    self.half_corrs[group_name][arena]['idshufCI'] = get_CI(np.asarray(id_shuf, axis=1))
 
+                self.half_corrs[group_name][arena]['tmap_sm_mean'] = session_corrs
 
 ## Object to map and view placefields for same neuron mapped between different sessions
 class PFCombineObject:
