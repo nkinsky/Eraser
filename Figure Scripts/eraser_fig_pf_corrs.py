@@ -344,8 +344,6 @@ arenas = ['Shock']
 days = [-2, -1, 0, 4, 1, 2, 7]
 for mouse in err.all_mice_good:
     # # for arena1 in arenas:
-
-
     # # arena2 = arena1
     # arena1 = 'Open'
     # arena2 = 'Shock'
@@ -360,7 +358,7 @@ for mouse in err.all_mice_good:
                                   arena2 + ' day ' + str(day2))
                             if arena1 == arena2:
                                 pfs.PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf=nshuf, batch_map=True)
-                        except FileNotFoundError:
+                        except (FileNotFoundError, IndexError):
                             print('FileNotFoundError for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' +
                                   str(day2))
 ## Identify the best rotation for each correlation between mice

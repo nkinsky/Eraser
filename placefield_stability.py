@@ -34,7 +34,9 @@ from helpers import match_ax_lims, get_CI, mean_CI
 
 # Plotting settings
 palette = sns.color_palette('Set2')
+color_dict = {'learners': palette[0], 'nonlearners': palette[1], 'ani': palette[2]}
 linetypes = ['-', '--', '-.']
+linetype_dict = {'learners': linetypes[0], 'nonlearners': linetypes[1], 'ani': linetypes[2]}
 
 
 # Make text save as whole words
@@ -1429,35 +1431,68 @@ class PlaceFieldHalf:
 class SessionStability:
     """Class to easily look at within session stability across all mice"""
     def __init__(self):
+        """Construct dictionary with each mouse group broken down into Shock/Open mean between-half correlations
+        and 95% CIs"""
         self.mice = {'learners': err.learners, 'nonlearners': err.nonlearners, 'ani': err.ani_mice_good}
         # self.amice = err.ani_mice_good
         # self.lmice = err.learners
         # self.nlmice = err.nonlearners
         self.arenas = ['Open', 'Shock']
         self.days = [-2, -1, 0, 4, 1, 2, 7]
-        self.half_corrs
+        self.half_corrs = {}
         for item in self.mice.items():
             group_name, mouse_list = item[0], item[1]
             self.half_corrs[group_name] = {}
             for arena in self.arenas:
                 self.half_corrs[group_name][arena] = {}
-                session_corrs = []
+                session_corrs, circshufCI, idshufCI = [], [], []
                 for day in self.days:
-                    mouse_corrs, circ_shuf, id_shuf = []
+                    mouse_corrs, circ_shuf, id_shuf = [], [], []
                     for mouse in mouse_list:
                         pfh = PlaceFieldHalf(mouse=mouse, arena=arena, day=day)
                         if 'tmap_sm_corrs' in pfh.half_corrs:
                             mouse_corrs.append(pfh.half_corrs['tmap_sm_corrs'].mean())
+                        else:
+                            mouse_corrs.append(np.nan)
                         if 'circshuf_sm_mean' in pfh.half_corrs:
                             circ_shuf.append(pfh.half_corrs['circshuf_sm_mean'])
                         if 'idshuf_mean' in pfh.half_corrs:
-                            id_shuf.append(pfh.half_corrs['idshuf'])
+                            id_shuf.append(pfh.half_corrs['idshuf_mean'])
                     # Now append values to list above and calculate 95% CIs from mean shuffled data
                     session_corrs.append(mouse_corrs)
-                    self.half_corrs[group_name][arena]['circshufCI'] = get_CI(np.asarray(circ_shuf, axis=1))
-                    self.half_corrs[group_name][arena]['idshufCI'] = get_CI(np.asarray(id_shuf, axis=1))
+                    circshufCI.append(get_CI(np.asarray(circ_shuf).mean(axis=0)))
+                    idshufCI.append(get_CI(np.asarray(id_shuf).mean(axis=0)))
 
-                self.half_corrs[group_name][arena]['tmap_sm_mean'] = session_corrs
+                self.half_corrs[group_name][arena]['circshufCI'] = np.asarray(circshufCI)
+                self.half_corrs[group_name][arena]['idshufCI'] = np.asarray(idshufCI)
+                self.half_corrs[group_name][arena]['tmap_sm_mean'] = np.asarray(session_corrs)
+
+    def plot_stability(self, group, CI='circshufCI', colorby='arena'):
+        """Plot within session stability for all mice in designated group"""
+        narenas = len(self.arenas)
+        fig, ax = plt.subplots(2, 1)
+        sns.despine(fig=fig)
+        fig.set_size_inches([11, 7.5])
+        if colorby == 'arena':
+            colors = ['k', 'r']
+        elif colorby == 'group':
+            colors = [color_dict[group], color_dict[group]]
+        for ida, arena in enumerate(self.arenas):
+            data_use = self.half_corrs[group][arena]
+            sns.stripplot(data=data_use['tmap_sm_mean'].swapaxes(0, 1), color=colors[ida], ax=ax[ida])
+            plt.sca(ax[ida])
+            plt.fill_between(range(data_use[CI].shape[0]), data_use[CI][:, 0],
+                             data_use[CI][:, 2], color='k', alpha=0.3)
+            plt.plot(range(data_use[CI].shape[0]), data_use[CI][:, 1], color='k', alpha=0.3)
+            ax[ida].set_xticklabels([str(day) for day in self.days])
+            if ida == 1:
+                ax[ida].set_xlabel('Session')
+            ax[ida].set_title(group.capitalize() + ': ' + arena + ' 1st v 2nd Half')
+            ax[ida].set_ylabel('Mean Spearman Correlation')
+            if ida == 1:
+                plt.legend([CI, 'Data'])
+
+
 
 ## Object to map and view placefields for same neuron mapped between different sessions
 class PFCombineObject:
@@ -1891,7 +1926,7 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    PV2_shuf_corrs('Marble06', 'Shock', -2, 'Shock', -1, 100, batch_map=True)
+    PFstab = SessionStability()
 
     pass
 
