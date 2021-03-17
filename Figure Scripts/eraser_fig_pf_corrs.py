@@ -338,9 +338,9 @@ for mouse in err.all_mice_good:
 
 
 ## Run shuffled PV2 correlations for each session pair
-nshuf = 1000
+nshuf = 100
 # arenas = ['Shock', 'Open']
-arenas = ['Shock']
+arenas = ['Open']
 days = [-2, -1, 0, 4, 1, 2, 7]
 for mouse in err.all_mice_good:
     # # for arena1 in arenas:
@@ -358,7 +358,7 @@ for mouse in err.all_mice_good:
                                   arena2 + ' day ' + str(day2))
                             if arena1 == arena2:
                                 pfs.PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf=nshuf, batch_map=True)
-                        except (FileNotFoundError, IndexError):
+                        except (FileNotFoundError, IndexError, TypeError):
                             print('FileNotFoundError for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' +
                                   str(day2))
 ## Identify the best rotation for each correlation between mice

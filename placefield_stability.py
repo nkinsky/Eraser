@@ -293,7 +293,7 @@ def PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, corr_t
     neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map_use)
     reg_session = sd.find_eraser_session(mouse, arena2, day2)
 
-    # Gets PVs - NRK update!
+    # Get PVs
     # First determine amount to rotate second session
     if not best_rot:
         rot_deg = 0
@@ -303,13 +303,25 @@ def PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, corr_t
             rot_deg = best_rot[0]
         elif corr_type == 'sm':
             rot_deg = best_rot[1]
-    PV1us, PV1sm = pf.get_PV2(mouse, arena1, day1, speed_thresh=speed_thresh, pf_file=pf_file)
-    PV2us, PV2sm = pf.get_PV2(mouse, arena2, day2, speed_thresh=speed_thresh, pf_file=pf_file, rot_deg=rot_deg)
 
+    if arena1 == arena2 and not best_rot:  # Don't resize 2nd session PFs if not rotating or looking b/w arenas
+        pf1_shape = None
+    else:  # Get dimensions of PFs in 1st session for resizing 2nd session to match if necessary
+        try:
+            PF1 = pf.load_pf(mouse, arena1, day1, pf_file=pf_file)
+        except FileNotFoundError:
+            raise RuntimeError('No placefields file found - can''t create 2d population vector')
+        pf1_shape = PF1.tmap_sm[0].shape
+
+    PV1us, PV1sm = pf.get_PV2(mouse, arena1, day1, speed_thresh=speed_thresh, pf_file=pf_file)
+    PV2us, PV2sm = pf.get_PV2(mouse, arena2, day2, speed_thresh=speed_thresh, pf_file=pf_file,
+                              rot_deg=rot_deg, resize_dims=pf1_shape)
+
+    # Fill in as nan if session data is missing
     if (np.isnan(PV1us).all() and np.isnan(PV1sm).all()) or (np.isnan(PV2us).all() and np.isnan(PV2sm).all()):
         PV2dcorr_all, PV2dcorr_both = np.nan, np.nan
-    else:
-        # Get the correct maps (smoothed vs. unsmoothed)
+    else:  # Get the correct maps (smoothed vs. unsmoothed)
+
         if corr_type == 'sm':
             PV1, PV2 = PV1sm, PV2sm
         elif corr_type == 'us':
@@ -369,8 +381,17 @@ def registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=False):
         PV1all = np.concatenate((PV1, np.zeros(nnew)))
         PV2allreg = np.concatenate((np.zeros(PV1.shape), np.zeros(nnew)))
     elif type == '2d':
-        PV1all = np.concatenate((PV1, np.zeros((nnew, nbins))))
-        PV2allreg = np.concatenate((np.zeros(PV1.shape), np.zeros((nnew, nbins))))
+        # Find out where there is zero occupancy (e.g. nan in a spatial bin across all neurons) and
+        # add that onto the end of the PV arrays
+        pfpad1 = np.zeros((1, nbins))
+        pf1nanbool = np.all(np.isnan(PV1), axis=0)
+        pfpad1[0, pf1nanbool] = np.nan * np.ones(pf1nanbool.sum())
+        PV1all = np.concatenate((PV1, np.matlib.repmat(pfpad1, nnew, 1)))
+
+        pfpad2 = np.zeros((1, nbins))
+        pf2nanbool = np.all(np.isnan(PV2), axis=0)
+        pfpad2[0, pf2nanbool] = np.nan * np.ones(pf2nanbool.sum())
+        PV2allreg = np.concatenate((np.zeros(PV1.shape), np.matlib.repmat(pfpad2, nnew, 1)))
     PV2allreg[good_map_ind] = PV2[good_map]  # Dump in all neurons from second session that match those in first session.
     PV2allreg[len(PV1):] = PV2[new_ind]  # Add in new neurons from second session to end - needs checking!
 
@@ -636,8 +657,8 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
         tmaps2_us_use, tmaps2_sm_use = tmaps2_us_rot, tmaps2_sm_rot
     else:
         tmap1_shape = tmaps1_us_valid[0].shape
-        tmaps2_us_use = rescale_tmaps(tmaps2_us_rot, tmap1_shape)
-        tmaps2_sm_use = rescale_tmaps(tmaps2_sm_rot, tmap1_shape)
+        tmaps2_us_use = pf.rescale_tmaps(tmaps2_us_rot, tmap1_shape)
+        tmaps2_sm_use = pf.rescale_tmaps(tmaps2_sm_rot, tmap1_shape)
 
     # Finally do your correlations!
     corrs_us = get_pf_corrs(tmaps1_us_valid, tmaps2_us_use, keep_poor_overlap=keep_poor_overlap)
@@ -724,20 +745,6 @@ def get_pf_corrs(tmaps1, tmaps2, keep_poor_overlap=False):
                 corrs.append(corr)
 
     return np.asarray(corrs)
-
-
-def rescale_tmaps(tmaps, new_size):
-    """
-    Resize all transient maps in tmaps to roughly match the shape specified in new_size
-    :param tmaps: list of tmaps
-    :param new_size: shape = (2,) list or tuple with shape to rescale to
-    :return: list of reshaped tmaps
-    """
-    tmaps_rescale = []
-    for tmap in tmaps:
-            tmaps_rescale.append(sk_resize(tmap, new_size, anti_aliasing=True))
-
-    return tmaps_rescale
 
 
 def rotate_tmaps(tmaps, rot_deg):
@@ -1429,7 +1436,7 @@ class PlaceFieldHalf:
 
 
 class SessionStability:
-    """Class to easily look at within session stability across all mice"""
+    """Class to easily look at within session stability across all mice/sessions"""
     def __init__(self):
         """Construct dictionary with each mouse group broken down into Shock/Open mean between-half correlations
         and 95% CIs"""
@@ -1496,6 +1503,7 @@ class SessionStability:
 
 ## Object to map and view placefields for same neuron mapped between different sessions
 class PFCombineObject:
+    """map and view placefields for same neuron mapped between different sessions"""
     def __init__(self, mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl', debug=False):
         self.mouse = mouse
         self.arena1 = arena1
@@ -1602,8 +1610,10 @@ class PFCombineObject:
                                 traj_lims=lims1, traj_lims2=lims2)
 
 
-# Create class to calculate and save correlations between sessions with neuron_map shuffled
+## Create class to calculate and save correlations between sessions with neuron_map shuffled
 class ShufMap:
+    """Create class to calculate and save correlations between sessions with neuron_map shuffled (basically
+    a unit id shuffle)"""
     def __init__(self, mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1, nshuf=100):
         self.mouse = mouse
         self.arena1 = arena1
@@ -1639,6 +1649,7 @@ class ShufMap:
 
 ## create a class to construct and keep all group data in a nice format and plot things...
 class GroupPF:
+    """construct and keep all group placefield data in a nice format and plot things..."""
     def __init__(self):
         self.amice = err.ani_mice_good
         self.lmice = err.learners
@@ -1668,6 +1679,7 @@ class GroupPF:
         self.nshuf = nshuf
         self.batch_map = batch_map
         self.cmperbin = pf.load_pf(self.lmice[0], 'Shock', -2, pf_file=pf_file).cmperbin
+        self.nshuf2d = [100, 1000, 0]  # for 'Shock', 'Open', and 'Open v Shock' until all shuffles run
         for type in types:
             learn_bestcorr_mean_all, nlearn_bestcorr_mean_all, ani_bestcorr_mean_all = [], [], []
             learn_shuf_all, nlearn_shuf_all, ani_shuf_all = [], [], []
@@ -1706,19 +1718,19 @@ class GroupPF:
                     tempnl, _, temp_sh_nl, _ = get_group_PV1d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf)
                     tempa, _, temp_sh_a, _ = get_group_PV1d_corrs(self.amice, arena1, arena2, self.days, nshuf=nshuf)
                 elif type == 'PV2dboth':
-                    _, templ, _, temp_sh_l = get_group_PV2d_corrs(self.lmice, arena1, arena2, self.days, nshuf=nshuf,
-                                                                  best_rot=best_rot)
-                    _, tempnl, _, temp_sh_nl = get_group_PV2d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf,
-                                                                    best_rot=best_rot)
-                    _, tempa, _, temp_sh_a = get_group_PV2d_corrs(self.amice, arena1, arena2, self.days, nshuf=nshuf,
-                                                                  best_rot=best_rot)
+                    _, templ, _, temp_sh_l = get_group_PV2d_corrs(self.lmice, arena1, arena2, self.days,
+                                                                  nshuf=self.nshuf2d[ida], best_rot=best_rot)
+                    _, tempnl, _, temp_sh_nl = get_group_PV2d_corrs(self.nlmice, arena1, arena2, self.days,
+                                                                    nshuf=self.nshuf2d[ida], best_rot=best_rot)
+                    _, tempa, _, temp_sh_a = get_group_PV2d_corrs(self.amice, arena1, arena2, self.days,
+                                                                  nshuf=self.nshuf2d[ida], best_rot=best_rot)
                 elif type == 'PV2dall':
-                    templ, _, temp_sh_l, _ = get_group_PV2d_corrs(self.lmice, arena1, arena2, self.days, nshuf=nshuf,
-                                                                  best_rot=best_rot)
-                    tempnl, _, temp_sh_nl, _ = get_group_PV2d_corrs(self.nlmice, arena1, arena2, self.days, nshuf=nshuf,
-                                                                    best_rot=best_rot)
-                    tempa, _, temp_sh_a, _ = get_group_PV2d_corrs(self.amice, arena1, arena2, self.days, nshuf=nshuf,
-                                                                  best_rot=best_rot)
+                    templ, _, temp_sh_l, _ = get_group_PV2d_corrs(self.lmice, arena1, arena2, self.days,
+                                                                  nshuf=self.nshuf2d[ida], best_rot=best_rot)
+                    tempnl, _, temp_sh_nl, _ = get_group_PV2d_corrs(self.nlmice, arena1, arena2, self.days,
+                                                                    nshuf=self.nshuf2d[ida], best_rot=best_rot)
+                    tempa, _, temp_sh_a, _ = get_group_PV2d_corrs(self.amice, arena1, arena2, self.days,
+                                                                  nshuf=self.nshuf2d[ida], best_rot=best_rot)
 
                 learn_bestcorr_mean_all.append(templ)
                 nlearn_bestcorr_mean_all.append(tempnl)
@@ -1926,7 +1938,7 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    PFstab = SessionStability()
-
+    PV2_shuf_corrs('Marble06', 'Open', 1, 'Open', 2, 101)
+    print('stop here')
     pass
 
