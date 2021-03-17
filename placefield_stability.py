@@ -391,7 +391,7 @@ def registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=False):
         pfpad2 = np.zeros((1, nbins))
         pf2nanbool = np.all(np.isnan(PV2), axis=0)
         pfpad2[0, pf2nanbool] = np.nan * np.ones(pf2nanbool.sum())
-        PV2allreg = np.concatenate((np.zeros(PV1.shape), np.matlib.repmat(pfpad2, nnew, 1)))
+        PV2allreg = np.matlib.repmat(pfpad2, PV1.shape[0] + nnew, 1)
     PV2allreg[good_map_ind] = PV2[good_map]  # Dump in all neurons from second session that match those in first session.
     PV2allreg[len(PV1):] = PV2[new_ind]  # Add in new neurons from second session to end - needs checking!
 
@@ -522,7 +522,7 @@ def get_all_PV2d_corrs(mouse, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshu
     return corrs_all, corrs_both, shuf_all, shuf_both
 
 
-def PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf, batch_map=True):
+def PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf, batch_map=True, debug=False):
     """
     Gets correlations for 1-d PVs between arenas/days with neuron mapping shuffled between sessions.
     :param mouse:
@@ -556,7 +556,9 @@ def PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf, batch_map=True):
         nboth = PV1both.shape[0]
 
         # NRK - eliminate ALL entries with nans in both here to cut down on computation time below...
-
+        good_bins = ~np.all(np.isnan(PV1both) | np.isnan(PV2both), axis=0)
+        P1all, PV1both = PV1all[:, good_bins], PV1both[:, good_bins]
+        PV2all, PV2both = PV2all[:, good_bins], PV2both[:, good_bins]
         # Now shuffle things up and calculate!
         for n in tqdm(np.arange(nshuf)):
             corr_all, all_p = sstats.spearmanr(PV1all.reshape(-1),
