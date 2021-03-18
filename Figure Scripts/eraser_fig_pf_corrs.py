@@ -338,7 +338,7 @@ for mouse in err.all_mice_good:
 
 
 ## Run shuffled PV2 correlations for each session pair
-nshuf = 100
+nshuf = 1000
 # arenas = ['Shock', 'Open']
 arenas = ['Open']
 days = [-2, -1, 0, 4, 1, 2, 7]

@@ -298,11 +298,11 @@ def PV2_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, corr_t
     if not best_rot:
         rot_deg = 0
     elif best_rot:
-        _, best_rot, _ = get_best_rot(mouse, arena1, day1, arena2, day2, pf_file=pf_file)
+        _, rot_degs, _ = get_best_rot(mouse, arena1, day1, arena2, day2, pf_file=pf_file)
         if corr_type == 'us':
-            rot_deg = best_rot[0]
+            rot_deg = rot_degs[0]
         elif corr_type == 'sm':
-            rot_deg = best_rot[1]
+            rot_deg = rot_degs[1]
 
     if arena1 == arena2 and not best_rot:  # Don't resize 2nd session PFs if not rotating or looking b/w arenas
         pf1_shape = None
@@ -555,10 +555,11 @@ def PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf, batch_map=True, deb
         PV1both, PV2both = PVboth[0], PVboth[1]
         nboth = PV1both.shape[0]
 
-        # NRK - eliminate ALL entries with nans in both here to cut down on computation time below...
+        # Eiminate ALL spatial bins with no occupancy in either sesison to (hopefully) cut down on computation time below...
         good_bins = ~np.all(np.isnan(PV1both) | np.isnan(PV2both), axis=0)
-        P1all, PV1both = PV1all[:, good_bins], PV1both[:, good_bins]
+        PV1all, PV1both = PV1all[:, good_bins], PV1both[:, good_bins]
         PV2all, PV2both = PV2all[:, good_bins], PV2both[:, good_bins]
+
         # Now shuffle things up and calculate!
         for n in tqdm(np.arange(nshuf)):
             corr_all, all_p = sstats.spearmanr(PV1all.reshape(-1),
@@ -1940,7 +1941,7 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    PV2_shuf_corrs('Marble06', 'Open', 1, 'Open', 2, 101)
+    PV2_shuf_corrs('Marble06', 'Open', -2, 'Open', -1, 101, batch_map=True)
     print('stop here')
     pass
 
