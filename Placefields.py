@@ -220,11 +220,21 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
 
     # Break up session into halves if necessary.
     if half is not None:
+        # Identify # minutes and when half occurs
         half_id = np.floor(len(isrunning) / 2).astype('int')
+        nminutes = np.ceil(len(isrunning) / sr_image / 60).astype(int)
+
+        # Now chop things up!
         if half == 1:
             isrunning[half_id:] = False
         elif half == 2:
             isrunning[:half_id] = False
+        elif half in ('odd', 'even'):
+            odd_even_bool = np.zeros_like(isrunning)
+            start_minute = np.where([half == epoch for epoch in ['odd', 'even']])[0][0]
+            for a in range(start_minute, nminutes, 2):
+                odd_even_bool[a * 60 * sr_image:(a + 1) * 60 * sr_image] = 1
+            isrunning[~odd_even_bool] = False
 
     # Get the mouse's occupancy in each spatial bin
     occmap, runoccmap, xEdges, yEdges, xBin, yBin = \
