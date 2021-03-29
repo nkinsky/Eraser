@@ -446,7 +446,7 @@ for mouse in err.all_mice_good:
         plt.close('all')
 
 
-## Calculate PF stability across days with two different metrics and save them
+## Calculate PF stability within days with two different metrics and save them
 from eraser_reference import all_mice_good
 import placefield_stability
 import session_directory as sd

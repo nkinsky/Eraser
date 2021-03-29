@@ -1335,9 +1335,11 @@ class PlaceFieldHalf:
         self.arena = arena
         self.day = day
         self.ncircshuf = nshuf
-        if type == "half":
+        self.type = type
+        self.generate_save_name()  # Get file name for loading in/saving later
+        if self.type == "half":
             half1, half2 = 1, 2
-        elif type == "odd/even" or type == "even/odd":
+        elif self.type == "odd/even" or self.type == "even/odd":
             half1, half2 = "odd", "even"
         try:  # load in existing file if there.
             self._load()
@@ -1443,19 +1445,26 @@ class PlaceFieldHalf:
 
         return ax
 
+    def generate_save_name(self):
+        if self.type == "half":
+            name_append = ""
+        elif self.type == "odd/even" or self.type == "even/odd":
+            name_append = "odd_v_even"
+        self.save_name = path.join(sd.find_eraser_session(self.mouse, self.arena, self.day)['Location'],
+                                   "pfhalfcorrs_" + str(self.ncircshuf) + 'shuf' + name_append + '.pkl')
+
     def _save(self):
-        save_name = path.join(sd.find_eraser_session(self.mouse, self.arena, self.day)['Location'],
-                              "pfhalfcorrs_" + str(self.ncircshuf) + 'shuf.pkl')
+
         half_corrs = {'mouse': self.mouse, 'arena': self.areba, 'day': self.day, 'ncircshuf': self.ncircshuf,
                       'nidshuf': self.nidshuf, 'idshuf_mean': self.idshuf_sm_mean,
                       'circshuf_sm_mean': self.circshuf_sm_mean, 'tmap_sm_corrs': self.tmap_sm_corrs}
-        with open(save_name, 'wb') as f:
+        with open(self.save_name, 'wb') as f:
             dump(half_corrs, f)
 
     def _load(self):
         save_name = path.join(sd.find_eraser_session(self.mouse, self.arena, self.day)['Location'],
                               "pfhalfcorrs_" + str(self.ncircshuf) + 'shuf.pkl')
-        with open(save_name, 'rb') as f:
+        with open(self.save_name, 'rb') as f:
             self.half_corrs = load(f)
 
 
