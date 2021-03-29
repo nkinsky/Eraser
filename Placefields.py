@@ -190,7 +190,7 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
     PSAbool = im_data['PSAbool']
     nneurons, _ = np.shape(PSAbool)
     try:
-        sr_image = im_data['SampleRate']
+        sr_image = im_data['SampleRate'].squeeze()
     except KeyError:
         sr_image = 20
 
@@ -515,8 +515,6 @@ def spatinfo(tmap_us, runoccmap, PSAbool):
     isec = []
     ispk = []
     for neuron in np.arange(nneurons):
-        if neuron in [0, 88]:
-            print('Debugging neuron ' + str(neuron))
         # Get probability of spike given location, tmap, only taking good pixels
         try:
             p1xtemp = tmap_us[neuron].flatten()

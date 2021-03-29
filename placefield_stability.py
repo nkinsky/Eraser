@@ -1323,19 +1323,34 @@ def get_group_PV2d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nsh
 
 
 class PlaceFieldHalf:
-    """Class to visualize and quantify wihin-session stability"""
-    def __init__(self, mouse, arena, day, nshuf=100):
+    """Class to visualize and quantify wihin-session stability
+    :param: mouse, arena day: self-explanatory
+    :param: nshuf: #unit-id and circular event-train shuffles to perform when calculating chance-level between half
+    correlations
+    :param: type: "half" (default) calculates 1st v 2nd half, "odd/even" calculates odd v even minutes
+    """
+    def __init__(self, mouse, arena, day, nshuf=100, type="half"):
+
         self.mouse = mouse
         self.arena = arena
         self.day = day
         self.ncircshuf = nshuf
+        if type == "half":
+            half1, half2 = 1, 2
+        elif type == "odd/even" or type == "even/odd":
+            half1, half2 = "odd", "even"
         try:  # load in existing file if there.
             self._load()
+            self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None)
+            self.PF2 = pf.placefields(mouse, arena, day, nshuf=0, half=half2, keep_shuffled=False, save_file=None)
+            self.calc_half_corrs()  # calculate actual correlations directly
+            self.idshuf_sm_mean = self.half_corrs['idshuf_mean']
+            self.circshuf_sm_mean = self.half_corrs['circshuf_sm_mean']
         except FileNotFoundError:
             try:
                 # Create PF object for each half - only shuffle spike train in second half of session
-                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=1, save_file=None)
-                self.PF2 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=2, keep_shuffled=True, save_file=None)
+                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None)
+                self.PF2 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=half2, keep_shuffled=True, save_file=None)
                 self.nneurons = len(self.PF1.tmap_sm)
 
                 # Get correlations between 1st and 2nd half
@@ -1975,10 +1990,6 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    pfg = GroupPF()
-    # pfg.construct(types=['PV1dboth', 'PV1dall', 'PV2dboth', 'PV2dall', 'PFsm', 'PFus'], best_rot=True, batch_map=True)
-    # get_group_PV2d_corrs(err.nonlearners, 'Open', 'Open', [-2, -1, 0, 4, 1, 2, 7],
-    #                      nshuf=1000, best_rot=False, batch_map_use=True)
-    get_all_PV1corrs('Marble24', 'Shock', 'Shock', days=[-2, -1, 0, 4, 1, 2, 7], nshuf=1000, batch_map_use=False)
+    PlaceFieldHalf('Marble06', 'Shock', -2, type='odd/even')
     pass
 
