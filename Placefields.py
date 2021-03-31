@@ -609,7 +609,7 @@ class PlaceFieldObject:
         with open(save_file, 'wb') as output:
             dump(self, output)
 
-    def pfscroll(self, current_position=0, pval_thresh=1, plot_xy=False, link_PFO=None):
+    def pfscroll(self, current_position=0, pval_thresh=1.01, plot_xy=False, link_PFO=None):
         """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
         and unsmoothed tmaps in another
 

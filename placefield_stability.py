@@ -1345,6 +1345,7 @@ class PlaceFieldHalf:
             self._load()
             self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None)
             self.PF2 = pf.placefields(mouse, arena, day, nshuf=0, half=half2, keep_shuffled=False, save_file=None)
+            self.nneurons = len(self.PF1.tmap_sm)
             self.calc_half_corrs()  # calculate actual correlations directly
             self.idshuf_sm_mean = self.half_corrs['idshuf_mean']
             self.circshuf_sm_mean = self.half_corrs['circshuf_sm_mean']
@@ -1455,15 +1456,15 @@ class PlaceFieldHalf:
 
     def _save(self):
 
-        half_corrs = {'mouse': self.mouse, 'arena': self.areba, 'day': self.day, 'ncircshuf': self.ncircshuf,
+        half_corrs = {'mouse': self.mouse, 'arena': self.arena, 'day': self.day, 'ncircshuf': self.ncircshuf,
                       'nidshuf': self.nidshuf, 'idshuf_mean': self.idshuf_sm_mean,
                       'circshuf_sm_mean': self.circshuf_sm_mean, 'tmap_sm_corrs': self.tmap_sm_corrs}
         with open(self.save_name, 'wb') as f:
             dump(half_corrs, f)
 
     def _load(self):
-        save_name = path.join(sd.find_eraser_session(self.mouse, self.arena, self.day)['Location'],
-                              "pfhalfcorrs_" + str(self.ncircshuf) + 'shuf.pkl')
+        # save_name = path.join(sd.find_eraser_session(self.mouse, self.arena, self.day)['Location'],
+        #                       "pfhalfcorrs_" + str(self.ncircshuf) + 'shuf.pkl')
         with open(self.save_name, 'rb') as f:
             self.half_corrs = load(f)
 

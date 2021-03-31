@@ -453,6 +453,7 @@ import session_directory as sd
 import pickle
 import os
 ncircshuf, nidshuf = 100, 100
+type, name_append = "odd/even", "odd_v_even"
 days = [-2, -1, 0, 4, 1, 2, 7]
 boxes = ['Open', 'Shock']
 mice_use = all_mice_good
@@ -461,23 +462,24 @@ for mouse in mice_use:  #all_mice_good:
         for box in boxes:
             try:
                 save_name = os.path.join(sd.find_eraser_session(mouse, box, day)['Location'], "pfhalfcorrs_" + str(
-                    ncircshuf) + 'shuf.pkl')
+                    ncircshuf) + 'shuf' + name_append + '.pkl')
                 if os.path.exists(save_name):  # Move on if file has already been saved
                     # print('File for ' + mouse + ' ' + box + ' Day ' + str(day) + ' already exists')
                     continue
                 print(mouse + ' ' + box + ' Day ' + str(day))
                 # Create placefield half class and calculate real and shuffled correlations.
-                PFh = placefield_stability.PlaceFieldHalf(mouse, box, day, ncircshuf=ncircshuf)
+                PFh = placefield_stability.PlaceFieldHalf(mouse, box, day, nshuf=ncircshuf, type=type)
                 PFh.calc_half_corrs()
                 PFh.calc_idshuffled_corrs(nidshuf=nidshuf)
                 PFh.calc_circshuffled_corrs()
+                PFh._save()
 
                 # now save.
-                half_corrs = {'mouse': mouse, 'arena': box, 'day': day, 'ncircshuf': ncircshuf, 'nidshuf': nidshuf,
-                              'idshuf_mean': PFh.idshuf_sm_mean, 'circshuf_sm_mean': PFh.circshuf_sm_mean,
-                              'tmap_sm_corrs': PFh.tmap_sm_corrs}
-                with open(save_name, 'wb') as f:
-                    pickle.dump(half_corrs, f)
-            except FileNotFoundError:
+                # half_corrs = {'mouse': mouse, 'arena': box, 'day': day, 'ncircshuf': ncircshuf, 'nidshuf': nidshuf,
+                #               'idshuf_mean': PFh.idshuf_sm_mean, 'circshuf_sm_mean': PFh.circshuf_sm_mean,
+                #               'tmap_sm_corrs': PFh.tmap_sm_corrs}
+                # with open(save_name, 'wb') as f:
+                #     pickle.dump(half_corrs, f)
+            except (FileNotFoundError, ValueError, AttributeError):
                 print('Error - moving onto next session')
 
