@@ -1328,25 +1328,30 @@ class PlaceFieldHalf:
     :param: nshuf: #unit-id and circular event-train shuffles to perform when calculating chance-level between half
     correlations
     :param: type: "half" (default) calculates 1st v 2nd half, "odd/even" calculates odd v even minutes
+    :param: quickload: True = load in correlations only (faster), False (default) = load in all placefields
     """
-    def __init__(self, mouse, arena, day, nshuf=100, type="half"):
+    def __init__(self, mouse, arena, day, nshuf=100, plot_type="half", quickload=False):
 
         self.mouse = mouse
         self.arena = arena
         self.day = day
         self.ncircshuf = nshuf
-        self.type = type
+        self.plot_type = plot_type
         self.generate_save_name()  # Get file name for loading in/saving later
-        if self.type == "half":
+        if self.plot_type == "half":
             half1, half2 = 1, 2
-        elif self.type == "odd/even" or self.type == "even/odd":
+        elif self.plot_type == "odd/even" or self.type == "even/odd":
             half1, half2 = "odd", "even"
         try:  # load in existing file if there.
             self._load()
-            self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None)
-            self.PF2 = pf.placefields(mouse, arena, day, nshuf=0, half=half2, keep_shuffled=False, save_file=None)
-            self.nneurons = len(self.PF1.tmap_sm)
-            self.calc_half_corrs()  # calculate actual correlations directly
+            if quickload:
+                PF = pf.load_pf(mouse, arena, day)
+            elif not quickload:
+                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None)
+                self.PF2 = pf.placefields(mouse, arena, day, nshuf=0, half=half2, keep_shuffled=False, save_file=None)
+            self.nneurons = len(PF.tmap_sm)
+            # self.calc_half_corrs()  # calculate actual correlations directly
+            self.tmap_sm_corrs = self.half_corrs['tmap_sm_corrs']
             self.idshuf_sm_mean = self.half_corrs['idshuf_mean']
             self.circshuf_sm_mean = self.half_corrs['circshuf_sm_mean']
         except FileNotFoundError:
@@ -1358,7 +1363,8 @@ class PlaceFieldHalf:
 
                 # Get correlations between 1st and 2nd half
                 self.calc_half_corrs()
-            except FileNotFoundError:
+                self._save()
+            except FileNotFoundError: # (FileNotFoundError, ValueError, AttributeError):
                 self.half_corrs = {}  # Make empty if not you can't load in
 
 
@@ -1447,9 +1453,9 @@ class PlaceFieldHalf:
         return ax
 
     def generate_save_name(self):
-        if self.type == "half":
+        if self.plot_type == "half":
             name_append = ""
-        elif self.type == "odd/even" or self.type == "even/odd":
+        elif self.plot_type == "odd/even" or self.plot_type == "even/odd":
             name_append = "odd_v_even"
         self.save_name = path.join(sd.find_eraser_session(self.mouse, self.arena, self.day)['Location'],
                                    "pfhalfcorrs_" + str(self.ncircshuf) + 'shuf' + name_append + '.pkl')
@@ -1471,10 +1477,13 @@ class PlaceFieldHalf:
 
 class SessionStability:
     """Class to easily look at within session stability across all mice/sessions"""
-    def __init__(self):
+    def __init__(self, plot_type='half'):
         """Construct dictionary with each mouse group broken down into Shock/Open mean between-half correlations
-        and 95% CIs"""
+        and 95% CIs
+        :param: plot_type = 'half' or 'odd_v_even" to calculate correlations based on 1st v 2nd half or odd v even minutes
+        """
         self.mice = {'learners': err.learners, 'nonlearners': err.nonlearners, 'ani': err.ani_mice_good}
+        self.plot_type = plot_type
         # self.amice = err.ani_mice_good
         # self.lmice = err.learners
         # self.nlmice = err.nonlearners
@@ -1489,16 +1498,23 @@ class SessionStability:
                 session_corrs, circshufCI, idshufCI = [], [], []
                 for day in self.days:
                     mouse_corrs, circ_shuf, id_shuf = [], [], []
-                    for mouse in mouse_list:
-                        pfh = PlaceFieldHalf(mouse=mouse, arena=arena, day=day)
-                        if 'tmap_sm_corrs' in pfh.half_corrs:
-                            mouse_corrs.append(pfh.half_corrs['tmap_sm_corrs'].mean())
-                        else:
+                    if not (day == 0 and arena == "Shock"):  # calculate for everything except shock day 0!
+                        for mouse in mouse_list:
+                            pfh = PlaceFieldHalf(mouse=mouse, arena=arena, day=day, quickload=True, plot_type=plot_type)
+                            if 'tmap_sm_corrs' in pfh.half_corrs:
+                                mouse_corrs.append(pfh.half_corrs['tmap_sm_corrs'].mean())
+                            else:
+                                mouse_corrs.append(np.nan)
+                            if 'circshuf_sm_mean' in pfh.half_corrs:
+                                circ_shuf.append(pfh.half_corrs['circshuf_sm_mean'])
+                            if 'idshuf_mean' in pfh.half_corrs:
+                                id_shuf.append(pfh.half_corrs['idshuf_mean'])
+                    elif day == 0 and arena == "Shock":  # Don't calculate anything for shock day 0!
+                        for mouse in mouse_list:  # send everything to nans!
                             mouse_corrs.append(np.nan)
-                        if 'circshuf_sm_mean' in pfh.half_corrs:
-                            circ_shuf.append(pfh.half_corrs['circshuf_sm_mean'])
-                        if 'idshuf_mean' in pfh.half_corrs:
-                            id_shuf.append(pfh.half_corrs['idshuf_mean'])
+                            circ_shuf.append(np.nan)
+                            id_shuf.append(np.nan)
+
                     # Now append values to list above and calculate 95% CIs from mean shuffled data
                     session_corrs.append(mouse_corrs)
                     circshufCI.append(get_CI(np.asarray(circ_shuf).mean(axis=0)))
@@ -1540,7 +1556,10 @@ class SessionStability:
             ax[ida].set_xticklabels([str(day) for day in self.days])
             if ida == 1:
                 ax[ida].set_xlabel('Session')
-            ax[ida].set_title(group.capitalize() + ': ' + arena + ' 1st v 2nd Half')
+            if self.plot_type == 'half':
+                ax[ida].set_title(group.capitalize() + ': ' + arena + ' 1st v 2nd Half')
+            elif self.plot_type == 'odd/even' or self.plot_type == 'even/odd':
+                ax[ida].set_title(group.capitalize() + ': ' + arena + ' Odd v Even Minutes')
             ax[ida].set_ylabel('Mean Spearman Correlation')
             if ida == 1:
                 plt.legend([CI, 'Data'])
