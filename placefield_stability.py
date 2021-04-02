@@ -1549,9 +1549,10 @@ class SessionStability:
         # now plot everything
         ncollections = [0]
         for ida, arena in enumerate(self.arenas):
-            if bw_arena:
+            # set up axes
+            if bw_arena: # plot on same subplot for between arena plots
                 ax_use = ax[0]
-            elif not bw_arena:
+            elif not bw_arena: # otherwise plot separately
                 ax_use = ax[ida]
 
             data_use = self.half_corrs[group][arena]  # pull out correct group
@@ -1581,9 +1582,12 @@ class SessionStability:
             if ida == 1 and not bw_arena:
                 plt.legend([CI, 'Data'])
 
-        if bw_arena:  # connect dots if bw_arena plots! need vetting!
-            collection1 = ax_use.collections[ncollections[0], ncollections[1]]
-            collection2 = ax_use.collections[ncollections[1], ncollections[2]]
+        # connect dots if bw_arena plots! need vetting!
+        if bw_arena:
+            collection1 = ax_use.collections[ncollections[0], ncollections[1]]  # Grab arena 1 points
+            collection2 = ax_use.collections[ncollections[1], ncollections[2]]  # Grab arena 2 points
+
+            # iterate through each session and connect the dots
             for col1, col2 in zip(collection1, collection2):
                 xvals = np.asarray([col1.get_offsets().data[:, 0],
                                     col2.get_offsets().data[:, 0]])
