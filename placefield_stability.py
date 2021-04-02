@@ -1524,7 +1524,7 @@ class SessionStability:
                 self.half_corrs[group_name][arena]['idshufCI'] = np.asarray(idshufCI)
                 self.half_corrs[group_name][arena]['tmap_sm_mean'] = np.asarray(session_corrs)
 
-    def plot_stability(self, group, CI='circshufCI', colorby='arena'):
+    def plot_stability(self, group, CI='circshufCI', colorby='arena', bw_arena=False):
         """Plot within session stability for all mice in designated group"""
         narenas = len(self.arenas)  # is this used?
 
@@ -1539,30 +1539,57 @@ class SessionStability:
         elif colorby == 'group':
             colors = [color_dict[group.lower()], color_dict[group]]
 
+        def offset_points(ax, offset, collection_range):
+            for idc in collection_range:
+                offset_data = ax.collections[idc].get_offsets().data + \
+                              np.matlib.repmat([-offset, 0],
+                                               ax.collections[2].get_offsets().data.shape[0], 1)
+                ax.collections[idc].set_offsets(offset_data)
+
         # now plot everything
+        ncollections = [0]
         for ida, arena in enumerate(self.arenas):
+            if bw_arena:
+                ax_use = ax[0]
+            elif not bw_arena:
+                ax_use = ax[ida]
+
             data_use = self.half_corrs[group][arena]  # pull out correct group
 
             # plot data
-            sns.stripplot(data=data_use['tmap_sm_mean'].swapaxes(0, 1), color=colors[ida], ax=ax[ida])
+            sns.stripplot(data=data_use['tmap_sm_mean'].swapaxes(0, 1), color=colors[ida], ax=ax_use)
+            if bw_arena:  # offset points!
+                ncollections.append(len(ax_use.collections))
+                collection_range = range(ncollections[-2], ncollections[-1])
+                offset_points(ax_use, 0.25, collection_range)
 
             # Fill in 95% CIs for shuffled data
-            plt.sca(ax[ida])
+            plt.sca(ax_use)
             plt.fill_between(range(data_use[CI].shape[0]), data_use[CI][:, 0],
                              data_use[CI][:, 2], color='k', alpha=0.3)  # 95% CIs
             plt.plot(range(data_use[CI].shape[0]), data_use[CI][:, 1], color='k', alpha=0.3)  # mean shuffled
 
             # Label everything
-            ax[ida].set_xticklabels([str(day) for day in self.days])
+            ax_use.set_xticklabels([str(day) for day in self.days])
             if ida == 1:
-                ax[ida].set_xlabel('Session')
+                ax_use.set_xlabel('Session')
             if self.plot_type == 'half':
-                ax[ida].set_title(group.capitalize() + ': ' + arena + ' 1st v 2nd Half')
+                ax_use.set_title(group.capitalize() + ': ' + arena + ' 1st v 2nd Half')
             elif self.plot_type == 'odd/even' or self.plot_type == 'even/odd':
-                ax[ida].set_title(group.capitalize() + ': ' + arena + ' Odd v Even Minutes')
+                ax_use.set_title(group.capitalize() + ': ' + arena + ' Odd v Even Minutes')
             ax[ida].set_ylabel('Mean Spearman Correlation')
-            if ida == 1:
+            if ida == 1 and not bw_arena:
                 plt.legend([CI, 'Data'])
+
+        if bw_arena:  # connect dots if bw_arena plots! need vetting!
+            collection1 = ax_use.collections[ncollections[0], ncollections[1]]
+            collection2 = ax_use.collections[ncollections[1], ncollections[2]]
+            for col1, col2 in zip(collection1, collection2):
+                xvals = np.asarray([col1.get_offsets().data[:, 0],
+                                    col2.get_offsets().data[:, 0]])
+                yvals = np.asarray([col1.get_offsets().data[:, 1],
+                                    col2.get_offsets().data[:, 1]])
+                ax_use.plot(xvals, yvals, 'k')
 
 
 
