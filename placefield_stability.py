@@ -1539,14 +1539,16 @@ class SessionStability:
         elif colorby == 'group':
             colors = [color_dict[group.lower()], color_dict[group]]
 
+        # Stagger points to one side when plotting with stripplot
         def offset_points(ax, offset, collection_range):
             for idc in collection_range:
                 offset_data = ax.collections[idc].get_offsets().data + \
-                              np.matlib.repmat([-offset, 0],
+                              np.matlib.repmat([offset, 0],
                                                ax.collections[2].get_offsets().data.shape[0], 1)
                 ax.collections[idc].set_offsets(offset_data)
 
         # now plot everything
+        offsets = [-0.125, 0.125]  # for offsetting data plotted side-by-side
         ncollections = [0]
         for ida, arena in enumerate(self.arenas):
             # set up axes
@@ -1559,16 +1561,17 @@ class SessionStability:
 
             # plot data
             sns.stripplot(data=data_use['tmap_sm_mean'].swapaxes(0, 1), color=colors[ida], ax=ax_use)
+            nsessions = data_use['tmap_sm_mean'].shape[0]
             if bw_arena:  # offset points!
                 ncollections.append(len(ax_use.collections))
-                collection_range = range(ncollections[-2], ncollections[-1])
-                offset_points(ax_use, 0.25, collection_range)
+                collection_range = range(ncollections[-1] - nsessions, ncollections[-1])
+                offset_points(ax_use, offsets[ida], collection_range)
 
             # Fill in 95% CIs for shuffled data
             plt.sca(ax_use)
             plt.fill_between(range(data_use[CI].shape[0]), data_use[CI][:, 0],
-                             data_use[CI][:, 2], color='k', alpha=0.3)  # 95% CIs
-            plt.plot(range(data_use[CI].shape[0]), data_use[CI][:, 1], color='k', alpha=0.3)  # mean shuffled
+                             data_use[CI][:, 2], color=colors[ida], alpha=0.3)  # 95% CIs
+            plt.plot(range(data_use[CI].shape[0]), data_use[CI][:, 1], color=colors[ida], alpha=0.3)  # mean shuffled
 
             # Label everything
             ax_use.set_xticklabels([str(day) for day in self.days])
@@ -1580,20 +1583,29 @@ class SessionStability:
                 ax_use.set_title(group.capitalize() + ': ' + arena + ' Odd v Even Minutes')
             ax[ida].set_ylabel('Mean Spearman Correlation')
             if ida == 1 and not bw_arena:
-                plt.legend([CI, 'Data'])
+                plt.legend(['CI', 'Data'])
+            elif ida == 1 and bw_arena:
+                plt.legend([ax_use.collections[0], ax_use.collections[ncollections[1] + 1]],
+                           ['Open', 'Shock'])
 
         # connect dots if bw_arena plots! need vetting!
         if bw_arena:
-            collection1 = ax_use.collections[ncollections[0], ncollections[1]]  # Grab arena 1 points
-            collection2 = ax_use.collections[ncollections[1], ncollections[2]]  # Grab arena 2 points
+            collection1 = ax_use.collections[(ncollections[1] - nsessions):ncollections[1]]  # Grab arena 1 points
+            collection2 = ax_use.collections[(ncollections[2] - nsessions):ncollections[2]]  # Grab arena 2 points
 
             # iterate through each session and connect the dots
             for col1, col2 in zip(collection1, collection2):
-                xvals = np.asarray([col1.get_offsets().data[:, 0],
-                                    col2.get_offsets().data[:, 0]])
-                yvals = np.asarray([col1.get_offsets().data[:, 1],
-                                    col2.get_offsets().data[:, 1]])
-                ax_use.plot(xvals, yvals, 'k')
+                if type(col1.get_offsets()) is np.ma.core.MaskedArray:
+                    xvals = np.asarray([col1.get_offsets().data[:, 0],
+                                        col2.get_offsets().data[:, 0]])
+                    yvals = np.asarray([col1.get_offsets().data[:, 1],
+                                        col2.get_offsets().data[:, 1]])
+                elif type(col1.get_offsets()) is np.ndarray:
+                    xvals = np.asarray([col1.get_offsets()[:, 0],
+                                        col2.get_offsets()[:, 0]])
+                    yvals = np.asarray([col1.get_offsets()[:, 1],
+                                        col2.get_offsets()[:, 1]])
+                ax_use.plot(xvals, yvals, 'k', alpha=0.3)
 
 
 
@@ -2050,6 +2062,7 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    PlaceFieldHalf('Marble06', 'Shock', -2, type='odd/even')
+    ss12 = SessionStability(plot_type='half')
+    ss12.plot_stability('learners', bw_arena=True)
     pass
 
