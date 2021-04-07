@@ -1344,12 +1344,13 @@ class PlaceFieldHalf:
             half1, half2 = "odd", "even"
         try:  # load in existing file if there.
             self._load()
-            if quickload:
+            if quickload:  # don't load in all placefields
                 PF = pf.load_pf(mouse, arena, day)
-            elif not quickload:
+                self.nneurons = len(PF.tmap_sm)
+            elif not quickload:  # load in all placefields for later access
                 self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None)
                 self.PF2 = pf.placefields(mouse, arena, day, nshuf=0, half=half2, keep_shuffled=False, save_file=None)
-            self.nneurons = len(PF.tmap_sm)
+                self.nneurons = len(self.PF1.tmap_sm)
             # self.calc_half_corrs()  # calculate actual correlations directly
             self.tmap_sm_corrs = self.half_corrs['tmap_sm_corrs']
             self.idshuf_sm_mean = self.half_corrs['idshuf_mean']
@@ -1363,6 +1364,10 @@ class PlaceFieldHalf:
 
                 # Get correlations between 1st and 2nd half
                 self.calc_half_corrs()
+
+                # Calculate chance level
+                self.calc_idshuffled_corrs(nidshuf=nshuf)
+                self.calc_circshuffled_corrs()
                 self._save()
             except FileNotFoundError: # (FileNotFoundError, ValueError, AttributeError):
                 self.half_corrs = {}  # Make empty if not you can't load in
@@ -1409,6 +1414,8 @@ class PlaceFieldHalf:
         self.idshuf_sm_mean = np.asarray(idshuf_sm_mean)
 
         if ax:
+            if type(ax) == bool:  # create figure axes if none specified
+                _, ax = plt.subplots()
             self.plot_shuffled_corrs(ax, self.tmap_sm_corrs.mean(), self.idshuf_sm_mean,
                                      names=['Data', 'Id Shuffle'])
             # with sns.axes_style('white'):
@@ -1434,6 +1441,8 @@ class PlaceFieldHalf:
         self.circshuf_sm_mean = np.nanmean(circshuf_corrs, axis=0)
 
         if ax:
+            if type(ax) == bool:  # create figure axes if none specified
+                _, ax = plt.subplots()
             self.plot_shuffled_corrs(ax, self.tmap_sm_corrs.mean(), self.circshuf_sm_mean,
                                      names=['Data', 'Circ Shuffle'])
 
