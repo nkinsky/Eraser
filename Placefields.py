@@ -183,6 +183,11 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
     speed, pos, t_track, sr = get_speed(dir_use)
     t_track = t_track[0:-1]  # chop last time data point to match t_track match speed/pos length
 
+    # Display warning if "aligntoend" is in folder name but you are running with align_from_end=False
+    if str(dir_use).upper().find('ALIGNTOEND') != -1 and align_from_end is False:
+        print('Folder structure for ' + mouse + ' ' + arena + ': Day ' + str(day) + ' suggests you should align data from end of recording')
+        print('RE-RUN WITH align_from_end=False!!!')
+
     # Import imaging data
     # im_data_file = path.join(dir_use + '\imaging', 'FinalOutput.mat')
     im_data_file = path.join(dir_use, 'FinalOutput.mat')

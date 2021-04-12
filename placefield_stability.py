@@ -1329,8 +1329,9 @@ class PlaceFieldHalf:
     correlations
     :param: type: "half" (default) calculates 1st v 2nd half, "odd/even" calculates odd v even minutes
     :param: quickload: True = load in correlations only (faster), False (default) = load in all placefields
+    :param: can take other kwarg inputs for PlaceFields.placefield, e.g. align_from_end=True...
     """
-    def __init__(self, mouse, arena, day, nshuf=100, plot_type="half", quickload=False):
+    def __init__(self, mouse, arena, day, nshuf=100, plot_type="half", quickload=False, **kwargs):
 
         self.mouse = mouse
         self.arena = arena
@@ -1348,8 +1349,9 @@ class PlaceFieldHalf:
                 PF = pf.load_pf(mouse, arena, day)
                 self.nneurons = len(PF.tmap_sm)
             elif not quickload:  # load in all placefields for later access
-                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None)
-                self.PF2 = pf.placefields(mouse, arena, day, nshuf=0, half=half2, keep_shuffled=False, save_file=None)
+                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None, **kwargs)
+                self.PF2 = pf.placefields(mouse, arena, day, nshuf=0, half=half2, keep_shuffled=False, save_file=None,
+                                          **kwargs)
                 self.nneurons = len(self.PF1.tmap_sm)
             # self.calc_half_corrs()  # calculate actual correlations directly
             self.tmap_sm_corrs = self.half_corrs['tmap_sm_corrs']
@@ -1358,8 +1360,9 @@ class PlaceFieldHalf:
         except FileNotFoundError:
             try:
                 # Create PF object for each half - only shuffle spike train in second half of session
-                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None)
-                self.PF2 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=half2, keep_shuffled=True, save_file=None)
+                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None, **kwargs)
+                self.PF2 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=half2, keep_shuffled=True,
+                                          save_file=None, **kwargs)
                 self.nneurons = len(self.PF1.tmap_sm)
 
                 # Get correlations between 1st and 2nd half
@@ -1509,7 +1512,12 @@ class SessionStability:
                     mouse_corrs, circ_shuf, id_shuf = [], [], []
                     if not (day == 0 and arena == "Shock"):  # calculate for everything except shock day 0!
                         for mouse in mouse_list:
-                            pfh = PlaceFieldHalf(mouse=mouse, arena=arena, day=day, quickload=True, plot_type=plot_type)
+                            # First check to see if "ALIGNTOEND" is in the working directory and align data from end
+                            dir_use = get_dir(mouse, arena, day)
+                            align_end_bool = str(dir_use).upper().find('ALIGNTOEND') != -1  # set to True if "aligntoend" is in folder name, False otherwise
+                            quickload = not align_end_bool  # don't quickload data below if special alignment is needed
+                            pfh = PlaceFieldHalf(mouse=mouse, arena=arena, day=day, quickload=True, plot_type=plot_type,
+                                                 align_from_end=align_end_bool)
                             if 'tmap_sm_corrs' in pfh.half_corrs:
                                 mouse_corrs.append(pfh.half_corrs['tmap_sm_corrs'].mean())
                             else:
@@ -2071,7 +2079,6 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    ss12 = SessionStability(plot_type='half')
-    ss12.plot_stability('learners', bw_arena=True)
+    ssoe = SessionStability(plot_type='odd/even')
     pass
 
