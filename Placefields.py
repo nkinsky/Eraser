@@ -154,7 +154,7 @@ def rescale_tmaps(tmaps, new_size):
 
 def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, half=None,
                 lims_method='auto', save_file='placefields_cm1.pkl', list_dir=master_directory,
-                align_from_end=False, keep_shuffled=False):
+                align_from_end=False, keep_shuffled=False, isrunning_custom=None):
     """
     Make placefields of each neuron. Ported over from Will Mau's/Dave Sullivan's MATLAB
     function
@@ -173,6 +173,8 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
     :param half: None (default) = run whole session, 1 = run 1st half only, 2 = run 2nd half only, (odd/even not yet
     implemented as of 2021_02_01).
     :param keep_shuffled: True = keep shuffled smoothed tmaps (saved as .tmap_sm_shuf). False = default.
+    :param isrunning_custom: use your own frames, specified in a boolean created by get_running_bool and modified by you
+    as you please, to calculate the place field map for an arbitrary period of the session.
     :return:
     """
 
@@ -241,6 +243,10 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
                 odd_even_bool[a * 60 * sr_image:(a + 1) * 60 * sr_image] = 1
             isrunning[~odd_even_bool] = False
 
+    # Use custom period for calculating placefields if specified
+    if isrunning_custom is not None:
+        isrunning = isrunning_custom
+
     # Get the mouse's occupancy in each spatial bin
     occmap, runoccmap, xEdges, yEdges, xBin, yBin = \
         makeoccmap(pos_align, lims, good, isrunning, cmperbin)
@@ -249,14 +255,6 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
     xrun = pos_align[0, isrunning]
     yrun = pos_align[1, isrunning]
     PSAboolrun = PSAbool_align[:, isrunning]
-
-    # Break up session into halves if specified.
-    # if half is not None:
-    #     half_id = np.floor(len(xrun) / 2).astype('int')
-    #     if half == 1:
-    #         xrun, yrun, PSAboolrun = xrun[:half_id], yrun[:half_id], PSAboolrun[:, :half_id]
-    #     elif half == 2:
-    #         xrun, yrun, PSAboolrun = xrun[half_id:], yrun[half_id:], PSAboolrun[:, half_id:]
 
     nGood = len(xrun)
 
@@ -309,6 +307,62 @@ def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, hal
 
     return PFobj
 
+
+def get_running_bool(mouse, arena, day,  speed_thresh=1.5, lims_method='auto', list_dir=master_directory,
+                align_from_end=False):
+    """Generate a boolean of times the animal is running to use with placefields. Can modify and then feed into
+    placefields function to generate place field maps from arbitrary times throughout the session
+    :param all same as in placefields function above
+    :return isrunning: boolean when the mouse is running. """
+    make_session_list(list_dir)
+
+    # Get position and time information for .csv file (later need to align to imaging)
+    dir_use = get_dir(mouse, arena, day)
+    speed, pos, t_track, sr = get_speed(dir_use)
+    t_track = t_track[0:-1]  # chop last time data point to match t_track match speed/pos length
+
+    # Display warning if "aligntoend" is in folder name but you are running with align_from_end=False
+    if str(dir_use).upper().find('ALIGNTOEND') != -1 and align_from_end is False:
+        print('Folder structure for ' + mouse + ' ' + arena + ': Day ' + str(
+            day) + ' suggests you should align data from end of recording')
+        print('RE-RUN WITH align_from_end=False!!!')
+
+    # Import imaging data
+    # im_data_file = path.join(dir_use + '\imaging', 'FinalOutput.mat')
+    im_data_file = path.join(dir_use, 'FinalOutput.mat')
+    im_data = sio.loadmat(im_data_file)
+    PSAbool = im_data['PSAbool']
+    nneurons, _ = np.shape(PSAbool)
+    try:
+        sr_image = im_data['SampleRate'].squeeze()
+    except KeyError:
+        sr_image = 20
+
+    # Convert position to cm
+    pix2cm = er.get_conv_factors(arena)  # get conversion to cm for the arena
+    pos_cm = pos * pix2cm
+    speed_cm = speed * pix2cm
+
+    # Align imaging and position data
+    pos_align, speed_align, PSAbool_align, time_interp = \
+        align_imaging_to_tracking(pos_cm, speed_cm, t_track, PSAbool, sr_image, align_from_end=align_from_end)
+
+    # Smooth speed data for legitimate thresholding, get limits of data
+    speed_sm = np.convolve(speed_align, np.ones(2 * int(sr)) / (2 * sr), mode='same')  # smooth speed
+
+    # Get data limits
+    if lims_method == 'auto':  # automatic by default
+        lims = [np.min(pos_cm, axis=1), np.max(pos_cm, axis=1)]
+    elif lims_method == 'file':  # file not yet enabled
+        print('lims_method=''file'' not enabled yet')
+    else:  # grab array!
+        lims = lims_method
+
+    good = np.ones(len(speed_sm)) == 1
+    isrunning = good
+    isrunning[speed_sm < speed_thresh] = False
+
+    return isrunning
 
 def makeoccmap(pos_cm, lims, good, isrunning, cmperbin):
     """
@@ -648,6 +702,11 @@ class PlaceFieldObject:
                                 tmap_sm=[self.tmap_sm[a] for a in spatial_neurons],
                                 mouse=self.mouse, arena=self.arena, day=self.day, link_obj=link_PFO)
         elif plot_xy:
+            # quick bugfix - earlier versions of Placefields spit out sr_image as multi-level list
+            sr_image = self.sr_image
+            while type(sr_image) is not int:
+                sr_image = sr_image[0]
+
             self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm, plot_psax, plot_psay),
                                 current_position=current_position, n_neurons=len(spatial_neurons),
                                 n_rows=3, n_cols=3, combine_rows=[1, 2], figsize=(12.43, 9.82), titles=titles,
@@ -655,7 +714,7 @@ class PlaceFieldObject:
                                 traj_lims=lims, PSAbool=self.PSAboolrun[spatial_neurons, :],
                                 tmap_us=[self.tmap_us[a] for a in spatial_neurons],
                                 tmap_sm=[self.tmap_sm[a] for a in spatial_neurons],
-                                mouse=self.mouse, arena=self.arena, day=self.day, sample_rate=self.sr_image[0][0],
+                                mouse=self.mouse, arena=self.arena, day=self.day, sample_rate=sr_image,
                                 link_obj=link_PFO)
 
 

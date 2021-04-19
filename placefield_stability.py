@@ -752,6 +752,8 @@ def get_pf_corrs(tmaps1, tmaps2, keep_poor_overlap=False):
         elif not keep_poor_overlap:
             if not poor_overlap:
                 corrs.append(corr)
+            # elif poor_overlap:
+                # print('debugging get_pf_corrs')
 
     return np.asarray(corrs)
 
@@ -1183,7 +1185,8 @@ def plot_confmat(corr_mean_mat, arena1, arena2, group_type, ndays=7, ax_use=None
 def spearmanr_nan(a, b):
     """
     Perform sstats.spearmanr with nan_policy='omit with error catching to return nan if every pair of bins has at
-    least one nan (i.e. the mouse never occupied any of the bins in the second session that it did in the first session)
+    least one nan (i.e. the mouse never occupied any of the bins in the second session that it did in the first session).
+    Note that this will also tmaps where a neuron had no transients above the running threshold.
 
     :param a:
     :param b:
@@ -1327,7 +1330,9 @@ class PlaceFieldHalf:
     :param: mouse, arena day: self-explanatory
     :param: nshuf: #unit-id and circular event-train shuffles to perform when calculating chance-level between half
     correlations
-    :param: type: "half" (default) calculates 1st v 2nd half, "odd/even" calculates odd v even minutes
+    :param: type: "half" (default) calculates 1st v 2nd half, "odd/even" calculates odd v even minutes. Can also take a
+    list of 3 values to calulate between arbitrary parts of the session of the form [numerator1, numerator2, demoninator].
+    e.g. [1, 3, 5] would calculate stability between the first and third 1/5s of the session.
     :param: quickload: True = load in correlations only (faster), False (default) = load in all placefields
     :param: can take other kwarg inputs for PlaceFields.placefield, e.g. align_from_end=True...
     """
@@ -1339,19 +1344,26 @@ class PlaceFieldHalf:
         self.ncircshuf = nshuf
         self.plot_type = plot_type
         self.generate_save_name()  # Get file name for loading in/saving later
+        isrunning1, isrunning2 = None, None  # By default don't use arbitrary periods of the session
         if self.plot_type == "half":
             half1, half2 = 1, 2
-        elif self.plot_type == "odd/even" or self.type == "even/odd":
+        elif self.plot_type == "odd/even" or self.plot_type == "even/odd":
             half1, half2 = "odd", "even"
+        elif type(self.plot_type) in [list, tuple]:
+            half1, half2 = None, None
+            isrunning1 = self.generate_arbitrary_bool(self.plot_type[0], self.plot_type[2])
+            isrunning2 = self.generate_arbitrary_bool(self.plot_type[1], self.plot_type[2])
+
         try:  # load in existing file if there.
             self._load()
             if quickload:  # don't load in all placefields
                 PF = pf.load_pf(mouse, arena, day)
                 self.nneurons = len(PF.tmap_sm)
             elif not quickload:  # load in all placefields for later access
-                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None, **kwargs)
+                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None,
+                                          isrunning_custom=isrunning1, **kwargs)
                 self.PF2 = pf.placefields(mouse, arena, day, nshuf=0, half=half2, keep_shuffled=False, save_file=None,
-                                          **kwargs)
+                                          isrunning_custom=isrunning2, **kwargs)
                 self.nneurons = len(self.PF1.tmap_sm)
             # self.calc_half_corrs()  # calculate actual correlations directly
             self.tmap_sm_corrs = self.half_corrs['tmap_sm_corrs']
@@ -1360,9 +1372,10 @@ class PlaceFieldHalf:
         except FileNotFoundError:
             try:
                 # Create PF object for each half - only shuffle spike train in second half of session
-                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None, **kwargs)
+                self.PF1 = pf.placefields(mouse, arena, day, nshuf=0, half=half1, save_file=None,
+                                          isrunning_custom=isrunning1, **kwargs)
                 self.PF2 = pf.placefields(mouse, arena, day, nshuf=nshuf, half=half2, keep_shuffled=True,
-                                          save_file=None, **kwargs)
+                                          save_file=None, isrunning_custom=isrunning2, **kwargs)
                 self.nneurons = len(self.PF1.tmap_sm)
 
                 # Get correlations between 1st and 2nd half
@@ -1375,6 +1388,18 @@ class PlaceFieldHalf:
             except FileNotFoundError: # (FileNotFoundError, ValueError, AttributeError):
                 self.half_corrs = {}  # Make empty if not you can't load in
 
+    def generate_arbitrary_bool(self, numerator, demoninator):
+        """Generate a boolean to calculate place-fields for an abitrary part of the session. E.g numerator=3 and
+        demoninator=5 would generate the place-field activity during the 3rd fifth of the session."""
+        isrunning = pf.get_running_bool(self.mouse, self.arena, self.day)  # get times when mouse is running
+        nframes_period = np.floor(len(isrunning) / demoninator).astype('int')  # identify # frames in each period of the session
+
+        # Keep only legitimate peiod from isrunning boolean array
+        isrunning_custom = np.zeros_like(isrunning).astype(bool)
+        isrunning_custom[((numerator-1)*nframes_period):(numerator*nframes_period)] = \
+            isrunning[((numerator-1)*nframes_period):(numerator*nframes_period)]
+
+        return isrunning_custom
 
     def pfscroll(self):
         """Scroll through 1st and 2nd half placefields simultaneously"""
@@ -1469,6 +1494,8 @@ class PlaceFieldHalf:
             name_append = ""
         elif self.plot_type == "odd/even" or self.plot_type == "even/odd":
             name_append = "odd_v_even"
+        elif type(self.plot_type) in [list, tuple]:
+            name_append = '_' + str(self.plot_type[0]) + '_' + str(self.plot_type[1]) + '_' + str(self.plot_type[2])
         self.save_name = path.join(sd.find_eraser_session(self.mouse, self.arena, self.day)['Location'],
                                    "pfhalfcorrs_" + str(self.ncircshuf) + 'shuf' + name_append + '.pkl')
 
@@ -2079,6 +2106,8 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    ssoe = SessionStability(plot_type='odd/even')
+    # ssoe = SessionStability(plot_type='odd/even')
+    pfh = PlaceFieldHalf('Marble07', 'Open', -2, plot_type=(1, 2, 4))
+    # pfh.calc_half_corrs()
     pass
 
