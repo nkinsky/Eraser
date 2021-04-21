@@ -1365,7 +1365,7 @@ class PlaceFieldHalf:
                 self.PF2 = pf.placefields(mouse, arena, day, nshuf=0, half=half2, keep_shuffled=False, save_file=None,
                                           isrunning_custom=isrunning2, **kwargs)
                 self.nneurons = len(self.PF1.tmap_sm)
-            # self.calc_half_corrs()  # calculate actual correlations directly
+            # self.calc_half_corrs()  # don't calculate actual correlations directly - should already be loaded!
             self.tmap_sm_corrs = self.half_corrs['tmap_sm_corrs']
             self.idshuf_sm_mean = self.half_corrs['idshuf_mean']
             self.circshuf_sm_mean = self.half_corrs['circshuf_sm_mean']
@@ -1385,6 +1385,9 @@ class PlaceFieldHalf:
                 self.calc_idshuffled_corrs(nidshuf=nshuf)
                 self.calc_circshuffled_corrs()
                 self._save()
+
+                # Now load everything into a nice dict for immediate use
+                self._load()
             except FileNotFoundError: # (FileNotFoundError, ValueError, AttributeError):
                 self.half_corrs = {}  # Make empty if not you can't load in
 
@@ -2107,7 +2110,7 @@ class GroupPF:
 
 if __name__ == '__main__':
     # ssoe = SessionStability(plot_type='odd/even')
-    pfh = PlaceFieldHalf('Marble07', 'Open', -2, plot_type=(1, 2, 4))
+    pfh = PlaceFieldHalf('Marble07', 'Open', -2, plot_type='half', quickload=True)
     # pfh.calc_half_corrs()
     pass
 
