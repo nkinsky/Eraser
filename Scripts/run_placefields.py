@@ -29,7 +29,7 @@ import eraser_reference as err
 #         except:
 #             good_bool[idm, idd] = False
 #             print('Error for ' + mouse_use + ' day ' + str(day))
-
+##
 # 1st plot all trajectories for a mouse and then manually align them with the same range of x/y values
 mouse_use = 'Marble06'
 day_des = [-2, -1, 0, 4, 1, 2, 7]  # keep this as-is or lots of code will break
@@ -93,7 +93,9 @@ for idd, day in enumerate(day_des[1:]):
 
 ## Run placefields on all sessions
 
-mice_use = err.all_mice_good
+mice_use = ['Marble07']  #err.all_mice_good
+day_des = [-2]  # overwrite for fixing Marble07 Day -2 stuff
+arenas_use = ['Open', 'Shock']
 nshuf = 1000
 
 nmice = mice_use.__len__()
@@ -118,20 +120,21 @@ for idm, mouse_use in enumerate(mice_use):
     #         good_bool[idm, 0, idd] = False
 
     # Now run for all shock data!
-    s_pix2cm = erp.get_conv_factors('Shock')
-    _, _, _, s_range, s_xmin, s_ymin = err.get_arena_lims(mouse_use)
-    # good_bool = np.ones(len(day_des)) == 0  # pre-allocate tracking boolean
-    for idd, day in enumerate(day_des):
-        xlims_use = np.asarray([s_xmin[idd], s_xmin[idd] + s_range[0]])*s_pix2cm
-        ylims_use = np.asarray([s_ymin[idd], s_ymin[idd] + s_range[1]])*s_pix2cm
-        try:
-            savename = 'placefields_cm1_manlims_' + str(nshuf) + 'shuf.pkl'
-            pf.placefields(mouse_use, 'Shock', day, cmperbin=1, lims_method=[[xlims_use[0], ylims_use[0]],
-                           [xlims_use[1], ylims_use[1]]], save_file=savename, nshuf=nshuf)
-            good_bool[idm, 1, idd] = True
-        except:
-            print('Error for ' + mouse_use + ' day ' + str(day) + ': Shock Arena')
-            good_bool[idm, 1, idd] = False
+    for arena in arenas_use:
+        s_pix2cm = erp.get_conv_factors(arena)
+        _, _, _, s_range, s_xmin, s_ymin = err.get_arena_lims(mouse_use)
+        # good_bool = np.ones(len(day_des)) == 0  # pre-allocate tracking boolean
+        for idd, day in enumerate(day_des):
+            xlims_use = np.asarray([s_xmin[idd], s_xmin[idd] + s_range[0]])*s_pix2cm
+            ylims_use = np.asarray([s_ymin[idd], s_ymin[idd] + s_range[1]])*s_pix2cm
+            try:
+                savename = 'placefields_cm1_manlims_' + str(nshuf) + 'shuf.pkl'
+                pf.placefields(mouse_use, arena, day, cmperbin=1, lims_method=[[xlims_use[0], ylims_use[0]],
+                               [xlims_use[1], ylims_use[1]]], save_file=savename, nshuf=nshuf)
+                good_bool[idm, 1, idd] = True
+            except:
+                print('Error for ' + mouse_use + ' day ' + str(day) + ': ' + arena + ' Arena')
+                good_bool[idm, 1, idd] = False
 
 ## Check it on day -2 and day 2 sessions
 dayn2s = pf.load_pf(mouse_use, 'Shock', -2, pf_file='placefields_cm1_manlims_1shuf.pkl')
