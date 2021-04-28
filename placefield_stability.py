@@ -670,7 +670,10 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
         tmaps2_sm_use = pf.rescale_tmaps(tmaps2_sm_rot, tmap1_shape)
 
     # Finally do your correlations!
-    corrs_us = get_pf_corrs(tmaps1_us_valid, tmaps2_us_use, keep_poor_overlap=keep_poor_overlap)
+    try:
+        corrs_us = get_pf_corrs(tmaps1_us_valid, tmaps2_us_use, keep_poor_overlap=keep_poor_overlap)
+    except ValueError:
+        print('Error in ' + mouse + ' ' + arena1 + str(day1) + ' to ' + arena2 + str(day2))
     corrs_sm = get_pf_corrs(tmaps1_sm_valid, tmaps2_sm_use, keep_poor_overlap=keep_poor_overlap)
 
     # Old, overly dense code below
@@ -1844,6 +1847,8 @@ class GroupPF:
                     arena1, arena2 = arena[0], arena[1]
                 else:
                     arena1, arena2 = arena, arena
+
+                    # Below is a mess - maybe dump into a sub-function?
                 if type == 'PFsm':
                     a, templ, b, temp_sh_l = get_group_pf_corrs(self.lmice, arena1, arena2, self.days,
                                                                 best_rot=best_rot, pf_file=pf_file, nshuf=nshuf,
@@ -1882,13 +1887,9 @@ class GroupPF:
                     _, templ, _, temp_sh_l = get_group_PV2d_corrs(self.lmice, arena1, arena2, self.days,
                                                                   nshuf=self.nshuf2d[ida], best_rot=best_rot,
                                                                   batch_map_use=batch_map)
-                    try:
-                        _, tempnl, _, temp_sh_nl = get_group_PV2d_corrs(self.nlmice, arena1, arena2, self.days,
-                                                                        nshuf=self.nshuf2d[ida], best_rot=best_rot,
-                                                                        batch_map_use=batch_map)
-                    except TypeError:
-                        print('Debugging PFGroup.construct()')
-                        a = 1
+                    _, tempnl, _, temp_sh_nl = get_group_PV2d_corrs(self.nlmice, arena1, arena2, self.days,
+                                                                    nshuf=self.nshuf2d[ida], best_rot=best_rot,
+                                                                    batch_map_use=batch_map)
                     _, tempa, _, temp_sh_a = get_group_PV2d_corrs(self.amice, arena1, arena2, self.days,
                                                                   nshuf=self.nshuf2d[ida], best_rot=best_rot,
                                                                   batch_map_use=batch_map)
@@ -2110,7 +2111,8 @@ class GroupPF:
 
 if __name__ == '__main__':
     # ssoe = SessionStability(plot_type='odd/even')
-    pfh = PlaceFieldHalf('Marble07', 'Open', -2, plot_type='half', quickload=True)
+    # pfh = PlaceFieldHalf('Marble07', 'Open', -2, plot_type='half', quickload=True)
     # pfh.calc_half_corrs()
+    pf_corr_bw_sesh('Marble07', 'Open', -2, 'Open', -1, batch_map_use=True)
     pass
 
