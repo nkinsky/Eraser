@@ -199,7 +199,7 @@ def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     return good_map_bool, silent_ind, new_ind
 
 
-def get_overlap(mouse, arena1, day1, arena2, day2):
+def get_overlap(mouse, arena1, day1, arena2, day2, batch_map=True):
     """
     Gets overlap of cells between sessions.
     :param mouse:
@@ -213,7 +213,7 @@ def get_overlap(mouse, arena1, day1, arena2, day2):
             overlap_ratio_max/min: same as above but divided by max/min number
             of cells active in either session
     """
-    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2)
+    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map)
     reg_session = sd.find_eraser_session(mouse, arena2, day2)
     good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
 
@@ -2047,12 +2047,15 @@ class GroupPF:
             shock_CIs = [get_CI(np.nanmean(shuf_use[group][1].reshape(-1, nshuf)[epoch_mat[idg].reshape(-1) == epoch_num],
                                         axis=0)) for idg, group in enumerate(groups)]
 
+            sns.set_context('notebook', font_scale=1.25, rc={'axes.linewidth': 2, 'lines.linewidth': 1.75,
+                                                            'legend.fontsize': 11})
             fig, ax, pval, tstat = erp.pfcorr_compare(open_corrs, shock_corrs, group_names=groups,
                                                       xlabel=epoch_labels[ide], ylabel=type,
                                                       xticklabels=['Open', 'Shock'],
                                                       CIs=[open_CIs, shock_CIs])
 
             ax[0].set_title(plot_title)  # label plot
+            sns.despine(fig)
             # Track figure/axes handles and save names
             axes.append(ax[0])
             figs.append(fig)
@@ -2067,6 +2070,44 @@ class GroupPF:
         # Save all if indicated
         if save_fig:
             [fig.savefig(savename) for fig, savename in zip(figs, savenames)]
+
+    def turnover_scatter(self, day1, day2, within_arena=True, ax=None):
+        """Plot turnover from one session to the next and compare between groups in a strip plot"""
+        if ax is None:
+            fig, ax = self.figset()
+
+        # Define groups.
+        groups = {'Learners': self.lmice, 'NonLearners': self.nlmice, 'Ani': self.amice}
+
+
+        # Set up variables for comparing between or within arenas
+        if within_arena:
+            arenas1 = ['Shock', 'Open']
+            arenas2 = ['Shock', 'Open']
+            title_name = 'Within Arena'
+        else:
+            arenas1 = ['Open']
+            arenas2 = ['Shock']
+            title_name = 'Between Arenas'
+
+        # Construct list of cell overlap ratios between sessions by group
+        overlap = []
+        for group in groups.values():
+            olap_by_group = []
+            for arena1, arena2 in zip(arenas1, arenas2):
+                temp = []
+                for mouse in group:
+                    _, _, oboth, _, _ = get_overlap(mouse, arena1, day1, arena2, day2, batch_map=self.batch_map)
+                    temp.append(oboth)
+                olap_by_group.append(temp)
+            overlap.append(np.asarray(olap_by_group))
+
+        # Now plot everything
+        sns.stripplot(data=[o.reshape(-1) for o in overlap], palette=palette, ax=ax)
+        sns.despine()
+        ax.set_title(title_name)
+        ax.set_ylabel('Overlap Ratio\nDay ' + str(day1) + ' to Day ' + str(day2))
+        ax.set_xticklabels(groups.keys())
 
     def figset(self, ax=None, nplots=[1, 1], size=[9.27, 3.36]):
         """Set up figure"""
