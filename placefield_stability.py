@@ -1127,7 +1127,7 @@ def get_time_epochs(nmice, group_desig=1):
 
     return epochs, epoch_labels
 
-def get_seq_time_pairs(nmice):
+def get_seq_time_pairs(nmice, include_dayzero=False):
     """
     Returns pairings for plotting each session versus the next
     :return: pairs: nmice x 7 x 7 array with groupings for pf comparisons
@@ -1135,15 +1135,22 @@ def get_seq_time_pairs(nmice):
 
     # Define pairs for scatter plots
     pairs = np.ones((7, 7)) * np.nan
-    pair_labels = ['-2 v -1', '-1 v 4hr', '4 hr v 1', '1 v 2', '2 v 7']
-    pairs[0, 1] = 0  # Day -2 v -1
-    pairs[1, 3] = 1  # -1 v 4hr
-    pairs[3, 4] = 2  # 4hr v 1
-    pairs[4, 5] = 3  # 1 v 2
-    pairs[5, 6] = 4  # 2 v 7
-    # pair_ids, grps = [0, 1, 3, 4, 5], [0, 1, 2, 3, 4]
-    # for ind, idd in enumerate(pair_ids):
-    #     pairs[idd, idd+1] = grps[ind]
+    if not include_dayzero:
+        pair_labels = ['-2 v -1', '-1 v 4hr', '4 hr v 1', '1 v 2', '2 v 7']
+        pairs[0, 1] = 0  # Day -2 v -1
+        pairs[1, 3] = 1  # -1 v 4hr
+        pairs[3, 4] = 2  # 4hr v 1
+        pairs[4, 5] = 3  # 1 v 2
+        pairs[5, 6] = 4  # 2 v 7
+    else:
+        pair_labels = ['-2 v -1', '-1 vs 0', '0 v 4hr', '4 hr v 1', '0 v 1', '1 v 2', '2 v 7']
+        pairs[0, 1] = 0  # Day -2 v -1
+        pairs[1, 2] = 1  # Day -1 to 0
+        pairs[2, 3] = 2  # 0 v 4hr
+        pairs[3, 4] = 3  # 4hr v 1
+        pairs[2, 4] = 4  # 0 vs 1
+        pairs[4, 5] = 5  # 1 v 2
+        pairs[5, 6] = 6  # 2 v 7
 
     # now shape and repeat matrix to shape (nmice, 7, 7)
     pairs = np.moveaxis(np.repeat(pairs[:, :, np.newaxis], nmice, 2), 2, 0)
@@ -1921,7 +1928,7 @@ class GroupPF:
             self.data['best_rot'] = best_rot
             self.data['batch_map'] = batch_map
 
-    def scatterbar_bw_days(self, type='PFsm', ax_use=None):
+    def scatterbar_bw_days(self, type='PFsm', ax_use=None, include_dayzero=False):
         # Set up plots
         fig, ax = self.figset(ax_use, nplots=[3, 1], size=[10.1, 9.2])
         save_flag = False  # Set up saving plots
@@ -1929,7 +1936,7 @@ class GroupPF:
         titles = list(data_dict.keys())
         for idd, (data, shuf) in enumerate(zip(data_dict.values(), shuf_dict.values())):
             nmice = data[0].shape[0]
-            pairs, labels = get_seq_time_pairs(nmice)
+            pairs, labels = get_seq_time_pairs(nmice, include_dayzero=include_dayzero)
 
             # Plot data
             erp.scatterbar(data[0][~np.isnan(pairs)], pairs[~np.isnan(pairs)], data_label='Neutral', offset=-0.125,
