@@ -507,9 +507,9 @@ def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
     days_plot = np.asarray(list(range(ndays)))
     days_str = [str(e) for e in days]
     for ida, arena in enumerate(arenas):
-        if arena is 'Open':
+        if arena == 'Open':
             offset = -0.05
-        elif arena is 'Shock':
+        elif arena == 'Shock':
             offset = 0.05
 
         ax.errorbar(days_plot + offset, fmean[ida, :], yerr=fstd[ida, :], color=plot_colors[ida])
@@ -718,9 +718,9 @@ def pf_rot_plot(mouse, arena1, day1, arena2, day2, nshuf=100, plot_type='smoothe
         fig, ax = plt.subplots()
 
     best_corr_mean, best_rot, corr_mean_all = pfs.get_best_rot(mouse, arena1, day1, arena2, day2)
-    if plot_type is 'unsmoothed':
+    if plot_type == 'unsmoothed':
         corrs_plot = corr_mean_all[0]
-    elif plot_type is 'smoothed':
+    elif plot_type == 'smoothed':
         corrs_plot = corr_mean_all[1]
 
     ax.plot(rots, corrs_plot, 'b-')
@@ -728,9 +728,9 @@ def pf_rot_plot(mouse, arena1, day1, arena2, day2, nshuf=100, plot_type='smoothe
     # Try to plot shuffled mean
     try:
         shuf_us, shuf_sm = pfs.load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf)
-        if plot_type is 'unsmoothed':
+        if plot_type == 'unsmoothed':
             shuf_use = shuf_us
-        elif plot_type is 'smoothed':
+        elif plot_type == 'smoothed':
             shuf_use = shuf_sm
         shuf_mean = np.nanmean(shuf_use)
         CIs = np.quantile(shuf_use, [0.025, 0.975])
@@ -766,12 +766,12 @@ def plot_PV1_simple(mouse, nshuf=10, ax=None, PVtype='both'):
     ocorrs_all, ocorrs_both, oshuf_all, oshuf_both = pfs.get_all_PV1corrs(mouse, 'Open', 'Open', nshuf=nshuf)
 
     # Grab correct correlation type
-    if PVtype is 'both':
+    if PVtype == 'both':
         scorrs = scorrs_both
         sshuf = sshuf_both
         ocorrs = ocorrs_both
         oshuf = oshuf_both
-    elif PVtype is 'all':
+    elif PVtype == 'all':
         scorrs = scorrs_all
         sshuf = sshuf_all
         ocorrs = ocorrs_all
