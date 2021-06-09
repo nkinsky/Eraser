@@ -217,18 +217,22 @@ def get_overlap(mouse, arena1, day1, arena2, day2, batch_map=True):
     reg_session = sd.find_eraser_session(mouse, arena2, day2)
     good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
 
-    num_active1 = len(good_map_bool)
-    num_active2 = sum(good_map_bool) + len(new_ind)
-    num_active_min = min(num_active1, num_active2)
-    num_active_max = max(num_active1, num_active2)
-    num_active_both = len(good_map_bool) + len(new_ind)
-    num_overlap = sum(good_map_bool)
+    if np.isnan(good_map_bool).all():
+        overlap_ratio1, overlap_ratio2, overlap_ratio_both, overlap_ratio_min, overlap_ratio_max = \
+            np.nan, np.nan, np.nan, np.nan, np.nan
+    else:
+        num_active1 = len(good_map_bool)
+        num_active2 = sum(good_map_bool) + len(new_ind)
+        num_active_min = min(num_active1, num_active2)
+        num_active_max = max(num_active1, num_active2)
+        num_active_both = len(good_map_bool) + len(new_ind)
+        num_overlap = sum(good_map_bool)
 
-    overlap_ratio1 = num_overlap/num_active1
-    overlap_ratio2 = num_overlap/num_active2
-    overlap_ratio_both = num_overlap/num_active_both
-    overlap_ratio_min = num_overlap/num_active_min
-    overlap_ratio_max = num_overlap/num_active_max
+        overlap_ratio1 = num_overlap/num_active1
+        overlap_ratio2 = num_overlap/num_active2
+        overlap_ratio_both = num_overlap/num_active_both
+        overlap_ratio_min = num_overlap/num_active_min
+        overlap_ratio_max = num_overlap/num_active_max
 
     return overlap_ratio1, overlap_ratio2, overlap_ratio_both, overlap_ratio_min, overlap_ratio_max
 
@@ -2158,9 +2162,6 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    # ssoe = SessionStability(plot_type='odd/even')
-    # pfh = PlaceFieldHalf('Marble07', 'Open', -2, plot_type='half', quickload=True)
-    # pfh.calc_half_corrs()
-    pf_corr_bw_sesh('Marble07', 'Open', -2, 'Open', -1, batch_map_use=True)
+    get_overlap('Marble14', 'Open', 1, 'Open', 2, batch_map=True)
     pass
 
