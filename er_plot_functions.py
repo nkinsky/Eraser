@@ -316,7 +316,7 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
     distance = np.hypot(pos_diff[:, 0], pos_diff[:, 1])  # Displacement.
     if (time_diff.__len__()) == (distance.__len__()):
         distance = distance[0:-1]
-    velocity = np.concatenate(([0], distance // time_diff[0:-1]))  # Velocity. cm/sec (pixels/sec)
+    velocity = np.concatenate(([0], distance / time_diff[0:-1]))  # Velocity. cm/sec (pixels/sec)
     freezing = velocity < velocity_threshold
 
     freezing_epochs = get_freezing_epochs(freezing)
@@ -466,9 +466,9 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
 
                 pix2cm = get_conv_factors(arena)
                 dir_use = get_dir(mouse, arena, day)
-                freezing = detect_freezing(dir_use, velocity_threshold=velocity_threshold,
+                freezing, _ = detect_freezing(dir_use, velocity_threshold=velocity_threshold,
                                            min_freeze_duration=min_freeze_duration,
-                                           arena=arena, pix2cm=pix2cm)[0]
+                                           arena=arena, pix2cm=pix2cm)
                 fratios[ida, idd] = freezing.sum()/freezing.__len__()
             except (IOError, IndexError, TypeError):  # FileNotFoundError is IOError in earlier versions
                 # print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
