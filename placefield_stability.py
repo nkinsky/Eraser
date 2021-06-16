@@ -1339,6 +1339,41 @@ def get_group_PV2d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nsh
     return PV2d_all_all, PV2d_both_all, PV2d_both_shuf, PV2d_all_shuf
 
 
+def event_rate_bw_sessions(mouse, arena1, day1, arena2, day2, batch_map_use=True, speed_thresh=1,
+                       pf_file='placefields_cm1_manlims_1000shuf.pkl', shuf_map=False):
+    """
+    Calculates event rate differences between two sessions for all cells active in both.
+    :param mouse: str
+    :param arena1: 'Shock' or 'Open'
+    :param day1: int
+    :param arena2: 'Shock' or 'Open'
+    :param day2: int
+    :param batch_map_use: boolean
+    :param speed_thresh: float >= 0
+    :param pf_file: file where placefields info is located, default = 'placefields_cm1_manlims_1000shuf.pkl'
+    :param shuf_map: boolean
+    :return:
+    deltaER: raw event rate differences for session1 - session2
+    DI_ER: (ER1 - ER2)/(ER1 + ER2)
+    """
+    # Get mapping between sessions
+    # try:
+    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map_use)
+    # except IndexError:
+    #     print('debugging PV1corr_bw_sesh')
+    reg_session = sd.find_eraser_session(mouse, arena2, day2)
+
+    # Gets PVs
+    PV1 = pf.get_PV1(mouse, arena1, day1, speed_thresh=speed_thresh, pf_file=pf_file)
+    PV2 = pf.get_PV1(mouse, arena2, day2, speed_thresh=speed_thresh, pf_file=pf_file)
+
+    # Now register between sessions
+    PV1all, PV2all, PV1both, PV2both = registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=shuf_map)
+    deltaER = PV1both - PV2both
+    DI_ER = (PV1both - PV2both) / (PV1both + PV2both)
+
+    return deltaER, DI_ER
+
 class PlaceFieldHalf:
     """Class to visualize and quantify wihin-session stability
     :param: mouse, arena day: self-explanatory
