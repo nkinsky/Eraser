@@ -1374,6 +1374,40 @@ def event_rate_bw_sessions(mouse, arena1, day1, arena2, day2, batch_map_use=True
 
     return deltaER, DI_ER
 
+
+def get_drift_bw_sessions(mouse, arena1, day1, arena2, day2, drift_type='overlap', batch_map=True, speed_thresh=1):
+    """Gets two metrics of drift between sessions: cell overlap, and mean(abs(DI_ER)) where DI_ER for a
+    given cell = (ER1 - ER2)/(ER1 + ER2).
+    :param mouse:
+    :param arena1:
+    :param day1:
+    :param arena2:
+    :param day2:
+    :param drift_type: 'overlap' or 'DI_ER' (event rate discrimination index)
+    :param batch_map: boolean
+    :param speed_thresh: cm/s (1 = default). Only used for 'DI_ER' drift_type, not for 'overlap'
+    :return: either: a) o_both (overlap ratio of cells active in BOTH sessions/ cells active in EITHER session)
+            or, b) DI_ER_abs_mean: abs(mean(DI_ER))
+    """
+
+    if drift_type == 'overlap':
+        _, _, drift_out, _, _ = get_overlap(mouse, arena1, day1, arena2, day2, batch_map=batch_map)
+    elif drift_type == 'DI_ER':
+        try:
+
+            _, DI_ER = event_rate_bw_sessions(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map,
+                                              speed_thresh=speed_thresh)
+            drift_out = np.abs(DI_ER).mean()
+        except FileNotFoundError:
+            if mouse == 'Marble14' and (arena1 == 'Open' and day1 in [0, 4, 1, 2, 7]) or \
+                    (arena2 == 'Open' and day2 in [0, 4, 1, 2, 7]):
+                print('Marble14 bad open-field tracking data from days 0-7 skipped')
+                drift_out = np.nan
+            else:
+                raise FileNotFoundError
+
+    return drift_out
+
 class PlaceFieldHalf:
     """Class to visualize and quantify wihin-session stability
     :param: mouse, arena day: self-explanatory
@@ -2117,14 +2151,62 @@ class GroupPF:
         if save_fig:
             [fig.savefig(savename) for fig, savename in zip(figs, savenames)]
 
-    def turnover_scatter(self, day1, day2, within_arena=True, ax=None):
-        """Plot turnover from one session to the next and compare between groups in a strip plot"""
+    def drift_time_v_context(self, day_pairs=[[-2, -1], [1, 2]], drift_metric='overlap'):
+        """ Is the amount of remapping/drift between contexts predictive of temporal drift across days?
+        Plots across day temporal drift in the same context versus drift between contexts (Shock v Open arenas)
+        on the same day.
+        :param day_pairs: list of pairs
+        :param drift_metric: 'overlap' (default) or 'event_rate' (this considers event rate changes and only includes
+        cells active in both sessions)
+        :return:
+        """
+        overlap_win_all, overlap_bw_all = [], []
+
+        for mouse in err.all_mice_good:
+            # Get turnover between arenas on days -2 and -1 and average them
+            o_bw_temp = []
+            o_win_temp = []
+            for day_pair in day_pairs:
+                for day in day_pair:
+                    # NRK todo: write `get_drift` function here to pull out either ovelap or event rate mean(abs(diff/sum)).
+                    _, _, oboth, _, _ = get_overlap(mouse, 'Open', day, 'Shock', day,
+                                                                         batch_map=True)
+                    o_bw_temp.append(oboth)
+                overlap_bw_all.append(np.nanmean(o_bw_temp))
+
+                # Get turnover within each arena from days -2 to -1 and average them
+
+                for arena in ['Shock', 'Open']:
+                    _, _, oboth, _, _ = get_overlap(mouse, arena, day_pair[0], arena, day_pair[1],
+                                                                         batch_map=True)
+                    o_win_temp.append(oboth)
+                overlap_win_all.append(np.nanmean(o_win_temp))
+
+        fig, ax = plt.subplots()
+        ax.plot(overlap_win_all, overlap_bw_all, '.')
+
+        # Set up titles (super complicated, must be a better way)
+        win_prefix = 'Cell Overlap w/in arenas Day '
+        win_title = ''.join((win_prefix, (', '.join([str(day_pair[0]) + ' to ' + str(day_pair[1]) for day_pair in day_pairs]))))
+        ax.set_xlabel(win_title)
+
+        bw_prefix = 'Cell Overlap bw arenas Day '
+        days_str = [str(day) for day_pair in day_pairs for day in day_pair]
+        bw_title = ''.join((bw_prefix, ' ,'.join(days_str)))
+        ax.set_ylabel(bw_title)
+
+        sns.despine(ax=ax)
+
+    def drift_by_group(self, day1, day2, within_arena=True, drift_type='overlap', speed_thresh=1, ax=None):
+        """Plot drift from one session to the next and compare between groups in a strip plot"""
         if ax is None:
             fig, ax = self.figset()
 
         # Define groups.
         groups = {'Learners': self.lmice, 'NonLearners': self.nlmice, 'Ani': self.amice}
 
+        # Set up labels
+        drift_label = 'Cell Overlap Ratio' if drift_type == 'overlap' else '|DI|mean'
 
         # Set up variables for comparing between or within arenas
         if within_arena:
@@ -2136,24 +2218,28 @@ class GroupPF:
             arenas2 = ['Shock']
             title_name = 'Between Arenas'
 
-        # Construct list of cell overlap ratios between sessions by group
-        overlap = []
+        # Construct list of drift between sessions by group
+        drift = []
         for group in groups.values():
-            olap_by_group = []
+            drift_by_group = []
             for arena1, arena2 in zip(arenas1, arenas2):
                 temp = []
                 for mouse in group:
-                    _, _, oboth, _, _ = get_overlap(mouse, arena1, day1, arena2, day2, batch_map=self.batch_map)
-                    temp.append(oboth)
-                olap_by_group.append(temp)
-            overlap.append(np.asarray(olap_by_group))
+                    drift_out = get_drift_bw_sessions(mouse, arena1, day1, arena2, day2, batch_map=self.batch_map,
+                                                               speed_thresh=speed_thresh, drift_type=drift_type)
+                    # _, _, oboth, _, _ = get_overlap(mouse, arena1, day1, arena2, day2, batch_map=self.batch_map)
+                    temp.append(drift_out)
+                drift_by_group.append(temp)
+            drift.append(np.asarray(drift_by_group))
 
         # Now plot everything
-        sns.stripplot(data=[o.reshape(-1) for o in overlap], palette=palette, ax=ax)
+        sns.stripplot(data=[o.reshape(-1) for o in drift], palette=palette, ax=ax)
         sns.despine()
         ax.set_title(title_name)
-        ax.set_ylabel('Overlap Ratio\nDay ' + str(day1) + ' to Day ' + str(day2))
+        ax.set_ylabel(drift_label + '\nDay ' + str(day1) + ' to Day ' + str(day2))
         ax.set_xticklabels(groups.keys())
+
+        return ax
 
     def figset(self, ax=None, nplots=[1, 1], size=[9.27, 3.36]):
         """Set up figure"""
