@@ -2152,15 +2152,18 @@ class GroupPF:
         if save_fig:
             [fig.savefig(savename) for fig, savename in zip(figs, savenames)]
 
-    def drift_time_v_context(self, day_pairs=[[-2, -1], [1, 2]], drift_metric='overlap', speed_thresh=0):
+    def drift_time_v_context(self, day_pairs=[[-2, -1], [1, 2]], bw_day_use='both', drift_metric='overlap', speed_thresh=0):
         """ Is the amount of remapping/drift between contexts predictive of temporal drift across days?
         Plots across day temporal drift in the same context versus drift between contexts (Shock v Open arenas)
-        on the same day.  Note that the term "drift" is use loosely here and does not refer to any place map correlations.
+        on the same day.  Note that the term "drift" is use loosely here and does not refer to any place map
+        correlations.
         :param day_pairs: list of day pairs to consider
-        :param drift_metric: (str) 'overlap' (default) or 'event_rate' (this considers event rate changes and only includes
-        cells active in both sessions)
-        :param speed_thresh: (float) for 'event_rate' metric only consider cells active when animal is above this speed (cm/s).
-        default = 0.
+        :param drift_metric: (str) 'overlap' (default) or 'event_rate' (this considers event rate changes and only
+        includes cells active in both sessions)
+        :param: bw_day_use: (str) 'both' (default), 'first', 'second' uses the specified day(s) for calculating bw arena
+        drift
+        :param speed_thresh: (float) for 'event_rate' metric only consider cells active when animal is above this
+        speed (cm/s). default = 0.
         :return: ax
         """
         assert drift_metric in ['overlap', 'event_rate'], "drift_metric must be either 'overlap' or 'event_rate'"
@@ -2172,11 +2175,21 @@ class GroupPF:
             drift_bw_temp = []
             drift_win_temp = []
             for day_pair in day_pairs:
-                for day in day_pair:
-                    drift_bw = get_drift_bw_sessions(mouse, 'Open', day, 'Shock', day, batch_map=self.batch_map,
-                                                  drift_type=drift_metric, speed_thresh=speed_thresh)
-                    drift_bw_temp.append(drift_bw)
-                drift_bw_all.append(np.nanmean(drift_bw_temp))
+                if bw_day_use == 'both':
+                    # Calculated b/w arena drifts on both days and average them
+                    for day in day_pair:
+                        drift_bw = get_drift_bw_sessions(mouse, 'Open', day, 'Shock', day, batch_map=self.batch_map,
+                                                      drift_type=drift_metric, speed_thresh=speed_thresh)
+                        drift_bw_temp.append(drift_bw)
+                    drift_bw_all.append(np.nanmean(drift_bw_temp))  # average days together before aggregating
+                elif bw_day_use in ['first', 'second']:
+                    # Calculate index for what day to use
+                    day_ind = np.where([bw_day_use == position for position in ['first', 'second']])[0][0]
+                    # Calculate b/w arena drifts on specified day
+                    drift_bw = get_drift_bw_sessions(mouse, 'Open', day_pair[day_ind], 'Shock', day_pair[day_ind],
+                                                     batch_map=self.batch_map,
+                                                     drift_type=drift_metric, speed_thresh=speed_thresh)
+                    drift_bw_all.append(drift_bw)  # append directly
 
                 # Get turnover within each arena from day 1 to day 2 of each day_pair and average them
 
@@ -2197,14 +2210,22 @@ class GroupPF:
         ax.set_xlabel(win_title)
 
         bw_prefix = drift_prefix + ' bw arenas Day '
-        days_str = [str(day) for day_pair in day_pairs for day in day_pair]
+        if bw_day_use == 'both':
+            days_str = [str(day) for day_pair in day_pairs for day in day_pair]
+        else:
+            days_str = [str(day_pair[day_ind]) for day_pair in day_pairs]
         bw_title = ''.join((bw_prefix, ' ,'.join(days_str)))
         ax.set_ylabel(bw_title)
+
+        if bw_day_use == 'both':
+            ax.set_title('Using both days for b/w arena drift')
+        else:
+            ax.set_title('Using ' + bw_day_use + ' day for b/w arena drift')
 
         sns.despine(ax=ax)
 
         # Print out stats - fold into neighboring axes for later...
-        r, p = sstats.spearmanr(np.asarray(drift_bw_all), np.asarray(drift_win_all))
+        r, p = sstats.spearmanr(np.asarray(drift_bw_all), np.asarray(drift_win_all), nan_policy='omit')
         print('\033[4mSpearman Correlation\033[0m')
         print('r = ' + str(r))
         print('p = ' + str(p))
