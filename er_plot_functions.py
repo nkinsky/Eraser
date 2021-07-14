@@ -16,13 +16,11 @@ from os import path
 import skvideo.io
 from glob import glob
 from session_directory import find_eraser_directory as get_dir
-# import pickle
 from scipy.signal import decimate
 import session_directory as sd
 import placefield_stability as pfs
-import eraser_reference as err
-import scipy as sp
 import scipy.stats as s
+from pathlib import Path
 sd.make_session_list()  # update session list
 plt.rcParams['pdf.fonttype'] = 42
 import helpers as hlp
@@ -412,7 +410,7 @@ def get_timestamps(dir_use):
         t: nd array of timestamps
     """
     try:
-        time_file = glob(path.join(dir_use + '\FreezeFrame', '*Index*.csv'))
+        time_file = glob(str(Path(dir_use) / 'FreezeFrame/*Index*.csv'))
         temp = pd.read_csv(time_file[0], header=None)
     except (IndexError, FileNotFoundError, IOError):  # FileNotFoundError is IOError in earlier versions
         time_file = glob(path.join(dir_use, '*Index*.csv'))
