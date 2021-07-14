@@ -1,3 +1,5 @@
+from os import environ
+
 # Marble14 should also be included once 10Hz SR is accounted for and Shock day 2 is run
 control_mice = ['Marble06', 'Marble07', 'Marble11', 'Marble12', 'Marble14', 'Marble24',
                 'Marble26', 'Marble27', 'Marble29']
@@ -21,20 +23,49 @@ learners = ["Marble07", "Marble12", "Marble24", "Marble27"]
 
 plot_dir = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'  # Plotting folder
 
-# Designate plotting folder
-from os import environ
-try:
-    comp_name = environ['COMPUTERNAME']
-except KeyError:  # Above does NOT work for Unix-based systems
-    from os import uname
-    comp_name = uname()[1]
+# from os import environ
+# try:
+#     comp_name = environ['COMPUTERNAME']
+# except KeyError:  # Above does NOT work for Unix-based systems
+#     from os import uname
+#     comp_name = uname()[1]
+#
+# if comp_name == 'NATLAPTOP':
+#     pathname = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'
+# elif comp_name == 'RKC-HAS-WD-0005':
+#     pathname = r'C:\Users\kinsky\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'
+# elif comp_name == 'Evans computer':
+#     pathname = 'fill in folder to plot to here evan'
 
-if comp_name == 'NATLAPTOP':
-    pathname = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'
-elif comp_name == 'RKC-HAS-WD-0005':
-    pathname = r'C:\Users\kinsky\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'
-elif comp_name == 'Evans computer':
-    pathname = 'fill in folder to plot to here evan'
+## function to grab computer name and relevant path(s) for plotting/working
+def get_comp_name():
+    """Get computer name and path(s) to figure location and working directory"""
+
+    working_dir = ''
+    try:
+        comp_name = environ['COMPUTERNAME']
+    except KeyError:  # Above does NOT work for Unix-based systems
+        from os import uname
+        comp_name = uname()[1]
+
+    if comp_name == 'NATLAPTOP':
+        pathname = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'
+        working_dir = r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser'
+        session_dir = r'C:\Eraser\SessionDirectories'
+    elif comp_name == 'RKC-HAS-WD-0005':  # not really used anymore
+        pathname = r'C:\Users\kinsky\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'
+    elif comp_name == 'Nathaniels-MacBook-Air.local':
+        pathname = '/Users/nkinsky/Dropbox/Imaging Project/Manuscripts/Eraser/Figures'
+        working_dir = '/Users/nkinsky/Documents/BU/Working/Eraser'
+        session_dir = '/Users/nkinsky/Documents/BU/Working/Eraser/SessionDirectories'
+    elif comp_name == 'Evans computer':
+        pathname = 'fill in folder to plot to here evan'
+
+    return comp_name, working_dir, pathname, session_dir
+
+
+# Designate plotting folder
+comp_name, working_dir, pathname, session_dir = get_comp_name()
 
 def grab_ax_lims(ax):
     """

@@ -1,4 +1,4 @@
-name: eraser7
+name: eraser
 channels:
   - conda-forge
 
