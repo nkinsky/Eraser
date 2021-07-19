@@ -169,55 +169,38 @@ def plot_prob_hist(array):
 #     plt.show()
 
 
-def sortPSA(PSAbool):
-
+def sortPSA(PSAbool, sort_by=None):
+    """
+    Sorts putative-spiking activity boolean array (PSAbool) by time of first calcium event. Or by whatever you want
+    if you use 'sort_by' parameter.
+    :param PSAbool: nneurons x nframes boolean ndarray of putative spiking activity
+    :param sort_by: if not None, alternative metric to sort cells by - default = None.
+    :return: PSAsort: sorted PSAbool
+    """
     nneurons,_ = PSAbool.shape
 
-    # First identify active and inactive (perhaps not active after speed thresholding) neurons
-    inactive_neurons = np.where(np.invert(np.any(PSAbool, 1)))
-    active_neurons = np.where(np.any(PSAbool, 1))[0]
+    if sort_by is None:
+        # First identify active and inactive (perhaps not active after speed thresholding) neurons
+        inactive_neurons = np.where(np.invert(np.any(PSAbool, 1)))
+        active_neurons = np.where(np.any(PSAbool, 1))[0]
 
-    n_events = np.nonzero(PSAbool)  # get indices of all calcium events (1 = neuron#, 2 = frame#)
+        n_events = np.nonzero(PSAbool)  # get indices of all calcium events (1 = neuron#, 2 = frame#)
 
-    # Get time of first calcium event and sort
-    onset_frame = np.asarray([np.min(n_events[1][n_events[0] == neuron])
-                              for neuron in active_neurons])
-    sort_ind_active = np.argsort(onset_frame)
-    sort_ind = np.append(active_neurons[sort_ind_active], inactive_neurons)
+        # Get time of first calcium event and sort
+        onset_frame = np.asarray([np.min(n_events[1][n_events[0] == neuron])
+                                  for neuron in active_neurons])
+        sort_ind_active = np.argsort(onset_frame)
+        sort_ind = np.append(active_neurons[sort_ind_active], inactive_neurons)
+    else:
+        sort_ind = np.argsort(sort_by)
 
     PSAsort = PSAbool[sort_ind, :]
 
     return PSAsort
 
-    return
-
 if __name__ == '__main__':
-    import matplotlib.pyplot as plt
     import Placefields as pf
-    PF = pf.load_pf('Marble14', 'Shock', 2)
-    PSAbool2 = PF.PSAbool_align.copy()
-    PSAbool2[0:30, :] = False
-    fig, ax = plt.subplots(1, 2)
-    ax[0].imshow(sortPSA(PF.PSAbool_align), aspect='auto')
-    ax[1].imshow(sortPSA(PSAbool2), aspect='auto')
-
-    # from Placefields import load_pf
-    # PF = load_pf("Marble24", "Shock", "-1", pf_file='placefields_cm1_manlims.pkl')
-    # ans = get_sampling_rate(PF)
-    # x , y = get_eventrate(PF.PSAbool_align, ans)
-    # fig = plt.figure()
-    # ax = fig.add_subplot(1, 1, 1, facecolor="1.0")
-    # ax.scatter(x, y)
-    # plt.show()
-    # # test comment by evan
+    mouse, arena, day = 'Marble07', 'Shock', -2
+    PF = pf.load_pf(mouse, arena, day)
+    sortPSA(PF.PSAbool_align)
     pass
-
-# import session_directory as sd
-# import os
-# import pickle
-# dir_use = sd.find_eraser_directory('Marble24','Shock','-1')
-# os.path.join(dir_use,'placefields_cml_manlims.pkl')
-# pf_file = os.path.join(dir_use, 'placefields_cm1_manlims.pkl')
-# with open(pf_file, 'rb') as file:
-#     PF = pickle.load(file)
-
