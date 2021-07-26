@@ -1,6 +1,32 @@
 import numpy as np
 import er_plot_functions as erp
 import Placefields as pf
+import seaborn as sns
+import helpers
+import matplotlib.pyplot as plt
+
+
+def get_freezing_times(mouse, arena, day, **kwargs):
+    """Identify chunks of frames and timestamps during which the mouse was freezing
+
+    :param mouse: str
+    :param arena: 'Open' or 'Shock'
+    :param day: int from [-2, -1, 0, 4, 1, 2, 7]
+    :param kwargs: see er_plot_functions.detect_freezing()
+    :return: freezing_epochs: list of start and end indices of each freezing epoch in behavioral video
+             freezing_times: list of start and end times of each freezing epoch
+    """
+    dir_use = erp.get_dir(mouse, arena, day)
+
+    video_t = erp.get_timestamps(str(dir_use))
+    freezing, velocity = erp.detect_freezing(str(dir_use), arena=arena, **kwargs)
+    video_t = video_t[:-1]  # Chop off last timepoint to make this the same length as freezing and velocity arrays
+
+    # convert freezing indices to timestamps
+    freezing_epochs = erp.get_freezing_epochs(freezing)
+    freezing_times = [[video_t[epoch[0]], video_t[epoch[1]]] for epoch in freezing_epochs]
+
+    return freezing_epochs, freezing_times
 
 
 def align_freezing_to_PSA(PSAbool, sr_image, freezing, video_t):
@@ -83,7 +109,67 @@ def motion_modulation_index(mouse, arena, day, **kwargs):
     event_rate_freezing = freeze_event_rate(PF.PSAbool_align, freeze_bool)
     MMI = (event_rate_moving - event_rate_freezing) / (event_rate_moving + event_rate_freezing)
 
-    return MMI
+
+def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', ax=None, **kwargs):
+    """
+
+    :param mouse: str
+    :param arena: 'Open' or 'Shock'
+    :param day: int from [-2, -1, 0, 4, 1, 2, 7]
+    :param sort_by: how to sort neurons, options are: 'first_event', 'move_event_rate', 'freeze_event_rate' or None
+    :param ax: axes to plot into, default (None) = create new figure and axes.
+    :param kwargs: freezing related parameters. see er_plot_functions.detect_freezing()
+    :return: ax to plot
+    """
+    dir_use = erp.get_dir(mouse, arena, day)
+    PF = pf.load_pf(mouse, arena, day)
+
+    video_t = erp.get_timestamps(str(dir_use))
+    video_t = video_t[:-1]  # Chop off last timepoint to make this the same length as freezing and velocity arrays
+
+    # convert freezing indices to timestamps
+    freezing, velocity = erp.detect_freezing(str(dir_use), arena=arena, **kwargs)
+    freezing_epochs, freezing_times = get_freezing_times(mouse, arena, day)
+
+    # get boolean of freezing indices in neural data
+    freeze_bool = align_freezing_to_PSA(PF.PSAbool_align, PF.sr_image, freezing, video_t)
+
+    # Now get time for imaging
+    t_imaging = np.arange(0, PF.PSAbool_align.shape[1]) / PF.sr_image
+
+    # Sort PSAbool
+    if sort_by is None:
+        PSAuse = PF.PSAbool_align
+    elif sort_by == 'first_event':  # Sort by first calcium event time
+        PSAuse = helpers.sortPSA(PF.PSAbool_align)
+    elif sort_by == 'move_event_rate':
+        event_rate_moving = move_event_rate(PF.PSAbool_align, freeze_bool)
+        PSAuse = helpers.sortPSA(PF.PSAbool_align, sort_by=event_rate_moving)
+    elif sort_by == 'freeze_event_rate':
+        event_rate_freezing = move_event_rate(PF.PSAbool_align, freeze_bool)
+        PSAuse = helpers.sortPSA(PF.PSAbool_align, sort_by=event_rate_freezing)
+
+    # Now set up plotting
+    SFvel = 4  # Factor to scale velocity by for overlay below
+    if ax is None:
+        fig, ax = plt.subplots()
+        fig.set_size_inches([12, 8])
+
+    # Now plot everything
+    sns.heatmap(data=PSAuse, ax=ax, xticklabels=1000, yticklabels=50)
+    nneurons = PF.PSAbool_align.shape[0]
+    ax.plot(video_t * PF.sr_image, velocity * -SFvel + nneurons / 2, color='r', linewidth=1)
+    ax.plot(video_t[freezing] * PF.sr_image, velocity[freezing] * -SFvel + nneurons / 2, 'b*')
+
+    for freeze_time in freezing_times:
+        ax.axvspan(freeze_time[0] * PF.sr_image, freeze_time[1] * PF.sr_image, color=[0, 1, 0, 0.4])
+
+    # Pretty things up and label
+    ax.tick_params(axis='y', rotation=0)
+    ax.set_xticklabels([int(int(label.get_text()) / PF.sr_image) for label in ax.get_xticklabels()])
+    ax.set_title('Neurons sorted by ' + str(sort_by))
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Neuron')
 
 if __name__ == '__main__':
     motion_modulation_index('Marble07', 'Shock', -2)
