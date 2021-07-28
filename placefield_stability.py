@@ -722,7 +722,8 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
 
 def eliminate_immobile_neurons(PSAboolrun1, PSAboolrun2, valid_neurons1, valid_neurons2):
     """Eliminate neurons that are only active during immobility - will encounter errors trying to calculate
-    correlations using their all-zero transient maps."""
+    correlations using their all-zero transient maps. Note that these neurons can be looked at with functions
+    in the `freezing_analysis` module"""
 
     # Identify mapped neurons with least one calcium event after speed thresholding
     run_events_bool = (PSAboolrun1[valid_neurons1, :].sum(axis=1) > 0) & \
