@@ -1,9 +1,13 @@
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+
 import er_plot_functions as erp
 import Placefields as pf
-import seaborn as sns
+import placefield_stability as pfs
+import session_directory as sd
 import helpers
-import matplotlib.pyplot as plt
 
 
 def get_freezing_times(mouse, arena, day, **kwargs):
@@ -112,17 +116,17 @@ def motion_modulation_index(mouse, arena, day, **kwargs):
     return MMI
 
 
-def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', across_days=False, ax=None, **kwargs):
+def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax=None, **kwargs):
     """Plot *raw* calcium event rasters across whole session with velocity trace overlaid in red and freezing epochs
     overlaid in green. Can sort by various interesting metrics and apply that across days.
     :param mouse: str
     :param arena: 'Open' or 'Shock'
     :param day: int from [-2, -1, 0, 4, 1, 2, 7]
     :param sort_by: how to sort neurons, options are: 'first_event', 'move_event_rate', 'freeze_event_rate', 'MMI', or None
-    :param across_days: 2nd day to use sorted by 1st day sorting (new neurons at the end).
+    :param day2: 2nd day to use sorted by 1st day sorting (new neurons at the end). False (default) = plot one day only.
     :param ax: axes to plot into, default (None) = create new figure and axes.
     :param kwargs: freezing related parameters for calculating freezing with all 'sort_by' options except 'first_event'.
-    See er_plot_functions.detect_freezing()
+    See er_plot_functions.detect_freezing(). Can also toggle 'batch_map_use' to True or False for sorting across days.
     :return: ax: axes or list of plotting axes
     """
 
@@ -147,7 +151,7 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', across_days=Fa
         return PF.PSAbool_align, PF.sr_image, video_t, velocity, freezing_times, freeze_bool
 
     # Plot sub-function
-    def plotPSAoverlay(PSAuse, sr_image, video_t, velocity, freezing_times, mouse, arena, day):
+    def plotPSAoverlay(PSAuse, sr_image, video_t, velocity, freezing_times, mouse, arena, day, ax):
         SFvel = 4  # Factor to scale velocity by for overlay below
 
         sns.heatmap(data=PSAuse, ax=ax, xticklabels=1000, yticklabels=50)
@@ -165,43 +169,86 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', across_days=Fa
         ax.set_xlabel('Time (s)')
         ax.set_ylabel('Neuron')
 
+    # Sorting sub-function
+    def sort_PSA(mouse, arena, day, PSAbool_in, freeze_bool, sort_by, **kwargs):
+        """Sort PSA according in `sort_by` metric"""
+
+        # Next, sort PSAbool appropriately
+        nneurons = PSAbool_in.shape[0]
+        if sort_by is None:
+            sort_array = np.arange(0, nneurons)
+        elif sort_by == 'first_event':  # Sort by first calcium event time
+            PSAuse, sort_array = helpers.sortPSA(PSAbool_in)
+        elif sort_by == 'move_event_rate':
+            sort_array = move_event_rate(PSAbool_in, freeze_bool)
+        elif sort_by == 'freeze_event_rate':
+            sort_array = move_event_rate(PSAbool_in, freeze_bool)
+        elif sort_by == 'MMI':
+            sort_array = motion_modulation_index(mouse, arena, day, **kwargs)
+
+        if sort_by != 'first_event':
+            PSAuse = helpers.sortPSA(PSAbool_align, sort_by=sort_array)
+
+        return PSAuse, sort_array
+
     # First get PSA and velocity data
     PSAbool_align, sr_image, video_t, velocity, freezing_times, freeze_bool = \
         getPSA_and_freezing(mouse, arena, day, **kwargs)
 
-    # Next, sort PSAbool appropriately
-    nneurons = PSAbool_align.shape[0]
-    if sort_by is None:
-        sort_array = np.arange(0, nneurons)
-    elif sort_by == 'first_event':  # Sort by first calcium event time
-        PSAuse = helpers.sortPSA(PSAbool_align)
-    elif sort_by == 'move_event_rate':
-        sort_array = move_event_rate(PSAbool_align, freeze_bool)
-    elif sort_by == 'freeze_event_rate':
-        sort_array = move_event_rate(PSAbool_align, freeze_bool)
-    elif sort_by == 'MMI':
-        sort_array = motion_modulation_index(mouse, arena, day, **kwargs)
-
-    if sort_by != 'first_event':
-        PSAuse = helpers.sortPSA(PSAbool_align, sort_by=sort_array)
+    # Now sort
+    PSAuse, sort_array = sort_PSA(mouse, arena, day, PSAbool_align, freeze_bool, sort_by, **kwargs)
 
     # Now set up plotting
     if ax is None:
-        fig, ax = plt.subplots()
-        fig.set_size_inches([12, 8])
+        fig = plt.figure(figsize=(12, 8))
+        nplots = 2 if day2 else 1
+        gs = gridspec.GridSpec(nrows=1, ncols=nplots, figure=fig)
+        ax1 = fig.add_subplot(gs[0, 0])
+
+    # NRK todo: add in code here to append a block of NaN rows with 0th dimension = # new neurons if plotting across days!
+    if day2:
+        # register and apply sorting to sort_array from above.
+        neuron_map = pfs.get_neuronmap(mouse, arena, day, arena, day2, **kwargs)
+        reg_session = sd.find_eraser_session(mouse, arena, day2)
+        good_map_bool, silent_ind, new_ind = pfs.classify_cells(neuron_map, reg_session)
+
+        nframes = PSAuse.shape[1]
+
+        PSAuse = np.concatenate((PSAuse, np.ones((len(new_ind), nframes))*np.nan))
 
     # Finally plot
-    plotPSAoverlay(PSAuse, sr_image, video_t, velocity, freezing_times, mouse, arena, day)
+    plotPSAoverlay(PSAuse, sr_image, video_t, velocity, freezing_times, mouse, arena, day, ax=ax1)
 
     # Now plot 2nd day if looking across days!
-    if across_days:
+    if day2:
         PSAbool_align2, sr_image2, video_t2, velocity2, freezing_times2, freeze_bool2 = \
-            getPSA_and_freezing(mouse, arena, across_days, **kwargs)
+            getPSA_and_freezing(mouse, arena, day2, **kwargs)
 
-        # next register and apply sorting to sort_array from above.  Add in new neurons from placefield_stability.classify_cells
-        # to bottom of PSAbool!!
+        # next register and apply sorting to sort_array from above.
+        neuron_map = pfs.get_neuronmap(mouse, arena, day, arena, day2, **kwargs)
+        reg_session = sd.find_eraser_session(mouse, arena, day2)
+        good_map_bool, silent_ind, new_ind = pfs.classify_cells(neuron_map, reg_session)
+
+        # now sort previously active cells by original session
+        sort_array_reg = neuron_map[sort_array]
+
+        # Now sort new cells by same metric and append cell ids to sort_array_reg
+        PSAuse2_reg, sort_array2 = sort_PSA(mouse, arena, day2, PSAbool_align2, freeze_bool2, sort_by, **kwargs)
+
+        # NRK todo: bug here - need to create 2nd psabool array of new neurons and concatenate to PSAbooluse2 above rather than creating an index to sort by OR we need to use the PSA_sortby function above
+        np.concatenate((sort_array_reg, np.arange(0, np.max(new_ind))[sort_array2[new_ind]]))
+
+        # Last, re-arrange PSAbool from the 2nd session!
+        PSAuse2 = PSAbool_align2[sort_array_reg]
+
+        # Finally plot side-by-side!
+        ax2 = fig.add_subplot(gs[0, 1])
+        plotPSAoverlay(PSAuse2, sr_image2, video_t2, velocity2, freezing_times2, mouse, arena, day2, ax=ax2)
+
+    return fig
+
 
 if __name__ == '__main__':
-    motion_modulation_index('Marble07', 'Shock', -2)
+    plot_PSA_w_freezing('Marble07', 'Shock', -2, sort_by='first_event', day2=-1)
 
     pass

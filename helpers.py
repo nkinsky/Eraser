@@ -196,7 +196,27 @@ def sortPSA(PSAbool, sort_by=None):
 
     PSAsort = PSAbool[sort_ind, :]
 
+    return PSAsort, sort_ind
+
+
+def sortPSAbyarray(PSAin, sort_ind):
+    """sorts PSAbool by the array indices in sort_ind. Sets any NaNs to all NaN rows in PSAsort_out"""
+
+    # Step through each neuron in sort_ind and grab the appopriate row from PSAin.
+    nneurons, nframes = PSAin.shape
+    PSAsort = []
+    for neuron in sort_ind:
+
+        # Get neural activity, making all frames NaN if sort_ind is Nan
+        if np.isnan(neuron):
+            psa = np.ones(nframes)*np.nan
+        else:
+            psa = PSAin[neuron]
+
+        PSAsort.append(psa)
+
     return PSAsort
+
 
 if __name__ == '__main__':
     import Placefields as pf
