@@ -205,7 +205,7 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
         gs = gridspec.GridSpec(nrows=1, ncols=nplots, figure=fig)
         ax1 = fig.add_subplot(gs[0, 0])
 
-    # NRK todo: add in code here to append a block of NaN rows with 0th dimension = # new neurons if plotting across days!
+    # append a block of NaN rows with 0th dimension = # new neurons if plotting across days
     if day2:
         # register and apply sorting to sort_array from above.
         neuron_map = pfs.get_neuronmap(mouse, arena, day, arena, day2, **kwargs)
@@ -229,26 +229,36 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
         reg_session = sd.find_eraser_session(mouse, arena, day2)
         good_map_bool, silent_ind, new_ind = pfs.classify_cells(neuron_map, reg_session)
 
-        # now sort previously active cells by original session
+        # now sort 2nd session cells by original session order
         sort_array_reg = neuron_map[sort_array]
 
         # Now sort new cells by same metric and append cell ids to sort_array_reg
         PSAuse2_reg, sort_array2 = sort_PSA(mouse, arena, day2, PSAbool_align2, freeze_bool2, sort_by, **kwargs)
 
         # NRK todo: bug here - need to create 2nd psabool array of new neurons and concatenate to PSAbooluse2 above rather than creating an index to sort by OR we need to use the PSA_sortby function above
-        np.concatenate((sort_array_reg, np.arange(0, np.max(new_ind))[sort_array2[new_ind]]))
+        PSAreg = []
+        nframes_reg = PSAuse2_reg.shape[1]
+        for ind in sort_array_reg:
+            if not np.isnan(ind):  # Add actual cell activity
+                psa_to_add = PSAbool_align2[int(ind)]
+            else:  # Add in all nans if not active the next day
+                psa_to_add = np.ones(nframes_reg)*np.nan
+            PSAreg.append(psa_to_add)  # append psa
+        PSAreg = np.asarray(PSAreg)  # convert from list to array
 
-        # Last, re-arrange PSAbool from the 2nd session!
-        PSAuse2 = PSAbool_align2[sort_array_reg]
+        # Now add in new cells at bottom
+        PSAreg = np.concatenate((PSAreg, PSAuse2_reg[new_ind]), axis=0)
 
         # Finally plot side-by-side!
         ax2 = fig.add_subplot(gs[0, 1])
-        plotPSAoverlay(PSAuse2, sr_image2, video_t2, velocity2, freezing_times2, mouse, arena, day2, ax=ax2)
+        plotPSAoverlay(PSAreg, sr_image2, video_t2, velocity2, freezing_times2, mouse, arena, day2, ax=ax2)
 
     return fig
 
 
 if __name__ == '__main__':
+    import matplotlib
+    matplotlib.use('TkAgg')
     plot_PSA_w_freezing('Marble07', 'Shock', -2, sort_by='first_event', day2=-1)
 
     pass
