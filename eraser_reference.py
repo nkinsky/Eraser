@@ -54,7 +54,7 @@ def get_comp_name():
         session_dir = r'C:\Eraser\SessionDirectories'
     elif comp_name == 'RKC-HAS-WD-0005':  # not really used anymore
         pathname = r'C:\Users\kinsky\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'
-    elif comp_name == 'Nathaniels-MacBook-Air.local':
+    elif 'Nathaniel' in comp_name:
         pathname = '/Users/nkinsky/Dropbox/Imaging Project/Manuscripts/Eraser/Figures'
         working_dir = '/Users/nkinsky/Documents/BU/Working/Eraser'
         session_dir = '/Users/nkinsky/Documents/BU/Working/Eraser/SessionDirectories'

@@ -116,7 +116,8 @@ def motion_modulation_index(mouse, arena, day, **kwargs):
     return MMI
 
 
-def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax=None, **kwargs):
+def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax=None, inactive_cells='black',
+                        plot_corr=False, **kwargs):
     """Plot *raw* calcium event rasters across whole session with velocity trace overlaid in red and freezing epochs
     overlaid in green. Can sort by various interesting metrics and apply that across days.
     :param mouse: str
@@ -125,6 +126,9 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
     :param sort_by: how to sort neurons, options are: 'first_event', 'move_event_rate', 'freeze_event_rate', 'MMI', or None
     :param day2: 2nd day to use sorted by 1st day sorting (new neurons at the end). False (default) = plot one day only.
     :param ax: axes to plot into, default (None) = create new figure and axes.
+    :param inactive_cells: str, 'black' (default) or 'white' plots inactive neuron rows all that color,
+    'ignore' = remove rows altogether, keeping only cells active in both sessions
+    :param plot_corr: bool, plots correlation between sort metrics across days , default = False
     :param kwargs: freezing related parameters for calculating freezing with all 'sort_by' options except 'first_event'.
     See er_plot_functions.detect_freezing(). Can also toggle 'batch_map_use' to True or False for sorting across days.
     :return: ax: axes or list of plotting axes
@@ -151,13 +155,25 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
         return PF.PSAbool_align, PF.sr_image, video_t, velocity, freezing_times, freeze_bool
 
     # Plot sub-function
-    def plotPSAoverlay(PSAuse, sr_image, video_t, velocity, freezing_times, mouse, arena, day, ax):
+    def plotPSAoverlay(PSAuse, sr_image, video_t, velocity, freezing_times, mouse, arena, day, ax,
+                       ignore_neuron_bool=None, inactive_color='black'):
+        # NRK todo: if plotting by MMI or event rate, overlay those metrics on the y-axis to see how well they line up across days!!!
+        # Basically you need to a) update gridspec to have either a 1x5 or 1x10 grid, 0:4 = heatmap, 4=yplot, 5:10=heatmap,
+        # 10 = plot, then you need to update MMI or event rate in the same manner you update PSAbool below.
+        
         SFvel = 4  # Factor to scale velocity by for overlay below
 
-        sns.heatmap(data=PSAuse, ax=ax, xticklabels=1000, yticklabels=50)
+        # Keep only specified rows if applicable
+        if ignore_neuron_bool is not None:
+            PSAuse = PSAuse[np.bitwise_not(ignore_neuron_bool)]
+        else:
+            # Make neuron rasters black if specified
+            if inactive_color == 'black':
+                PSAuse[np.isnan(PSAuse)] = 0
+                
+        sns.heatmap(data=PSAuse, ax=ax, xticklabels=1000, yticklabels=50, cbar=False)
         nneurons = PSAuse.shape[0]
         ax.plot(video_t * sr_image, velocity * -SFvel + nneurons / 2, color=[1, 0, 0, 0.5], linewidth=1)
-        # ax.plot(video_t[freezing] * PF.sr_image, velocity[freezing] * -SFvel + nneurons / 2, 'b*', alpha=0.5)
 
         for freeze_time in freezing_times:
             ax.axvspan(freeze_time[0] * sr_image, freeze_time[1] * sr_image, color=[0, 1, 0, 0.4])
@@ -165,9 +181,10 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
         # Pretty things up and label
         ax.tick_params(axis='y', rotation=0)
         ax.set_xticklabels([int(int(label.get_text()) / sr_image) for label in ax.get_xticklabels()])
-        ax.set_title(mouse + ' ' + arena + ' Day ' + str(day) + ': ' + str(sort_by) + ' sort')
+        title_append = ': coactive cells only' if ignore_neuron_bool is not None else ': all cells'
+        ax.set_title(mouse + ' ' + arena + ' Day ' + str(day) + title_append)
         ax.set_xlabel('Time (s)')
-        ax.set_ylabel('Neuron')
+        ax.set_ylabel('Neuron # sorted by ' + str(sort_by))
 
     # Sorting sub-function
     def sort_PSA(mouse, arena, day, PSAbool_in, freeze_bool, sort_by, **kwargs):
@@ -176,34 +193,47 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
         # Next, sort PSAbool appropriately
         nneurons = PSAbool_in.shape[0]
         if sort_by is None:
-            sort_array = np.arange(0, nneurons)
+            sort_ind, sort_array = np.arange(0, nneurons), None
         elif sort_by == 'first_event':  # Sort by first calcium event time
-            PSAuse, sort_array = helpers.sortPSA(PSAbool_in)
+            PSAuse, sort_ind = helpers.sortPSA(PSAbool_in)
+            sort_array = None
         elif sort_by == 'move_event_rate':
             sort_array = move_event_rate(PSAbool_in, freeze_bool)
         elif sort_by == 'freeze_event_rate':
-            sort_array = move_event_rate(PSAbool_in, freeze_bool)
+            sort_array = freeze_event_rate(PSAbool_in, freeze_bool)
         elif sort_by == 'MMI':
             sort_array = motion_modulation_index(mouse, arena, day, **kwargs)
 
         if sort_by != 'first_event':
-            PSAuse = helpers.sortPSA(PSAbool_align, sort_by=sort_array)
+            PSAuse, sort_ind = helpers.sortPSA(PSAbool_in, sort_by=sort_array)
 
-        return PSAuse, sort_array
+        return PSAuse, sort_ind, sort_array
+
+    def ploty_sort_metric(sort_metric, axmetric, axpsa, sort_metric_name):
+        """Plots metric by which PSAbool is sorted next to PSAbool on the y-axis. inputs are the (already sorted) metric
+        by which cells are sorted, axes to plot into, PSAbool axes, and metric name"""
+        axmetric.plot(sort_metric, range(len(sort_metric)))
+        axmetric.invert_yaxis()
+        axmetric.set_xlabel(sort_metric_name)
+        axmetric.axes.yaxis.set_visible(False)
+        axmetric.set_ylim(axpsa.get_ylim())
+        sns.despine(ax=axmetric)
 
     # First get PSA and velocity data
     PSAbool_align, sr_image, video_t, velocity, freezing_times, freeze_bool = \
         getPSA_and_freezing(mouse, arena, day, **kwargs)
+    nneurons1 = PSAbool_align.shape[0]
 
     # Now sort
-    PSAuse, sort_array = sort_PSA(mouse, arena, day, PSAbool_align, freeze_bool, sort_by, **kwargs)
+    PSAuse, sort_ind, sort_array = sort_PSA(mouse, arena, day, PSAbool_align, freeze_bool, sort_by, **kwargs)
 
     # Now set up plotting
     if ax is None:
         fig = plt.figure(figsize=(12, 8))
-        nplots = 2 if day2 else 1
+        nplots = 12 if day2 else 6
         gs = gridspec.GridSpec(nrows=1, ncols=nplots, figure=fig)
-        ax1 = fig.add_subplot(gs[0, 0])
+        ax1 = fig.add_subplot(gs[0, 0:4]) if sort_by is not None else fig.add_subplot(gs[0, 0:6])
+        ax1sort_met = fig.add_subplot(gs[0, 4]) if sort_by is not None else None
 
     # append a block of NaN rows with 0th dimension = # new neurons if plotting across days
     if day2:
@@ -216,49 +246,89 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 
         PSAuse = np.concatenate((PSAuse, np.ones((len(new_ind), nframes))*np.nan))
 
-    # Finally plot
-    plotPSAoverlay(PSAuse, sr_image, video_t, velocity, freezing_times, mouse, arena, day, ax=ax1)
-
-    # Now plot 2nd day if looking across days!
+    # Now plot 2nd day if looking across days! Do this first to identify cells active across both days.
     if day2:
         PSAbool_align2, sr_image2, video_t2, velocity2, freezing_times2, freeze_bool2 = \
             getPSA_and_freezing(mouse, arena, day2, **kwargs)
 
-        # next register and apply sorting to sort_array from above.
+        # next register and apply sorting to sort_ind from above.
         neuron_map = pfs.get_neuronmap(mouse, arena, day, arena, day2, **kwargs)
         reg_session = sd.find_eraser_session(mouse, arena, day2)
         good_map_bool, silent_ind, new_ind = pfs.classify_cells(neuron_map, reg_session)
 
         # now sort 2nd session cells by original session order
-        sort_array_reg = neuron_map[sort_array]
+        sort_ind_reg = neuron_map[sort_ind]
 
-        # Now sort new cells by same metric and append cell ids to sort_array_reg
-        PSAuse2_reg, sort_array2 = sort_PSA(mouse, arena, day2, PSAbool_align2, freeze_bool2, sort_by, **kwargs)
+        # Now sort new cells by same metric and append cell ids to sort_ind_reg
+        PSAuse2_reg, sort_ind2, sort_array2 = sort_PSA(mouse, arena, day2, PSAbool_align2, freeze_bool2, sort_by,
+                                                       **kwargs)
 
-        # NRK todo: bug here - need to create 2nd psabool array of new neurons and concatenate to PSAbooluse2 above rather than creating an index to sort by OR we need to use the PSA_sortby function above
-        PSAreg = []
+        # NRK todo: check this with a subset of neurons to make sure they match up!!!
+        PSAreg, sort_array2reg = [], []
         nframes_reg = PSAuse2_reg.shape[1]
-        for ind in sort_array_reg:
+        for ind in sort_ind_reg:
             if not np.isnan(ind):  # Add actual cell activity
                 psa_to_add = PSAbool_align2[int(ind)]
+                sort_met_add = sort_array2[int(ind)]
             else:  # Add in all nans if not active the next day
                 psa_to_add = np.ones(nframes_reg)*np.nan
+                sort_met_add = np.nan
             PSAreg.append(psa_to_add)  # append psa
+            sort_array2reg.append(sort_met_add)
         PSAreg = np.asarray(PSAreg)  # convert from list to array
+        sort_array2reg = np.asarray(sort_array2reg)
 
         # Now add in new cells at bottom
         PSAreg = np.concatenate((PSAreg, PSAuse2_reg[new_ind]), axis=0)
+        sort_array2reg = np.concatenate((sort_array2reg, np.ones(len(new_ind))*np.nan), axis=0)
 
-        # Finally plot side-by-side!
-        ax2 = fig.add_subplot(gs[0, 1])
-        plotPSAoverlay(PSAreg, sr_image2, video_t2, velocity2, freezing_times2, mouse, arena, day2, ax=ax2)
+        # find out cells that are inactive in one of the sessions
+        if inactive_cells == 'ignore':
+            inactive_bool = np.bitwise_or(np.all(np.isnan(PSAreg), axis=1), np.all(np.isnan(PSAuse), axis=1))
+        else:
+            inactive_bool = np.ones(PSAuse.shape[0], dtype='bool')
+
+        # Plot reg session
+        ax2 = fig.add_subplot(gs[0, 6:10]) if sort_by is not None else fig.add_subplot(gs[0, 6:11])
+        ax2sort_met = fig.add_subplot(gs[0, 10]) if sort_by is not None else None
+        plotPSAoverlay(PSAreg, sr_image2, video_t2, velocity2, freezing_times2, mouse, arena, day2, ax=ax2,
+                       ignore_neuron_bool=inactive_bool, inactive_color=inactive_cells)
+        ax2.axhline(nneurons1 + 0.5, 0, 1, color='r', linestyle='--')
+
+        # Plot sort metric next to raw data
+        if sort_by is not None:
+            sort_metric2_good = sort_array2reg[np.bitwise_not(inactive_bool)]
+            ploty_sort_metric(sort_metric2_good, ax2sort_met, ax2, sort_by)
+
+    # Finally plot first session
+    plotPSAoverlay(PSAuse, sr_image, video_t, velocity, freezing_times, mouse, arena, day, ax=ax1,
+                   ignore_neuron_bool=inactive_bool, inactive_color=inactive_cells)
+    if sort_by is not None:  # plot sort metric on y-axis
+        sort_metric_good = sort_array[sort_ind][np.where(np.bitwise_not(inactive_bool))[0]]
+        ploty_sort_metric(sort_metric_good, ax1sort_met, ax1, sort_by)
+        # ax1sort_met.plot(sort_metric_good, range(len(sort_metric_good)))
+        # ax1sort_met.invert_yaxis()
+        # ax1sort_met.set_xlabel(sort_by)
+        # ax1sort_met.axes.yaxis.set_visible(False)
+        # ax1sort_met.set_ylim(ax1.get_ylim())
+        # sns.despine(ax=ax1sort_met)
+
+    if day2:
+        ax1.axhline(nneurons1 + 0.5, 0, 1, color='r', linestyle='--')
+        ax2.set_ylabel('Sorted by Day ' + str(day))
+        if plot_corr:
+            figb, axb = plt.subplots()
+            axb.plot(sort_metric_good, sort_metric2_good, '.')
+            axb.set_xlabel(sort_by + ' Day ' + str(day))
+            axb.set_ylabel(sort_by + ' Day ' + str(day2))
+            sns.despine(ax=axb)
+
 
     return fig
-
 
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')
-    plot_PSA_w_freezing('Marble07', 'Shock', -2, sort_by='first_event', day2=-1)
+    plot_PSA_w_freezing('Marble07', 'Shock', -2, sort_by='MMI', day2=-1)
 
     pass
