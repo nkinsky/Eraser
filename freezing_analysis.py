@@ -50,11 +50,14 @@ def align_freezing_to_PSA(PSAbool, sr_image, freezing, video_t):
 
     # Set up boolean to match neural data shape
     freeze_bool = np.zeros(nframes, dtype='bool')
-    PSAtime = np.arange(0, nframes)/sr_image
+    PSAtime = np.arange(0, nframes)/sr_image.squeeze()
 
     # Interpolate freezing times in video time to imaging time
     for freeze_time in freezing_times:
-        freeze_bool[np.bitwise_and(PSAtime >= freeze_time[0], PSAtime < freeze_time[1])] = True
+        try:
+            freeze_bool[np.bitwise_and(PSAtime >= freeze_time[0], PSAtime < freeze_time[1])] = True
+        except IndexError:
+            print('debugging')
 
     return freeze_bool
 
@@ -329,6 +332,6 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')
-    plot_PSA_w_freezing('Marble07', 'Shock', -2, sort_by='MMI', day2=-1)
+    plot_PSA_w_freezing('Marble11', 'Shock', 1, sort_by='MMI', day2=2, inactive_cells='ignore', plot_corr=True)
 
     pass

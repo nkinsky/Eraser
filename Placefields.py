@@ -39,6 +39,8 @@ def load_pf(mouse, arena, day, session_index=None, pf_file='placefields_cm1_manl
     with open(position_path, 'rb') as file:
         PF = load(file)
 
+    PF.sr_image = PF.sr_image.squeeze()  # Backwards compatibility fix
+
     return PF
 
 
