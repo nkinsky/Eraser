@@ -2,6 +2,7 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
+import scipy.stats as stats
 
 import er_plot_functions as erp
 import Placefields as pf
@@ -309,12 +310,6 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
     if sort_by is not None:  # plot sort metric on y-axis
         sort_metric_good = sort_array[sort_ind][np.where(np.bitwise_not(inactive_bool))[0]]
         ploty_sort_metric(sort_metric_good, ax1sort_met, ax1, sort_by)
-        # ax1sort_met.plot(sort_metric_good, range(len(sort_metric_good)))
-        # ax1sort_met.invert_yaxis()
-        # ax1sort_met.set_xlabel(sort_by)
-        # ax1sort_met.axes.yaxis.set_visible(False)
-        # ax1sort_met.set_ylim(ax1.get_ylim())
-        # sns.despine(ax=ax1sort_met)
 
     if day2:
         ax1.axhline(nneurons1 + 0.5, 0, 1, color='r', linestyle='--')
@@ -324,6 +319,13 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
             axb.plot(sort_metric_good, sort_metric2_good, '.')
             axb.set_xlabel(sort_by + ' Day ' + str(day))
             axb.set_ylabel(sort_by + ' Day ' + str(day2))
+            axb.set_title(mouse + ': ' + arena)
+
+            # calculate and plot correlation
+            r, p = stats.spearmanr(sort_metric_good, sort_metric2_good, nan_policy='omit')
+            axb.plot(np.asarray([-1, 1]), np.asarray([-1, 1])*r, 'r-')
+            axb.text(0.375, -0.5, 'r = ' + f"{r:0.3g}")
+            axb.text(0.375, -0.625, 'p = ' + f"{p:0.3g}")
             sns.despine(ax=axb)
 
 
