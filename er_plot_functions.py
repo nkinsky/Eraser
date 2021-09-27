@@ -343,7 +343,7 @@ def get_pos(dir_use):
     # Grab position either by directory or mouse/arena/day inputs
 
     try:  # look in either freezeframe directory or base directory
-        pos_file = path.join(dir_use + '\FreezeFrame', 'pos.csv')
+        pos_file = path.join(dir_use, 'FreezeFrame', 'pos.csv')
         temp = pd.read_csv(pos_file, header=None)
         pos = temp.values
     except IOError:  # look in base directory if above is missing # FileNotFoundError is IOError in earlier versions

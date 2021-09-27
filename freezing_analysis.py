@@ -17,7 +17,7 @@ def get_freezing_times(mouse, arena, day, **kwargs):
     :param mouse: str
     :param arena: 'Open' or 'Shock'
     :param day: int from [-2, -1, 0, 4, 1, 2, 7]
-    :param kwargs: see er_plot_functions.detect_freezing()
+    :param kwargs: Freezing parameters to use. See er_plot_functions.detect_freezing()
     :return: freezing_epochs: list of start and end indices of each freezing epoch in behavioral video
              freezing_times: list of start and end times of each freezing epoch
     """
@@ -38,7 +38,7 @@ def align_freezing_to_PSA(PSAbool, sr_image, freezing, video_t):
     """
     Align freezing times to neural data.
     :param PSAbool: nneurons x nframes_imaging boolean ndarray of putative spiking activity
-    :param sr_image: frames/sec
+    :param sr_image: frames/sec (int)
     :param freezing: output of er_plot_functions.detect_freezing() function.
     :param video_t: video frame timestamps, same shape as `freezing`
     :return: freeze_bool: boolean ndarray of shape (nframes_imaging,) indicating frames where animals was freezing.
@@ -51,7 +51,7 @@ def align_freezing_to_PSA(PSAbool, sr_image, freezing, video_t):
 
     # Set up boolean to match neural data shape
     freeze_bool = np.zeros(nframes, dtype='bool')
-    PSAtime = np.arange(0, nframes)/sr_image.squeeze()
+    PSAtime = np.arange(0, nframes)/sr_image
 
     # Interpolate freezing times in video time to imaging time
     for freeze_time in freezing_times:
@@ -89,6 +89,22 @@ def move_event_rate(PSAbool, freeze_bool):
     return event_rate_moving
 
 
+def get_freeze_bool(mouse, arena, day, **kwargs):
+    # First get directory and neural data
+    dir_use = erp.get_dir(mouse, arena, day)
+    PF = pf.load_pf(mouse, arena, day)
+
+    # Now get behavioral timestamps and freezing times
+    video_t = erp.get_timestamps(str(dir_use))
+    freezing, velocity = erp.detect_freezing(str(dir_use), arena=arena, **kwargs)
+    video_t = video_t[:-1]  # Chop off last timepoint to make this the same length as freezing and velocity arrays
+
+    # Now align freezing to neural data!
+    freeze_bool = align_freezing_to_PSA(PF.PSAbool_align, PF.sr_image, freezing, video_t)
+
+    return PF.PSAbool_align, freeze_bool
+
+
 def motion_modulation_index(mouse, arena, day, **kwargs):
     """ Calculate motion modulation index (MMI): difference/sum of event rates during motion and freezing (1 = only
     active during motion, -1 = only active during freezing)
@@ -120,6 +136,85 @@ def motion_modulation_index(mouse, arena, day, **kwargs):
     return MMI
 
 
+def calc_sig_modulation(mouse, arena, day, nperms=1000, **kwargs):
+    """ Calculates how much each cell is modulated by moving, freezing, and a combination
+    (Motion Modulation Index = MMI).  Gives p value based on circularly permuting neural activity.
+    Rough - does not consider cells that might predict freezing or motion.
+    :param mouse: str
+    :param arena: str ('Shock' or 'Open')
+    :param day: int from [-2, -1, 0, 4, 1, 2, 7]
+    :param nperms: 1000 = default
+    :param kwargs: args to eraser_plot_functions.detect_freezing for calculating freezing epochs.
+    :return:
+    """
+    PSAbool, freeze_bool = get_freeze_bool(mouse, arena, day, **kwargs)
+
+    # Get moving and freezing event rates and calculate MMI
+    event_rate_moving = move_event_rate(PSAbool, freeze_bool)
+    event_rate_freezing = freeze_event_rate(PSAbool, freeze_bool)
+    MMI = (event_rate_moving - event_rate_freezing) / (event_rate_moving + event_rate_freezing)
+
+    # Now shuffle things up and recalculate everything!
+    ER_freeze_shuf, ER_move_shuf, MMI_shuf = [], [], []
+    shifts = [np.random.randint(0, PSAbool.shape[1]) for _ in range(nperms)]
+    for shift in shifts:
+        PSAshuf = np.roll(PSAbool, shift, axis=1)
+        ER_move_shuf.append(move_event_rate(PSAshuf, freeze_bool))
+        ER_freeze_shuf.append(freeze_event_rate(PSAshuf, freeze_bool))
+        MMI_shuf.append((ER_move_shuf[-1] - ER_freeze_shuf[-1]) / (ER_move_shuf[-1] + ER_freeze_shuf[-1]))
+
+    # Make lists into workable arrays
+    ER_move_shuf = np.asarray(ER_move_shuf)
+    ER_freeze_shuf = np.asarray(ER_freeze_shuf)
+    MMI_shuf = np.asarray(MMI_shuf)
+
+    # Now calculate significance here!
+    pmove = ((event_rate_moving - ER_move_shuf) < 0).sum(axis=0)/nperms
+    pfreeze = ((event_rate_freezing - ER_freeze_shuf) < 0).sum(axis=0)/nperms
+
+    # Note that this is two sided!!! - things with p < 0.05 should be motion modulated,
+    # # p > 0.95 should be freeze modulated, need to double check
+    pMMI = ((MMI - MMI_shuf) < 0).sum(axis=0)/nperms
+
+    # Dump things into a dictionary for easy access later
+    p = {'move': pmove, 'freeze': pfreeze, 'MMI': pMMI}
+    ER = {'move': event_rate_moving, 'freeze': event_rate_freezing, 'MMI': MMI}
+
+    return p, ER
+
+
+def get_PE_raster(psa, event_starts, buffer_sec=1, sr_image=20):
+    """ Gets peri-event rasters for +/-buffers sec from all event start times in event_starts
+    :param psa: activity for one cell at sr_image
+    :param event_starts: list of event start times in seconds.
+    :param buffer_sec: float, sec
+    :param sr_image: frame rate for imaging data
+    :return:
+    """
+    # Get # frames before/after event to include in raster
+    buffer_frames = int(buffer_sec * sr_image)
+
+    # Exclude any events where the buffer extends beyond the start/end of the neural recording
+    first_ok_time = buffer_frames/sr_image
+    last_ok_time = (len(psa) - buffer_frames)/sr_image
+    good_event_bool = np.bitwise_and(np.asarray(event_starts) >= first_ok_time,
+                                     np.asarray(event_starts) <= last_ok_time)
+    filtered_starts = [start for (start, ok) in zip(event_starts, good_event_bool) if ok]
+
+    raster_list = []
+    for start_time in filtered_starts:
+        start_id = int(start_time * sr_image)
+        raster_list.append(psa[(start_id - buffer_frames):(start_id + buffer_frames)])
+
+    pe_raster = np.asarray(raster_list[1:])
+
+    return pe_raster
+
+
+def gen_motion_tuning_curve():
+    """Function to write to generate neural tuning curves at onset or offset of motion."""
+    pass
+
 def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax=None, inactive_cells='black',
                         plot_corr=False, **kwargs):
     """Plot *raw* calcium event rasters across whole session with velocity trace overlaid in red and freezing epochs
@@ -135,7 +230,7 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
     :param plot_corr: bool, plots correlation between sort metrics across days , default = False
     :param kwargs: freezing related parameters for calculating freezing with all 'sort_by' options except 'first_event'.
     See er_plot_functions.detect_freezing(). Can also toggle 'batch_map_use' to True or False for sorting across days.
-    :return: ax: axes or list of plotting axes
+    :return: fig: main figure plot, if day2 == True, also returns fig handle for correlation scatterplot
     """
 
     # Sub-function to parse out PSA and velocity/freezing data
@@ -216,7 +311,7 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
     def ploty_sort_metric(sort_metric, axmetric, axpsa, sort_metric_name):
         """Plots metric by which PSAbool is sorted next to PSAbool on the y-axis. inputs are the (already sorted) metric
         by which cells are sorted, axes to plot into, PSAbool axes, and metric name"""
-        axmetric.plot(sort_metric, range(len(sort_metric)))
+        axmetric.plot(sort_metric, range(len(sort_metric)), '.')
         axmetric.invert_yaxis()
         axmetric.set_xlabel(sort_metric_name)
         axmetric.axes.yaxis.set_visible(False)
@@ -267,7 +362,6 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
         PSAuse2_reg, sort_ind2, sort_array2 = sort_PSA(mouse, arena, day2, PSAbool_align2, freeze_bool2, sort_by,
                                                        **kwargs)
 
-        # NRK todo: check this with a subset of neurons to make sure they match up!!!
         PSAreg, sort_array2reg = [], []
         nframes_reg = PSAuse2_reg.shape[1]
         for ind in sort_ind_reg:
@@ -323,17 +417,27 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 
             # calculate and plot correlation
             r, p = stats.spearmanr(sort_metric_good, sort_metric2_good, nan_policy='omit')
-            axb.plot(np.asarray([-1, 1]), np.asarray([-1, 1])*r, 'r-')
-            axb.text(0.375, -0.5, 'r = ' + f"{r:0.3g}")
-            axb.text(0.375, -0.625, 'p = ' + f"{p:0.3g}")
+            xlims_use = np.asarray([-1, 1]) if sort_by == 'MMI' else np.asarray(axb.get_xlim())
+            axb.plot(xlims_use, xlims_use*r, 'r-')
+            if sort_by == "MMI":
+                axb.text(0.375, -0.5, 'r = ' + f"{r:0.3g}")
+                axb.text(0.375, -0.625, 'p = ' + f"{p:0.3g}")
+            else:
+                ylims_use = np.asarray(axb.get_ylim())
+                axb.text(0.375*xlims_use[1], 0.2*ylims_use[1], 'r = ' + f"{r:0.3g}")
+                axb.text(0.375*xlims_use[1], 0.1*ylims_use[1], 'p = ' + f"{p:0.3g}")
             sns.despine(ax=axb)
 
+    if not day2 or not plot_corr:
+        return fig
+    elif day2 and plot_corr:
+        return fig, figb
 
-    return fig
 
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')
-    plot_PSA_w_freezing('Marble11', 'Shock', 1, sort_by='MMI', day2=2, inactive_cells='ignore', plot_corr=True)
+    plot_PSA_w_freezing('Marble29', 'Shock', 1, sort_by='MMI', day2=2
+                           , inactive_cells='ignore', plot_corr=True)
 
     pass
