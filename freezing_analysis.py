@@ -3,12 +3,117 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import scipy.stats as stats
+from os import path
+import scipy.io as sio
 
 import er_plot_functions as erp
 import Placefields as pf
 import placefield_stability as pfs
 import session_directory as sd
 import helpers
+
+
+class Freeze:
+    def __init__(self, mouse, arena, day, p_thresh=0.05):
+        self.session = {'mouse': mouse, 'arena': arena, 'day': day}
+
+        # Get PSAbool and freezing info
+        self.PSAbool, self.freeze_bool = get_freeze_bool(mouse, arena, day)
+        self.freezing_indices, self.freezing_times = get_freezing_times(mouse, arena, day)
+
+        # Get initial estimate of motion-modulated vs freeze modulated cells
+        self.p, self.ER = calc_sig_modulation(mouse, arena, day)
+        self.freeze_cells = np.where(self.p['MMI'] > 0.95)[0]
+        self.move_cells = np.where(self.p['MMI'] < 0.05)[0]
+
+        # Get sample rate
+        dir_use = pf.get_dir(mouse, arena, day)
+        im_data_file = path.join(dir_use, 'FinalOutput.mat')
+        im_data = sio.loadmat(im_data_file)
+        try:
+            self.sr_image = im_data['SampleRate'].squeeze()
+        except KeyError:
+            self.sr_image = 20
+
+        self.pe_rasters = {'freeze_cells': {'freeze_onset': {}, 'move_onset': {}},
+                           'move_cells': {'freeze_onset': {}, 'move_onset': {}}}
+
+
+    def gen_pe_rasters(self, cells='freeze', events='freeze_onset', buffer_sec=[2, 2]):
+        """Generate the rasters and dump them into a dictionary"""
+        # Get appropriate cells and event times to use
+        cells_use, event_starts = self.select_events(cells, events)
+
+        pe_rasters = [get_PE_raster(self.PSAbool[cell], event_starts, buffer_sec=buffer_sec,
+                                    sr_image=self.sr_image) for cell in cells_use]
+
+        self.pe_rasters[cells + '_cells'][events]['data'] = pe_rasters
+
+        return pe_rasters
+
+    def gen_perm_rasters(self, cells='freeze', events='freeze_onset', buffer_sec=[2, 2]):
+        """Generate shuffled rasters and dump them into a dictionary"""
+        # Get appropriate cells and event times to use
+        cells_use, event_starts = self.select_events(cells, events)
+
+        perm_rasters = [shuffle_raster(self.PSAbool[cell], event_starts, buffer_sec=buffer_sec,
+                                       sr_image=self.sr_image) for cell in cells_use]
+        self.pe_rasters[cells + '_cells'][events]['perm'] = perm_rasters
+
+        return perm_rasters
+
+    def gen_tuning_curves(self):
+        """This function will generate tuning curves and p-values for each time bin based on real and shuffled data"""
+        pass
+
+    def plot_pe_rasters(self, cells, events):
+        raster_use = self.pe_rasters[cells + '_cells'][events]['data']
+        if cells == 'freeze':
+            cell_ids = self.freeze_cells
+        elif cells == 'move':
+            cell_ids = self.move_cells
+
+        # NRK todo: add in tuning curves based on permutations if calculated with significance indicated
+        # perm_use = self.pe_rasters[cells + '_cells'][events]['perm']
+
+        # hopefully future proof for rasters as either a list (as developed)
+        ncells = len(raster_use) if type(raster_use) == list else raster_use.shape[0]
+        nframes = raster_use[0].shape[1]
+
+        nplots = np.ceil(ncells/25)
+        for plot in range(nplots):
+            fig, ax = plt.subplots(5, 5)
+            fig.set_size_inches([12, 6.9])
+            fig.suptitle(cells + ' cells: plot ' + str(plot))
+
+            range_use = range(25*plot, 25*(plot + 1))
+
+            for raster, cell_id, a in zip(raster_use[range_use], cell_ids[range_use], ax.reshape(-1)):
+                sns.heatmap(raster, ax=a)
+                a.axvline(nframes/2, color='g')
+                a.set_title('Cell ' + str(cell_id))
+            sns.despine(fig=fig)
+
+
+
+    def select_events(self, cells, events):
+        """Quickly get the appropriate cells and event times to use"""
+
+        # Get appropriate cells to use
+        if cells == 'freeze':
+            cells_use = self.freeze_cells
+        elif cells == 'move':
+            cells_use = self.move_cells
+        else:
+            cells_use = cells
+
+        # Get appropriate events
+        if events == 'freeze_onset':
+            event_starts = self.freezing_times[:, 0]
+        elif events == 'move_onset':
+            event_starts = self.freezing_times[:, 1]
+
+        return cells_use, event_starts
 
 
 def get_freezing_times(mouse, arena, day, **kwargs):
@@ -28,10 +133,10 @@ def get_freezing_times(mouse, arena, day, **kwargs):
     video_t = video_t[:-1]  # Chop off last timepoint to make this the same length as freezing and velocity arrays
 
     # convert freezing indices to timestamps
-    freezing_epochs = erp.get_freezing_epochs(freezing)
-    freezing_times = [[video_t[epoch[0]], video_t[epoch[1]]] for epoch in freezing_epochs]
+    freezing_indices = erp.get_freezing_epochs(freezing)
+    freezing_times = [[video_t[epoch[0]], video_t[epoch[1]]] for epoch in freezing_indices]
 
-    return freezing_epochs, freezing_times
+    return np.asarray(freezing_indices), np.asarray(freezing_times)
 
 
 def align_freezing_to_PSA(PSAbool, sr_image, freezing, video_t):
@@ -183,20 +288,24 @@ def calc_sig_modulation(mouse, arena, day, nperms=1000, **kwargs):
     return p, ER
 
 
-def get_PE_raster(psa, event_starts, buffer_sec=1, sr_image=20):
+def get_PE_raster(psa, event_starts, buffer_sec=[2, 2], sr_image=20):
     """ Gets peri-event rasters for +/-buffers sec from all event start times in event_starts
     :param psa: activity for one cell at sr_image
     :param event_starts: list of event start times in seconds.
-    :param buffer_sec: float, sec
+    :param buffer_sec: float, sec or length 2 array/list of buffer times before/after
     :param sr_image: frame rate for imaging data
     :return:
     """
+
+    if len(buffer_sec) == 1:  # Make into size 2 array if only one int specified
+        buffer_sec = [buffer_sec, buffer_sec]
+
     # Get # frames before/after event to include in raster
-    buffer_frames = int(buffer_sec * sr_image)
+    buffer_frames = [int(buffer_sec[0] * sr_image), int(buffer_sec[1] * sr_image)]
 
     # Exclude any events where the buffer extends beyond the start/end of the neural recording
-    first_ok_time = buffer_frames/sr_image
-    last_ok_time = (len(psa) - buffer_frames)/sr_image
+    first_ok_time = buffer_frames[0]/sr_image
+    last_ok_time = (len(psa) - buffer_frames[1])/sr_image
     good_event_bool = np.bitwise_and(np.asarray(event_starts) >= first_ok_time,
                                      np.asarray(event_starts) <= last_ok_time)
     filtered_starts = [start for (start, ok) in zip(event_starts, good_event_bool) if ok]
@@ -204,11 +313,32 @@ def get_PE_raster(psa, event_starts, buffer_sec=1, sr_image=20):
     raster_list = []
     for start_time in filtered_starts:
         start_id = int(start_time * sr_image)
-        raster_list.append(psa[(start_id - buffer_frames):(start_id + buffer_frames)])
+        raster_list.append(psa[(start_id - buffer_frames[0]):(start_id + buffer_frames[1])])
 
     pe_raster = np.asarray(raster_list[1:])
 
     return pe_raster
+
+
+def shuffle_raster(psa, event_starts, buffer_sec=[2, 2], sr_image=20, nperm=1000):
+    """Calculates shuffled event rasters by circularly permuting psa.
+
+    :param psa: ndarray of event activity at sr_image
+    :param event_starts: list of start times
+    :param buffer_sec: before/after times to use to calculate raster, float. default = [2, 2]
+    :param sr_image: int, 20 = default
+    :param nperm: int, 1000 = default
+    :return:
+    """
+
+    perms = np.random.permutation(len(psa))[0:nperm]  # get nperms
+
+    shuffle_raster = []
+    for perm in perms:
+        psashuf = np.roll(psa, perm)  # permute psa
+        shuffle_raster.append(get_PE_raster(psashuf, buffer_sec=buffer_sec, sr_image=sr_image))
+
+    return np.asarray(shuffle_raster[1:])
 
 
 def gen_motion_tuning_curve():
