@@ -47,6 +47,7 @@ class Freeze:
         pe_rasters = [get_PE_raster(self.PSAbool[cell], event_starts, buffer_sec=buffer_sec,
                                     sr_image=self.sr_image) for cell in cells_use]
 
+        pe_rasters = np.asarray(pe_rasters)
         self.pe_rasters[cells + '_cells'][events]['data'] = pe_rasters
 
         return pe_rasters
@@ -56,14 +57,22 @@ class Freeze:
         # Get appropriate cells and event times to use
         cells_use, event_starts = self.select_events(cells, events)
 
+        # Loop through each cell and get its chance level raster
         perm_rasters = [shuffle_raster(self.PSAbool[cell], event_starts, buffer_sec=buffer_sec,
                                        sr_image=self.sr_image) for cell in cells_use]
         self.pe_rasters[cells + '_cells'][events]['perm'] = perm_rasters
 
         return perm_rasters
 
-    def gen_tuning_curves(self):
-        """This function will generate tuning curves and p-values for each time bin based on real and shuffled data"""
+    def gen_tuning_curves(self, cells='freeze', events='freeze_onset', buffer_sec=[2, 2]):
+        """This function will generate tuning curves and p-values for each time bin based on real and shuffled data.
+        NOT SURE IF THIS IS NECESSARY! - quick to calculate from rasters!
+        :param cells:
+        :param events:
+        :param buffer_sec:
+        :return:
+        """
+
         pass
 
     def plot_pe_rasters(self, cells, events):
@@ -73,25 +82,46 @@ class Freeze:
         elif cells == 'move':
             cell_ids = self.move_cells
 
+        tuning_curves = gen_motion_tuning_curve(raster_use)
+
         # NRK todo: add in tuning curves based on permutations if calculated with significance indicated
         # perm_use = self.pe_rasters[cells + '_cells'][events]['perm']
 
         # hopefully future proof for rasters as either a list (as developed)
         ncells = len(raster_use) if type(raster_use) == list else raster_use.shape[0]
-        nframes = raster_use[0].shape[1]
+        nevents, nframes = raster_use[0].shape
 
-        nplots = np.ceil(ncells/25)
+        nplots = np.ceil(ncells/25).astype('int')
         for plot in range(nplots):
-            fig, ax = plt.subplots(5, 5)
+            fig, ax = plt.subplots(5, 5, sharex=True, sharey=True)
             fig.set_size_inches([12, 6.9])
             fig.suptitle(cells + ' cells: plot ' + str(plot))
 
-            range_use = range(25*plot, 25*(plot + 1))
+            range_use = slice(25*plot, np.min((25*(plot + 1), ncells)))
+            buffer = np.floor(nframes/2/self.sr_image)
 
-            for raster, cell_id, a in zip(raster_use[range_use], cell_ids[range_use], ax.reshape(-1)):
-                sns.heatmap(raster, ax=a)
+            for ida, (raster, curve, cell_id, a) in enumerate(zip(raster_use[range_use], tuning_curves[range_use],
+                                                                  cell_ids[range_use], ax.reshape(-1))):
+                sns.heatmap(raster, ax=a, cbar=False)
+                a.plot(nevents - curve*nevents*4, 'r-')
                 a.axvline(nframes/2, color='g')
                 a.set_title('Cell ' + str(cell_id))
+                if ida >= 20: # Label bottom row
+                    a.set_xticks([0, nframes/2, nframes])
+                    a.set_xticklabels([str(-buffer), '0', str(buffer)])
+                    a.set_xlabel('Time from ' + events + '(s)')
+
+                if ida in [0, 5, 10, 15, 20]:  # Label left side
+                    a.set_yticks([0, nevents])
+                    a.set_ylabel(events + ' #')
+
+                if ida in [4, 9, 14, 19, 24]:  # Add second axis and label
+                    secax = a.secondary_yaxis('right', functions=(lambda y1: 2*(nevents - y1)/nevents,
+                                                                  lambda y: nevents*(1 - y/2)))
+                    secax.set_yticks([0, 2])
+                    secax.tick_params(labelcolor='r')
+                    secax.set_ylabel(r'$p_{event}$', color='r')
+
             sns.despine(fig=fig)
 
 
@@ -331,20 +361,28 @@ def shuffle_raster(psa, event_starts, buffer_sec=[2, 2], sr_image=20, nperm=1000
     :return:
     """
 
-    perms = np.random.permutation(len(psa))[0:nperm]  # get nperms
+    perms = np.random.permutation(len(psa))[0:(nperm+1)]  # get nperms
 
     shuffle_raster = []
     for perm in perms:
         psashuf = np.roll(psa, perm)  # permute psa
-        shuffle_raster.append(get_PE_raster(psashuf, buffer_sec=buffer_sec, sr_image=sr_image))
+        shuffle_raster.append(get_PE_raster(psashuf, event_starts, buffer_sec=buffer_sec, sr_image=sr_image))
 
     return np.asarray(shuffle_raster[1:])
 
 
-def gen_motion_tuning_curve():
-    """Function to write to generate neural tuning curves at onset or offset of motion."""
-    pass
+def gen_motion_tuning_curve(pe_rasters):
+    """Function to write to generate neural tuning curves at onset or offset of motion.
 
+    :param pe_rasters: 3d ndarray (ncells x nevents x ntimebins)
+    :return:
+    """
+    tuning_curves = pe_rasters.sum(axis=1)/pe_rasters.shape[1]
+
+    return tuning_curves
+
+def get_motion_tuning_sig(pe_rasters, perm_rasters):
+    pass
 def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax=None, inactive_cells='black',
                         plot_corr=False, **kwargs):
     """Plot *raw* calcium event rasters across whole session with velocity trace overlaid in red and freezing epochs
