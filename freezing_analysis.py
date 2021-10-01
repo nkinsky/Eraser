@@ -38,42 +38,41 @@ class Freeze:
         except KeyError:
             self.sr_image = 20
 
-        self.pe_rasters = {'freeze_onset': {}, 'move_onset': {}}
-        self.perm_rasters = {'freeze_onset': {}, 'move_onset': {}}
-
+        self.pe_rasters = {'freeze_onset': None, 'move_onset': None}
+        self.perm_rasters = {'freeze_onset': None, 'move_onset': None}
 
         try:  # Load in previously calculated tunings
             self.load_sig_tuning()
         except FileNotFoundError:  # if not saved, initialize
             self.sig = {'freeze_onset': {}, 'move_onset': {}}
 
-    def gen_pe_rasters(self, cells='all', events='freeze_onset', buffer_sec=[2, 2]):
-        """Generate the rasters and dump them into a dictionary"""
+    def gen_pe_rasters(self, events='freeze_onset', buffer_sec=[2, 2]):
+        """Generate the rasters for all cells and dump them into a dictionary"""
         # Get appropriate event times to use
         event_starts = self.select_events(events)
 
-        pe_rasters = [get_PE_raster(self.PSAbool[cell], event_starts, buffer_sec=buffer_sec,
-                                    sr_image=self.sr_image) for cell in cells_use]
+        pe_rasters = [get_PE_raster(psa, event_starts, buffer_sec=buffer_sec,
+                                    sr_image=self.sr_image) for psa in self.PSAbool]
 
         pe_rasters = np.asarray(pe_rasters)
         self.pe_rasters[events] = pe_rasters
 
         return pe_rasters
 
-    def gen_perm_rasters(self, cells='all', events='freeze_onset', buffer_sec=[2, 2], nperm=1000):
+    def gen_perm_rasters(self, events='freeze_onset', buffer_sec=[2, 2], nperm=1000):
         """Generate shuffled rasters and dump them into a dictionary"""
         # Get appropriate cells and event times to use
-        cells_use, event_starts = self.select_events(cells, events)
+        event_starts = self.select_events(events)
 
         # Loop through each cell and get its chance level raster
-        print('generating permutated rasters - may take up to 1 minute')
-        perm_rasters = [shuffle_raster(self.PSAbool[cell], event_starts, buffer_sec=buffer_sec,
-                                       sr_image=self.sr_image, nperm=nperm) for cell in cells_use]
-        self.pe_rasters[cells + '_cells'][events]['perm'] = np.asarray(perm_rasters).swapaxes(0, 1)
+        print('generating permuted rasters - may take up to 1 minute')
+        perm_rasters = [shuffle_raster(psa, event_starts, buffer_sec=buffer_sec,
+                                       sr_image=self.sr_image, nperm=nperm) for psa in self.PSAbool]
+        self.perm_rasters[events] = np.asarray(perm_rasters).swapaxes(0, 1)
 
         return perm_rasters
 
-    def get_tuning_sig(self, cells='all', events='freeze_onset', buffer_sec=[2, 2], nperm=1000):
+    def get_tuning_sig(self, events='freeze_onset', buffer_sec=[2, 2], nperm=1000):
         """This function will calculate significance values by comparing event-centered tuning curves to
         chance (calculated from circulat permutation of neural activity).
         :param cells:
@@ -83,7 +82,7 @@ class Freeze:
         """
 
         # check if both regular and permuted raster are run already!
-        pe_rasters, perm_rasters = self.check_rasters_run(cells=cells, events=events,
+        pe_rasters, perm_rasters = self.check_rasters_run(events=events,
                                                           buffer_sec=buffer_sec,  nperm=nperm)
 
         # Now calculate tuning curves and get significance!
@@ -92,25 +91,24 @@ class Freeze:
         pval = (pe_tuning < perm_tuning).sum(axis=0) / nperm
 
         # Store in class
-        self.sig[cells + '_cells'][events]['pval'] = pval
-        self.sig[cells + '_cells'][events]['nperm'] = nperm
+        self.sig[events]['pval'] = pval
+        self.sig[events]['nperm'] = nperm
 
         # Save to disk to save time in future
         self.save_sig_tuning()
 
         return pval
 
-    def get_sig_neurons(self, cells='all', events='freeze_onset', buffer_sec=[2, 2], nperm=1000,
+    def get_sig_neurons(self, events='freeze_onset', buffer_sec=[2, 2], nperm=1000,
                         alpha=0.01, nbins=3, active_prop=0.25):
         """Find freezing neurons as those which have sig < alpha for nbins (consecutive) or more AND are active on
         at least active_prop of events."""
-        # NRK todo: run this with different alpha values to see if it looks legit or too conservative
 
         # Load in significance values at each spatial bin and re-run things if not already there
-        pval = self.get_tuning_sig(cells=cells, events=events, buffer_sec=buffer_sec, nperm=nperm)
+        pval = self.get_tuning_sig(events=events, buffer_sec=buffer_sec, nperm=nperm)
 
         # Load in rasters
-        pe_rasters, _ = self.check_rasters_run(cells=cells, events=events, buffer_sec=buffer_sec, nperm=nperm)
+        pe_rasters, _ = self.check_rasters_run(events=events, buffer_sec=buffer_sec, nperm=nperm)
         nevents = pe_rasters.shape[1]
 
         # Determine if there is significant tuning of < alpha for nbins (consecutive)
@@ -125,7 +123,7 @@ class Freeze:
 
         return sig_neurons
 
-    def check_rasters_run(self, cells='all', events='freeze_onset', buffer_sec=[2, 2],  nperm=1000):
+    def check_rasters_run(self, events='freeze_onset', buffer_sec=[2, 2],  nperm=1000):
         """ Verifies if you have already created rasters and permuted rasters and checks to make sure they match.
 
         :param cells:
@@ -135,8 +133,8 @@ class Freeze:
         :return:
         """
         # check if both regular and permuted raster are run already!
-        pe_rasters = self.pe_rasters[cells + '_cells'][events]['data']
-        perm_rasters = self.pe_rasters[cells + '_cells'][events]['perm']
+        pe_rasters = self.pe_rasters[events]
+        perm_rasters = self.perm_rasters[events]
         nbins_use = np.sum([int(buffer_sec[0] * self.sr_image), int(buffer_sec[1] * self.sr_image)])
         if isinstance(pe_rasters, np.ndarray) and isinstance(perm_rasters, np.ndarray):
             ncells, nevents, nbins = pe_rasters.shape
@@ -148,11 +146,18 @@ class Freeze:
 
             # if different buffer_sec used, re-run full rasters
             if nbins != nbins_use:
-                self.gen_pe_rasters(cells=cells, events=events, buffer_sec=buffer_sec)
+                pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
 
             # if different buffer_sec or nperm used, re-run permuted rasters
             if nbins2 != nbins_use or nperm2 != nperm:
-                self.gen_perm_rasters(cells=cells, events=events, buffer_sec=buffer_sec, nperm=nperm)
+                perm_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm)
+
+        elif not isinstance(perm_rasters, np.ndarray):
+            pe_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm)
+            if not isinstance(pe_rasters, np.ndarray):
+                perm_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
+            else:
+                pe_rasters, perm_rasters = self.check_rasters_run(events=events, buffer_sec=buffer_sec, nperm=nperm)
 
         return pe_rasters, perm_rasters
 
@@ -166,12 +171,16 @@ class Freeze:
         with open(self.dir_use / "sig_motion_tuning.pkl", 'rb') as f:
             self.sig = load(f)
 
-    def plot_pe_rasters(self, cells, events):
-        raster_use = self.pe_rasters[cells + '_cells'][events]['data']
-        if cells == 'freeze':
-            cell_ids = self.freeze_cells
-        elif cells == 'move':
-            cell_ids = self.move_cells
+    def plot_pe_rasters(self, cells='freeze_fine', events='freeze_onset', buffer_sec=[2, 2], **kwargs):
+
+        # NRK todo: better yet, fold this into a wrapper function. User must specify cells to plot.
+        if cells == 'freeze_rough':
+            cell_ids = self.freeze_cells_rough
+        elif cells == 'move_rough':
+            cell_ids = self.move_cells_rough
+        elif cells == 'freeze_fine':
+            cell_ids = self.get_sig_neurons(events=events, buffer_sec=buffer_sec, **kwargs)
+        raster_use = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)[cell_ids]
 
         tuning_curves = gen_motion_tuning_curve(raster_use)
 
@@ -198,7 +207,7 @@ class Freeze:
                 a.plot(nevents - curve*nevents*4, 'r-')
                 a.axvline(nframes/2, color='g')
                 a.set_title('Cell ' + str(cell_id))
-                if ida >= 20: # Label bottom row
+                if ida >= 20:  # Label bottom row
                     a.set_xticks([0, nframes/2, nframes])
                     a.set_xticklabels([str(-buffer), '0', str(buffer)])
                     a.set_xlabel('Time from ' + events + '(s)')
@@ -208,9 +217,9 @@ class Freeze:
                     a.set_ylabel(events + ' #')
 
                 if ida in [4, 9, 14, 19, 24]:  # Add second axis and label
-                    secax = a.secondary_yaxis('right', functions=(lambda y1: 2*(nevents - y1)/nevents,
-                                                                  lambda y: nevents*(1 - y/2)))
-                    secax.set_yticks([0, 2])
+                    secax = a.secondary_yaxis('right', functions=(lambda y1: 0.2*(nevents - y1)/nevents,
+                                                                  lambda y: nevents*(1 - y/0.2)))
+                    secax.set_yticks([0, 0.2])
                     secax.tick_params(labelcolor='r')
                     secax.set_ylabel(r'$p_{event}$', color='r')
 
