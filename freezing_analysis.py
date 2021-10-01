@@ -5,12 +5,14 @@ import matplotlib.gridspec as gridspec
 import scipy.stats as stats
 from os import path
 import scipy.io as sio
+from pickle import dump, load
 
 import er_plot_functions as erp
 import Placefields as pf
 import placefield_stability as pfs
 import session_directory as sd
 import helpers
+from helpers import contiguous_regions
 
 
 class Freeze:
@@ -23,11 +25,12 @@ class Freeze:
 
         # Get initial estimate of motion-modulated vs freeze modulated cells
         self.p, self.ER = calc_sig_modulation(mouse, arena, day)
-        self.freeze_cells = np.where(self.p['MMI'] > 0.95)[0]
-        self.move_cells = np.where(self.p['MMI'] < 0.05)[0]
+        self.freeze_cells_rough = np.where(self.p['MMI'] > 0.95)[0]
+        self.move_cells_rough = np.where(self.p['MMI'] < 0.05)[0]
 
         # Get sample rate
         dir_use = pf.get_dir(mouse, arena, day)
+        self.dir_use = dir_use
         im_data_file = path.join(dir_use, 'FinalOutput.mat')
         im_data = sio.loadmat(im_data_file)
         try:
@@ -35,45 +38,133 @@ class Freeze:
         except KeyError:
             self.sr_image = 20
 
-        self.pe_rasters = {'freeze_cells': {'freeze_onset': {}, 'move_onset': {}},
-                           'move_cells': {'freeze_onset': {}, 'move_onset': {}}}
+        self.pe_rasters = {'freeze_onset': {}, 'move_onset': {}}
+        self.perm_rasters = {'freeze_onset': {}, 'move_onset': {}}
 
 
-    def gen_pe_rasters(self, cells='freeze', events='freeze_onset', buffer_sec=[2, 2]):
+        try:  # Load in previously calculated tunings
+            self.load_sig_tuning()
+        except FileNotFoundError:  # if not saved, initialize
+            self.sig = {'freeze_onset': {}, 'move_onset': {}}
+
+    def gen_pe_rasters(self, cells='all', events='freeze_onset', buffer_sec=[2, 2]):
         """Generate the rasters and dump them into a dictionary"""
-        # Get appropriate cells and event times to use
-        cells_use, event_starts = self.select_events(cells, events)
+        # Get appropriate event times to use
+        event_starts = self.select_events(events)
 
         pe_rasters = [get_PE_raster(self.PSAbool[cell], event_starts, buffer_sec=buffer_sec,
                                     sr_image=self.sr_image) for cell in cells_use]
 
         pe_rasters = np.asarray(pe_rasters)
-        self.pe_rasters[cells + '_cells'][events]['data'] = pe_rasters
+        self.pe_rasters[events] = pe_rasters
 
         return pe_rasters
 
-    def gen_perm_rasters(self, cells='freeze', events='freeze_onset', buffer_sec=[2, 2]):
+    def gen_perm_rasters(self, cells='all', events='freeze_onset', buffer_sec=[2, 2], nperm=1000):
         """Generate shuffled rasters and dump them into a dictionary"""
         # Get appropriate cells and event times to use
         cells_use, event_starts = self.select_events(cells, events)
 
         # Loop through each cell and get its chance level raster
+        print('generating permutated rasters - may take up to 1 minute')
         perm_rasters = [shuffle_raster(self.PSAbool[cell], event_starts, buffer_sec=buffer_sec,
-                                       sr_image=self.sr_image) for cell in cells_use]
-        self.pe_rasters[cells + '_cells'][events]['perm'] = perm_rasters
+                                       sr_image=self.sr_image, nperm=nperm) for cell in cells_use]
+        self.pe_rasters[cells + '_cells'][events]['perm'] = np.asarray(perm_rasters).swapaxes(0, 1)
 
         return perm_rasters
 
-    def gen_tuning_curves(self, cells='freeze', events='freeze_onset', buffer_sec=[2, 2]):
-        """This function will generate tuning curves and p-values for each time bin based on real and shuffled data.
-        NOT SURE IF THIS IS NECESSARY! - quick to calculate from rasters!
+    def get_tuning_sig(self, cells='all', events='freeze_onset', buffer_sec=[2, 2], nperm=1000):
+        """This function will calculate significance values by comparing event-centered tuning curves to
+        chance (calculated from circulat permutation of neural activity).
         :param cells:
         :param events:
         :param buffer_sec:
         :return:
         """
 
-        pass
+        # check if both regular and permuted raster are run already!
+        pe_rasters, perm_rasters = self.check_rasters_run(cells=cells, events=events,
+                                                          buffer_sec=buffer_sec,  nperm=nperm)
+
+        # Now calculate tuning curves and get significance!
+        pe_tuning = gen_motion_tuning_curve(pe_rasters)
+        perm_tuning = np.asarray([gen_motion_tuning_curve(perm_raster) for perm_raster in perm_rasters])
+        pval = (pe_tuning < perm_tuning).sum(axis=0) / nperm
+
+        # Store in class
+        self.sig[cells + '_cells'][events]['pval'] = pval
+        self.sig[cells + '_cells'][events]['nperm'] = nperm
+
+        # Save to disk to save time in future
+        self.save_sig_tuning()
+
+        return pval
+
+    def get_sig_neurons(self, cells='all', events='freeze_onset', buffer_sec=[2, 2], nperm=1000,
+                        alpha=0.01, nbins=3, active_prop=0.25):
+        """Find freezing neurons as those which have sig < alpha for nbins (consecutive) or more AND are active on
+        at least active_prop of events."""
+        # NRK todo: run this with different alpha values to see if it looks legit or too conservative
+
+        # Load in significance values at each spatial bin and re-run things if not already there
+        pval = self.get_tuning_sig(cells=cells, events=events, buffer_sec=buffer_sec, nperm=nperm)
+
+        # Load in rasters
+        pe_rasters, _ = self.check_rasters_run(cells=cells, events=events, buffer_sec=buffer_sec, nperm=nperm)
+        nevents = pe_rasters.shape[1]
+
+        # Determine if there is significant tuning of < alpha for nbins (consecutive)
+        sig_bool = np.asarray([(np.diff(contiguous_regions(p < alpha), axis=1) > nbins).any() for p in pval],
+                              dtype=bool)
+
+        # Determine if neurons pass the activity threshold
+        nevents_active = pe_rasters.any(axis=2).sum(axis=1)
+        active_bool = (nevents_active > active_prop * nevents)
+
+        sig_neurons = np.where(np.bitwise_and(sig_bool, active_bool))[0]
+
+        return sig_neurons
+
+    def check_rasters_run(self, cells='all', events='freeze_onset', buffer_sec=[2, 2],  nperm=1000):
+        """ Verifies if you have already created rasters and permuted rasters and checks to make sure they match.
+
+        :param cells:
+        :param events:
+        :param buffer_sec:
+        :param nperm:
+        :return:
+        """
+        # check if both regular and permuted raster are run already!
+        pe_rasters = self.pe_rasters[cells + '_cells'][events]['data']
+        perm_rasters = self.pe_rasters[cells + '_cells'][events]['perm']
+        nbins_use = np.sum([int(buffer_sec[0] * self.sr_image), int(buffer_sec[1] * self.sr_image)])
+        if isinstance(pe_rasters, np.ndarray) and isinstance(perm_rasters, np.ndarray):
+            ncells, nevents, nbins = pe_rasters.shape
+            nperm2, ncells2, nevents2, nbins2 = perm_rasters.shape
+
+            # Make sure you are using the same data format!
+            assert ncells == ncells2, '# Cells in data and permuted rasters do not match'
+            assert nevents == nevents2, '# events in data and permuted rasters do not match'
+
+            # if different buffer_sec used, re-run full rasters
+            if nbins != nbins_use:
+                self.gen_pe_rasters(cells=cells, events=events, buffer_sec=buffer_sec)
+
+            # if different buffer_sec or nperm used, re-run permuted rasters
+            if nbins2 != nbins_use or nperm2 != nperm:
+                self.gen_perm_rasters(cells=cells, events=events, buffer_sec=buffer_sec, nperm=nperm)
+
+        return pe_rasters, perm_rasters
+
+    def save_sig_tuning(self):
+        """Saves any significant tuned neuron data"""
+        with open(self.dir_use / "sig_motion_tuning.pkl", 'wb') as f:
+            dump(self.sig, f)
+
+    def load_sig_tuning(self):
+        """Loads any previously calculated tunings"""
+        with open(self.dir_use / "sig_motion_tuning.pkl", 'rb') as f:
+            self.sig = load(f)
 
     def plot_pe_rasters(self, cells, events):
         raster_use = self.pe_rasters[cells + '_cells'][events]['data']
@@ -95,7 +186,8 @@ class Freeze:
         for plot in range(nplots):
             fig, ax = plt.subplots(5, 5, sharex=True, sharey=True)
             fig.set_size_inches([12, 6.9])
-            fig.suptitle(cells + ' cells: plot ' + str(plot))
+            fig.suptitle(self.session['mouse'] + ' ' + self.session['arena'] + ' day ' +
+                         str(self.session['day']) + ': ' + cells + ' cells: plot ' + str(plot))
 
             range_use = slice(25*plot, np.min((25*(plot + 1), ncells)))
             buffer = np.floor(nframes/2/self.sr_image)
@@ -124,18 +216,8 @@ class Freeze:
 
             sns.despine(fig=fig)
 
-
-
-    def select_events(self, cells, events):
+    def select_events(self, events):
         """Quickly get the appropriate cells and event times to use"""
-
-        # Get appropriate cells to use
-        if cells == 'freeze':
-            cells_use = self.freeze_cells
-        elif cells == 'move':
-            cells_use = self.move_cells
-        else:
-            cells_use = cells
 
         # Get appropriate events
         if events == 'freeze_onset':
@@ -143,7 +225,7 @@ class Freeze:
         elif events == 'move_onset':
             event_starts = self.freezing_times[:, 1]
 
-        return cells_use, event_starts
+        return event_starts
 
 
 def get_freezing_times(mouse, arena, day, **kwargs):
@@ -274,7 +356,8 @@ def motion_modulation_index(mouse, arena, day, **kwargs):
 def calc_sig_modulation(mouse, arena, day, nperms=1000, **kwargs):
     """ Calculates how much each cell is modulated by moving, freezing, and a combination
     (Motion Modulation Index = MMI).  Gives p value based on circularly permuting neural activity.
-    Rough - does not consider cells that might predict freezing or motion.
+    Rough - does not consider cells that might predict freezing or motion, only considers whole epoch of motion
+    or freezing.
     :param mouse: str
     :param arena: str ('Shock' or 'Open')
     :param day: int from [-2, -1, 0, 4, 1, 2, 7]
