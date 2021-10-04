@@ -289,7 +289,8 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
 
     pos = get_pos(dir_use)
     pos, nbad = fix_pos(pos)
-    print(dir_use + ': nbadpts = ' + str(nbad[0]) + ' max_in_a_row = ' + str(nbad[3]))
+    if nbad[0] > 0 and nbad[3] > 1:
+        print(dir_use + ': nbadpts = ' + str(nbad[0]) + ' max_in_a_row = ' + str(nbad[3]))
     # print(str(nbad[0]))  # for debugging
     # print('nbadpts = ' + str(nbad[0]))
     video_t = get_timestamps(dir_use)

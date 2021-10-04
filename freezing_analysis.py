@@ -21,9 +21,10 @@ class Freeze:
 
         # Get PSAbool and freezing info
         self.PSAbool, self.freeze_bool = get_freeze_bool(mouse, arena, day)
+        self.event_rates = self.PSAbool.sum(axis=1)/self.PSAbool.shape[1]
         self.freezing_indices, self.freezing_times = get_freezing_times(mouse, arena, day)
 
-        # Get initial estimate of motion-modulated vs freeze modulated cells
+        # Get initial estimate of motion-modulated vs freeze modulated cells - very rough
         self.p, self.ER = calc_sig_modulation(mouse, arena, day)
         self.freeze_cells_rough = np.where(self.p['MMI'] > 0.95)[0]
         self.move_cells_rough = np.where(self.p['MMI'] < 0.05)[0]
@@ -49,7 +50,8 @@ class Freeze:
     def gen_pe_rasters(self, events='freeze_onset', buffer_sec=[2, 2]):
         """Generate the rasters for all cells and dump them into a dictionary"""
         # Get appropriate event times to use
-        event_starts = self.select_events(events)
+        if events in ['freeze_onset', 'move_onset']:
+            event_starts = self.select_events(events)
 
         pe_rasters = [get_PE_raster(psa, event_starts, buffer_sec=buffer_sec,
                                     sr_image=self.sr_image) for psa in self.PSAbool]
@@ -66,36 +68,48 @@ class Freeze:
 
         # Loop through each cell and get its chance level raster
         print('generating permuted rasters - may take up to 1 minute')
-        perm_rasters = [shuffle_raster(psa, event_starts, buffer_sec=buffer_sec,
-                                       sr_image=self.sr_image, nperm=nperm) for psa in self.PSAbool]
-        self.perm_rasters[events] = np.asarray(perm_rasters).swapaxes(0, 1)
+        perm_rasters = np.asarray([shuffle_raster(psa, event_starts, buffer_sec=buffer_sec,
+                                       sr_image=self.sr_image, nperm=nperm) for psa in self.PSAbool]).swapaxes(0, 1)
+        self.perm_rasters[events] = perm_rasters
 
         return perm_rasters
 
     def get_tuning_sig(self, events='freeze_onset', buffer_sec=[2, 2], nperm=1000):
         """This function will calculate significance values by comparing event-centered tuning curves to
-        chance (calculated from circulat permutation of neural activity).
+        chance (calculated from circular permutation of neural activity).
         :param cells:
         :param events:
         :param buffer_sec:
         :return:
         """
 
-        # check if both regular and permuted raster are run already!
-        pe_rasters, perm_rasters = self.check_rasters_run(events=events,
-                                                          buffer_sec=buffer_sec,  nperm=nperm)
+        # Load in previous tuning
+        sig_use = self.sig[events]
 
-        # Now calculate tuning curves and get significance!
-        pe_tuning = gen_motion_tuning_curve(pe_rasters)
-        perm_tuning = np.asarray([gen_motion_tuning_curve(perm_raster) for perm_raster in perm_rasters])
-        pval = (pe_tuning < perm_tuning).sum(axis=0) / nperm
+        calc_tuning = True
+        # Check to see if appropriate tuning already run and stored and just use that, otherwise calculate from scratch.
+        if 'nperm' in sig_use:
+            if sig_use['nperm'] == nperm:
+                calc_tuning = False
+                pval = sig_use['pval']
 
-        # Store in class
-        self.sig[events]['pval'] = pval
-        self.sig[events]['nperm'] = nperm
+        if calc_tuning:
+            print('calculating significant tuning for nperm=' + str(nperm))
+            # check if both regular and permuted raster are run already!
+            pe_rasters, perm_rasters = self.check_rasters_run(events=events,
+                                                              buffer_sec=buffer_sec,  nperm=nperm)
 
-        # Save to disk to save time in future
-        self.save_sig_tuning()
+            # Now calculate tuning curves and get significance!
+            pe_tuning = gen_motion_tuning_curve(pe_rasters)
+            perm_tuning = np.asarray([gen_motion_tuning_curve(perm_raster) for perm_raster in perm_rasters])
+            pval = (pe_tuning < perm_tuning).sum(axis=0) / nperm
+
+            # Store in class
+            self.sig[events]['pval'] = pval
+            self.sig[events]['nperm'] = nperm
+
+            # Save to disk to save time in future
+            self.save_sig_tuning()
 
         return pval
 
@@ -107,13 +121,13 @@ class Freeze:
         # Load in significance values at each spatial bin and re-run things if not already there
         pval = self.get_tuning_sig(events=events, buffer_sec=buffer_sec, nperm=nperm)
 
-        # Load in rasters
-        pe_rasters, _ = self.check_rasters_run(events=events, buffer_sec=buffer_sec, nperm=nperm)
-        nevents = pe_rasters.shape[1]
-
         # Determine if there is significant tuning of < alpha for nbins (consecutive)
         sig_bool = np.asarray([(np.diff(contiguous_regions(p < alpha), axis=1) > nbins).any() for p in pval],
                               dtype=bool)
+
+        # Load in rasters
+        pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
+        nevents = pe_rasters.shape[1]
 
         # Determine if neurons pass the activity threshold
         nevents_active = pe_rasters.any(axis=2).sum(axis=1)
@@ -152,10 +166,10 @@ class Freeze:
             if nbins2 != nbins_use or nperm2 != nperm:
                 perm_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm)
 
-        elif not isinstance(perm_rasters, np.ndarray):
-            pe_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm)
-            if not isinstance(pe_rasters, np.ndarray):
-                perm_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
+        elif not isinstance(pe_rasters, np.ndarray):
+            pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
+            if not isinstance(perm_rasters, np.ndarray):
+                perm_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm)
             else:
                 pe_rasters, perm_rasters = self.check_rasters_run(events=events, buffer_sec=buffer_sec, nperm=nperm)
 
@@ -172,6 +186,17 @@ class Freeze:
             self.sig = load(f)
 
     def plot_pe_rasters(self, cells='freeze_fine', events='freeze_onset', buffer_sec=[2, 2], **kwargs):
+        """ Plot rasters of cells at either movement or freezing onsets.
+
+        :param cells: str to auto-select either cells that have significant tuning to move or freeze onset
+        at a fine ('move_fine' or 'freeze_fine' calculated with buffer_sec of motion/freezing onset)
+        or rough ('move_rough' or 'freeze_rough', tuning calculated across all freezing/motion timepoints) timescale.
+        Can also be a list of other events
+        :param events: 'move_onset' or 'freeze_onset'.
+        :param buffer_sec: int or size 2, array like of time(s) +/- event to plot
+        :param kwargs:
+        :return:
+        """
 
         # NRK todo: better yet, fold this into a wrapper function. User must specify cells to plot.
         if cells == 'freeze_rough':
@@ -179,8 +204,11 @@ class Freeze:
         elif cells == 'move_rough':
             cell_ids = self.move_cells_rough
         elif cells == 'freeze_fine':
-            cell_ids = self.get_sig_neurons(events=events, buffer_sec=buffer_sec, **kwargs)
+            cell_ids = self.get_sig_neurons(events='freeze_onset', buffer_sec=buffer_sec, **kwargs)
+        elif cells == 'move_fine':
+            cell_ids = self.get_sig_neurons(events='move_onset', buffer_sec=buffer_sec, **kwargs)
         raster_use = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)[cell_ids]
+        baseline_rates = self.event_rates[cell_ids]
 
         tuning_curves = gen_motion_tuning_curve(raster_use)
 
@@ -192,6 +220,7 @@ class Freeze:
         nevents, nframes = raster_use[0].shape
 
         nplots = np.ceil(ncells/25).astype('int')
+        fig_array = []
         for plot in range(nplots):
             fig, ax = plt.subplots(5, 5, sharex=True, sharey=True)
             fig.set_size_inches([12, 6.9])
@@ -201,11 +230,13 @@ class Freeze:
             range_use = slice(25*plot, np.min((25*(plot + 1), ncells)))
             buffer = np.floor(nframes/2/self.sr_image)
 
-            for ida, (raster, curve, cell_id, a) in enumerate(zip(raster_use[range_use], tuning_curves[range_use],
-                                                                  cell_ids[range_use], ax.reshape(-1))):
+            for ida, (raster, curve, cell_id, bs_rate, a) in enumerate(zip(raster_use[range_use], tuning_curves[range_use],
+                                                                       cell_ids[range_use], baseline_rates[range_use],
+                                                                       ax.reshape(-1))):
                 sns.heatmap(raster, ax=a, cbar=False)
                 a.plot(nevents - curve*nevents*4, 'r-')
                 a.axvline(nframes/2, color='g')
+                a.axhline(nevents - bs_rate*nevents*4, color='b', linestyle='--')
                 a.set_title('Cell ' + str(cell_id))
                 if ida >= 20:  # Label bottom row
                     a.set_xticks([0, nframes/2, nframes])
@@ -224,6 +255,9 @@ class Freeze:
                     secax.set_ylabel(r'$p_{event}$', color='r')
 
             sns.despine(fig=fig)
+            fig_array.append(fig)
+
+        return np.asarray(fig_array)
 
     def select_events(self, events):
         """Quickly get the appropriate cells and event times to use"""
@@ -473,8 +507,11 @@ def gen_motion_tuning_curve(pe_rasters):
 
     return tuning_curves
 
+
 def get_motion_tuning_sig(pe_rasters, perm_rasters):
     pass
+
+
 def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax=None, inactive_cells='black',
                         plot_corr=False, **kwargs):
     """Plot *raw* calcium event rasters across whole session with velocity trace overlaid in red and freezing epochs
