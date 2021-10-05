@@ -82,7 +82,7 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=False):
     elif batch_map_use:
         neuron_map = get_pairwise_map_from_batch(mouse, arena1, day1, arena2, day2)
 
-    return neuron_map
+    return neuron_map.astype(int)
 
 
 def fix_batchmap(batch_path):
