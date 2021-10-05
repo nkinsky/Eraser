@@ -548,7 +548,7 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.2, 
 
     if ax is None:
         fig, ax = plt.subplots()
-        fig.set_size_inches([2.67, 2])
+        fig.set_size_inches([2.5, 3])
 
     curve = gen_motion_tuning_curve(raster).squeeze()
 
@@ -558,7 +558,8 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.2, 
     sns.heatmap(raster, ax=ax, cbar=False)
     ax.plot(nevents - curve * nevents * 4, 'r-')
     ax.axvline(nframes / 2, color='g')
-    ax.axhline(nevents - bs_rate * nevents * 4, color='b', linestyle='--')
+    if bs_rate is not None:
+        ax.axhline(nevents - bs_rate * nevents * 4, color='b', linestyle='--')
     ax.set_title('Cell ' + str(cell_id))
     if labelx:  # Label bottom row
         ax.set_xticks([0, nframes / 2, nframes])
