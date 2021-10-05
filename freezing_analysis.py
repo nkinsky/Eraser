@@ -16,7 +16,7 @@ from helpers import contiguous_regions
 
 
 class Freeze:
-    def __init__(self, mouse, arena, day, p_thresh=0.05):
+    def __init__(self, mouse, arena, day):
         self.session = {'mouse': mouse, 'arena': arena, 'day': day}
 
         # Get PSAbool and freezing info
@@ -207,13 +207,12 @@ class Freeze:
             cell_ids = self.get_sig_neurons(events='freeze_onset', buffer_sec=buffer_sec, **kwargs)
         elif cells == 'move_fine':
             cell_ids = self.get_sig_neurons(events='move_onset', buffer_sec=buffer_sec, **kwargs)
+        elif isinstance(cells, np.ndarray) or isinstance(cells, list):
+            cell_ids = cells
         raster_use = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)[cell_ids]
         baseline_rates = self.event_rates[cell_ids]
 
         tuning_curves = gen_motion_tuning_curve(raster_use)
-
-        # NRK todo: add in tuning curves based on permutations if calculated with significance indicated
-        # perm_use = self.pe_rasters[cells + '_cells'][events]['perm']
 
         # hopefully future proof for rasters as either a list (as developed)
         ncells = len(raster_use) if type(raster_use) == list else raster_use.shape[0]
@@ -228,33 +227,19 @@ class Freeze:
                          str(self.session['day']) + ': ' + cells + ' cells: plot ' + str(plot))
 
             range_use = slice(25*plot, np.min((25*(plot + 1), ncells)))
-            buffer = np.floor(nframes/2/self.sr_image)
+            # buffer = np.floor(nframes/2/self.sr_image)
 
             for ida, (raster, curve, cell_id, bs_rate, a) in enumerate(zip(raster_use[range_use], tuning_curves[range_use],
                                                                        cell_ids[range_use], baseline_rates[range_use],
                                                                        ax.reshape(-1))):
-                sns.heatmap(raster, ax=a, cbar=False)
-                a.plot(nevents - curve*nevents*4, 'r-')
-                a.axvline(nframes/2, color='g')
-                a.axhline(nevents - bs_rate*nevents*4, color='b', linestyle='--')
-                a.set_title('Cell ' + str(cell_id))
-                if ida >= 20:  # Label bottom row
-                    a.set_xticks([0, nframes/2, nframes])
-                    a.set_xticklabels([str(-buffer), '0', str(buffer)])
-                    a.set_xlabel('Time from ' + events + '(s)')
 
-                if ida in [0, 5, 10, 15, 20]:  # Label left side
-                    a.set_yticks([0, nevents])
-                    a.set_ylabel(events + ' #')
+                labelx = True if ida >= 20 else False  # Label bottom row
+                labely = True if ida in [0, 5, 10, 15, 20] else False  # Label left side
+                labely2 = True if ida in [4, 9, 14, 19, 24] else False  # Label right side
 
-                if ida in [4, 9, 14, 19, 24]:  # Add second axis and label
-                    secax = a.secondary_yaxis('right', functions=(lambda y1: 0.2*(nevents - y1)/nevents,
-                                                                  lambda y: nevents*(1 - y/0.2)))
-                    secax.set_yticks([0, 0.2])
-                    secax.tick_params(labelcolor='r')
-                    secax.set_ylabel(r'$p_{event}$', color='r')
+                plot_raster(raster, cell_id=cell_id, sig_bins=None, bs_rate=bs_rate, y2scale=0.2, events=events,
+                            labelx=labelx, labely=labely, labely2=labely2, sr_image=self.sr_image, ax=a)
 
-            sns.despine(fig=fig)
             fig_array.append(fig)
 
         return np.asarray(fig_array)
@@ -269,6 +254,37 @@ class Freeze:
             event_starts = self.freezing_times[:, 1]
 
         return event_starts
+
+
+class FreezeMultiDay:
+    def __init__(self, mouse, arena, days=[-1, 4, 1, 2]):
+        self.mouse = mouse
+        self.arena = arena
+        self.days = days
+
+        # Dump all days into a dictionary
+        self.freeze = dict.fromkeys(days)
+        for day in days:
+            self.freeze[day] = Freeze(mouse, arena, day)
+
+    def plot_raster_across_days(self, base_day=1, days_plot=[4, 1, 2], ax=None):
+        """Plots a cell's freeze raster on base_day and tracks backward/forward to all other days_plot.
+        e.g. if you have a freezing cell emerge on day1 and want to see what it looked like right before/after,
+        use base_day=1 and days_plot=[4, 1, 2]
+
+        :param base_day:
+        :param days_plot:
+        :return:
+        """
+
+        # First get map between days
+        for day in days_plot:
+            neuron_map = pfs.get_neuronmap(self.mouse, self.arena, base_day, self.arena, day)
+
+        if ax is None:
+            fig, ax = plt.subplots(1, len(days_plot))
+            fig.set_size_inches[2.67 * len(days_plot), 3]
+
 
 
 def get_freezing_times(mouse, arena, day, **kwargs):
@@ -503,13 +519,69 @@ def gen_motion_tuning_curve(pe_rasters):
     :param pe_rasters: 3d ndarray (ncells x nevents x ntimebins)
     :return:
     """
+    # Make 3d array if just one raster input
+    if len(pe_rasters.shape) == 2:
+        pe_rasters = pe_rasters[np.newaxis, :, :]
+
     tuning_curves = pe_rasters.sum(axis=1)/pe_rasters.shape[1]
 
     return tuning_curves
 
 
-def get_motion_tuning_sig(pe_rasters, perm_rasters):
-    pass
+def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.2, events='trial',
+                labelx=True, labely=True, labely2=True, sr_image=20, ax=None):
+    """Plot peri-event raster with tuning curve overlaid.
+
+    :param raster: nevents x nframes array
+    :param cell_id: int, cell # to label with
+    :param sig_bins: bool, frames with significant tuning to label with *s
+    :param bs_rate: float, baseline rate outside of events
+    :param y2scale: float, 0.2 = default, scale for plotting second y-axis (event rate)
+    :param events: str, for x and y labels
+    :param labelx: bool
+    :param labely: bool
+    :param labely2: bool
+    :param sr_image: int, default = 20 fps
+    :param ax: ax to plot into, default = None -> create new fig
+    :return:
+    """
+
+    if ax is None:
+        fig, ax = plt.subplots()
+        fig.set_size_inches([2.67, 2])
+
+    curve = gen_motion_tuning_curve(raster).squeeze()
+
+    nevents, nframes = raster.shape
+    buffer = np.floor(nframes / 2 / sr_image)
+
+    sns.heatmap(raster, ax=ax, cbar=False)
+    ax.plot(nevents - curve * nevents * 4, 'r-')
+    ax.axvline(nframes / 2, color='g')
+    ax.axhline(nevents - bs_rate * nevents * 4, color='b', linestyle='--')
+    ax.set_title('Cell ' + str(cell_id))
+    if labelx:  # Label bottom row
+        ax.set_xticks([0, nframes / 2, nframes])
+        ax.set_xticklabels([str(-buffer), '0', str(buffer)])
+        ax.set_xlabel('Time from ' + events + '(s)')
+
+    if sig_bins:  # add a start over all bins with significant tuning
+        pass
+
+    if labely:  # Label left side
+        ax.set_yticks([0, nevents])
+        ax.set_ylabel(events + ' #')
+
+    if labely2:  # Add second axis and label
+        secax = ax.secondary_yaxis('right', functions=(lambda y1: y2scale * (nevents - y1) / nevents,
+                                                       lambda y: nevents * (1 - y / y2scale)))
+        secax.set_yticks([0, y2scale])
+        secax.tick_params(labelcolor='r')
+        secax.set_ylabel(r'$p_{event}$', color='r')
+
+    sns.despine(ax=ax)
+
+    return ax
 
 
 def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax=None, inactive_cells='black',
