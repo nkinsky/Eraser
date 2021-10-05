@@ -6,6 +6,7 @@ import scipy.stats as stats
 from os import path
 import scipy.io as sio
 from pickle import dump, load
+from pathlib import Path
 
 import er_plot_functions as erp
 import Placefields as pf
@@ -15,7 +16,7 @@ import helpers
 from helpers import contiguous_regions
 
 
-class Freeze:
+class MotionTuning:
     def __init__(self, mouse, arena, day):
         self.session = {'mouse': mouse, 'arena': arena, 'day': day}
 
@@ -31,7 +32,7 @@ class Freeze:
 
         # Get sample rate
         dir_use = pf.get_dir(mouse, arena, day)
-        self.dir_use = dir_use
+        self.dir_use = Path(dir_use)
         im_data_file = path.join(dir_use, 'FinalOutput.mat')
         im_data = sio.loadmat(im_data_file)
         try:
@@ -216,7 +217,7 @@ class Freeze:
 
         # hopefully future proof for rasters as either a list (as developed)
         ncells = len(raster_use) if type(raster_use) == list else raster_use.shape[0]
-        nevents, nframes = raster_use[0].shape
+        # nevents, nframes = raster_use[0].shape
 
         nplots = np.ceil(ncells/25).astype('int')
         fig_array = []
@@ -227,12 +228,12 @@ class Freeze:
                          str(self.session['day']) + ': ' + cells + ' cells: plot ' + str(plot))
 
             range_use = slice(25*plot, np.min((25*(plot + 1), ncells)))
-            # buffer = np.floor(nframes/2/self.sr_image)
 
             for ida, (raster, curve, cell_id, bs_rate, a) in enumerate(zip(raster_use[range_use], tuning_curves[range_use],
                                                                        cell_ids[range_use], baseline_rates[range_use],
                                                                        ax.reshape(-1))):
 
+                # Figure out whether or not to label things - only get edges to keep things clear
                 labelx = True if ida >= 20 else False  # Label bottom row
                 labely = True if ida in [0, 5, 10, 15, 20] else False  # Label left side
                 labely2 = True if ida in [4, 9, 14, 19, 24] else False  # Label right side
@@ -256,35 +257,57 @@ class Freeze:
         return event_starts
 
 
-class FreezeMultiDay:
+class MotionTuningMultiDay:
     def __init__(self, mouse, arena, days=[-1, 4, 1, 2]):
         self.mouse = mouse
         self.arena = arena
         self.days = days
 
         # Dump all days into a dictionary
-        self.freeze = dict.fromkeys(days)
+        self.motion_tuning = dict.fromkeys(days)
         for day in days:
-            self.freeze[day] = Freeze(mouse, arena, day)
+            self.motion_tuning[day] = MotionTuning(mouse, arena, day)
+            self.motion_tuning[day].gen_pe_rasters()  # generate freeze_onset rasters by default
 
-    def plot_raster_across_days(self, base_day=1, days_plot=[4, 1, 2], ax=None):
-        """Plots a cell's freeze raster on base_day and tracks backward/forward to all other days_plot.
+    def plot_raster_across_days(self, cell_id, events='freeze_onset', base_day=1, days_plot=[4, 1, 2],
+                                labelx=True, ax=None, **kwargs):
+        """Plots a cell's peri-event raster on base_day and tracks backward/forward to all other days_plot.
         e.g. if you have a freezing cell emerge on day1 and want to see what it looked like right before/after,
         use base_day=1 and days_plot=[4, 1, 2]
 
-        :param base_day:
-        :param days_plot:
+        :param cell_id: int, cell to plot on base_day and track forward/backward to other days_plot
+        :param events: either 'freeze_onset' or 'move_onset'
+        :param base_day: int
+        :param days_plot: list or ndarray of ints
+        :param labelx: bool
+        :param ax: axes to plot into, default = create new figure with 1 x len(days_plot) subplots
+        :param **kwargs: see MotionTuning.gen_pe_rasters
         :return:
         """
 
-        # First get map between days
-        for day in days_plot:
-            neuron_map = pfs.get_neuronmap(self.mouse, self.arena, base_day, self.arena, day)
+        # Generate rasters if not already done
+        [mt.gen_pe_rasters(events=events, **kwargs) for mt in self.motion_tuning.values() if mt.pe_rasters[events] is None]
 
+        # Set up figure if not specified
         if ax is None:
             fig, ax = plt.subplots(1, len(days_plot))
-            fig.set_size_inches[2.67 * len(days_plot), 3]
+            fig.set_size_inches([2.25 * len(days_plot), 2.75])
 
+        # First get map between days
+        for idd, day in enumerate(days_plot):
+            neuron_map = pfs.get_neuronmap(self.mouse, self.arena, base_day, self.arena, day, batch_map_use=True)
+            id_plot = neuron_map[cell_id]
+            raster_plot = self.motion_tuning[day].pe_rasters[events][id_plot]
+            bs_rate = self.motion_tuning[day].event_rates[id_plot]
+            labely = True if idd == 0 else False
+            labely2 = True if idd == len(days_plot) else False
+            plot_raster(raster_plot, cell_id=id_plot, bs_rate=bs_rate, events=events, labelx=labelx,
+                        labely=labely, labely2=labely2, ax=ax[idd])
+            ax[idd].set_title('Day ' + str(day) + ': Cell ' + str(id_plot))
+
+        fig.suptitle(self.mouse + ': ' + self.arena + ' Arena Across Days')
+
+        return ax
 
 
 def get_freezing_times(mouse, arena, day, **kwargs):
