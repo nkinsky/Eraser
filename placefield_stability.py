@@ -7,6 +7,7 @@ Created on Mon Feb 04 09:53:00 2019
 import importlib
 import numpy as np
 import scipy.io as sio
+import scipy.ndimage
 import scipy.stats as sstats
 import matplotlib.pyplot as plt
 from matplotlib import axes
@@ -58,6 +59,8 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=False):
     that matches session1 neuron.
     """
 
+    day_list = [-2, -1, 0, 4, 1, 2]
+
     make_session_list()  # Initialize session list
 
     if not batch_map_use:
@@ -69,20 +72,52 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=False):
         map_file = path.join(dir_use, reg_filename)
 
         # Load file in
-        try:
-            map_data = sio.loadmat(map_file)
-        except TypeError:
-            map_data = sio.loadmat(map_file)
-        map_import = map_data['neuron_map']['neuron_id'][0][0]  # Grab terribly formatted neuron map from matlab
+        if arena1 == arena2 and day1 == day2:  # If registering to itself, just fill in array
+            neuron_map = np.arange(sio.loadmat(path.join(dir_use, 'FinalOutput.mat'))['NumNeurons'].squeeze())
+        else:  # Load file in
+            try:
+                map_data = sio.loadmat(map_file)
+                map_import = map_data['neuron_map']['neuron_id'][0][0]  # Grab terribly formatted neuron map from matlab
 
-        # Fix the map - spit out an array!
-        neuron_map = fix_neuronmap(map_import).reshape(-1)
+                # Fix the map - spit out an array!
+                neuron_map = fix_neuronmap(map_import).reshape(-1)
 
-        # good_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
+            except FileNotFoundError:  # try to do map in reverse
+                print('Cannot find normal map - trying to run in reverse')
+                neuron_map = reverse_neuron_map(mouse, arena1, day1, arena2, day2)
+            # good_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
     elif batch_map_use:
         neuron_map = get_pairwise_map_from_batch(mouse, arena1, day1, arena2, day2)
 
     return neuron_map.astype(int)
+
+
+def reverse_neuron_map(mouse, arena1, day1, arena2, day2):
+    """Get neuron map from day1 to day2 using map from day2 to day1. Useful if you haven't performed the
+    registration in that direction yet.
+
+    :param mouse:
+    :param arena1:
+    :param day1:
+    :param arena2:
+    :param day2:
+    :return:
+    """
+
+    # Get info about base session
+    dir_use = get_dir(mouse, arena1, day1)
+    nneurons = sio.loadmat(path.join(dir_use, 'FinalOutput.mat'))['NumNeurons'].squeeze()
+    map_reverse = np.ones(nneurons) * np.nan  # initialize map
+
+    # Get map in the direction you have it
+    neuron_map = get_neuronmap(mouse, arena2, day2, arena1, day1, batch_map_use=False)
+
+    # Step through and form reverse map
+    for idn, _ in enumerate(map_reverse):
+        if (match_bool := idn == neuron_map).any():
+            map_reverse[idn] = np.where(match_bool)[0]
+
+    return map_reverse
 
 
 def fix_batchmap(batch_path):
@@ -167,6 +202,34 @@ def fix_neuronmap(map_import):
 
     return map_fixed
 
+
+def plot_ROI_centered(ROI, buffer=20, ax=None):
+    """Plot neuron ROI zoomed in
+
+    :param ROI: 2d ndarray
+    :param buffer: # pixels to zoom out from ROI center-of-mass
+    :param ax: axes to plot into, None (default) = create new figure and axes
+    :return:
+    """
+
+    if ax is None:  # create axes if not specified
+        fig, ax = plt.subplots()
+
+    # Get center of mass
+    com = scipy.ndimage.measurements.center_of_mass(ROI)
+
+    # Plot ROI
+    sns.heatmap(ROI, ax=ax, cbar=False)
+
+    # zoom in as specified by buffer
+    ax.set_xlim(com[1] + [-buffer, buffer])
+    ax.set_ylim(com[0] + [-buffer, buffer])
+
+    # Turn off axes
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    return ax
 
 def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     """
