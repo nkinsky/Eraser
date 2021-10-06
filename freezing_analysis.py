@@ -26,9 +26,11 @@ class MotionTuning:
         self.freezing_indices, self.freezing_times = get_freezing_times(mouse, arena, day)
 
         # Get initial estimate of motion-modulated vs freeze modulated cells - very rough
-        self.p, self.ER = calc_sig_modulation(mouse, arena, day)
-        self.freeze_cells_rough = np.where(self.p['MMI'] > 0.95)[0]
-        self.move_cells_rough = np.where(self.p['MMI'] < 0.05)[0]
+        # don't really use - calculate later through function if needs be!
+        # print('calculating rough modulation')
+        # self.p, self.ER = calc_sig_modulation(mouse, arena, day)
+        # self.freeze_cells_rough = np.where(self.p['MMI'] > 0.95)[0]
+        # self.move_cells_rough = np.where(self.p['MMI'] < 0.05)[0]
 
         # Get sample rate
         dir_use = pf.get_dir(mouse, arena, day)
@@ -270,7 +272,7 @@ class MotionTuningMultiDay:
             self.motion_tuning[day].gen_pe_rasters()  # generate freeze_onset rasters by default
 
     def plot_raster_across_days(self, cell_id, events='freeze_onset', base_day=1, days_plot=[4, 1, 2],
-                                labelx=True, ax=None, **kwargs):
+                                labelx=True, ax=None, batch_map=True, **kwargs):
         """Plots a cell's peri-event raster on base_day and tracks backward/forward to all other days_plot.
         e.g. if you have a freezing cell emerge on day1 and want to see what it looked like right before/after,
         use base_day=1 and days_plot=[4, 1, 2]
@@ -281,6 +283,7 @@ class MotionTuningMultiDay:
         :param days_plot: list or ndarray of ints
         :param labelx: bool
         :param ax: axes to plot into, default = create new figure with 1 x len(days_plot) subplots
+        :param batch_map: use batch map for registering neurons across days as opposed to direct session-to-session reg.
         :param **kwargs: see MotionTuning.gen_pe_rasters
         :return:
         """
@@ -295,15 +298,20 @@ class MotionTuningMultiDay:
 
         # First get map between days
         for idd, day in enumerate(days_plot):
-            neuron_map = pfs.get_neuronmap(self.mouse, self.arena, base_day, self.arena, day, batch_map_use=True)
+            neuron_map = pfs.get_neuronmap(self.mouse, self.arena, base_day, self.arena, day,
+                                           batch_map_use=batch_map)
             id_plot = neuron_map[cell_id]
-            raster_plot = self.motion_tuning[day].pe_rasters[events][id_plot]
-            bs_rate = self.motion_tuning[day].event_rates[id_plot]
-            labely = True if idd == 0 else False
-            labely2 = True if idd == len(days_plot) else False
-            plot_raster(raster_plot, cell_id=id_plot, bs_rate=bs_rate, events=events, labelx=labelx,
-                        labely=labely, labely2=labely2, ax=ax[idd])
-            ax[idd].set_title('Day ' + str(day) + ': Cell ' + str(id_plot))
+            if id_plot >= 0:  # only plot if valid mapping between neurons
+                raster_plot = self.motion_tuning[day].pe_rasters[events][id_plot]
+                bs_rate = self.motion_tuning[day].event_rates[id_plot]
+                labely = True if idd == 0 else False
+                labely2 = True if idd == len(days_plot) else False
+                plot_raster(raster_plot, cell_id=id_plot, bs_rate=bs_rate, events=events, labelx=labelx,
+                            labely=labely, labely2=labely2, ax=ax[idd])
+                ax[idd].set_title('Day ' + str(day) + ': Cell ' + str(id_plot))
+            else:
+                ax[idd].text(0.1, 0.5, 'Not detected')
+                sns.despine(ax=ax[idd], left=True, bottom=True)
 
         fig.suptitle(self.mouse + ': ' + self.arena + ' Arena Across Days')
 
@@ -830,7 +838,7 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')
-    plot_PSA_w_freezing('Marble29', 'Shock', 1, sort_by='MMI', day2=2
-                           , inactive_cells='ignore', plot_corr=True)
+    mmd = MotionTuningMultiDay('Marble24', 'Shock', days=[-1, 4, 1, 2])
+    mmd.plot_raster_across_days(40, days_plot=[-1, 4, 1, 2], batch_map=False)
 
     pass
