@@ -7,6 +7,7 @@ from os import path
 import scipy.io as sio
 from pickle import dump, load
 from pathlib import Path
+import pandas as pd
 
 import er_plot_functions as erp
 import Placefields as pf
@@ -260,62 +261,197 @@ class MotionTuning:
 
 
 class MotionTuningMultiDay:
-    def __init__(self, mouse, arena, days=[-1, 4, 1, 2]):
+    def __init__(self, mouse: str, arena: str or list, days: list = [-1, 4, 1, 2], events: str = 'freeze_onset'):
+        """
+        Create class for tracking motion or freezing tuning of cells across days.
+        :param mouse: str of form 'Marble##'
+        :param arena: str in ['Open', 'Shock'] or list matching len(days)
+        :param days: int in [-2, -1, 0, 4, 1, 2, 7] though day 0 generally not analyzed in 'Shock' due to short
+        (60 sec) recording time
+        """
         self.mouse = mouse
-        self.arena = arena
         self.days = days
+        self.events = events
+
+        # Make arena into list below if only one is specified
+        if isinstance(arena, str):
+            self.arenas = [arena for _ in days]
+        else:
+            assert len(arena) == len(days), 'Length of arena and days inputs must match'
+            self.arenas = arena
 
         # Dump all days into a dictionary
-        self.motion_tuning = dict.fromkeys(days)
-        for day in days:
-            self.motion_tuning[day] = MotionTuning(mouse, arena, day)
-            self.motion_tuning[day].gen_pe_rasters()  # generate freeze_onset rasters by default
+        self.motion_tuning = {'Open': dict.fromkeys(days), 'Shock': dict.fromkeys(days)}
+        self.rois = {'Open': dict.fromkeys(days), 'Shock': dict.fromkeys(days)}
+        for arena, day in zip(self.arenas, days):
+            self.motion_tuning[arena][day] = MotionTuning(mouse, arena, day)  # Get motion tuning for each day above.
+            self.motion_tuning[arena][day].gen_pe_rasters(events=events)  # generate freeze_onset rasters by default
+            self.rois[arena][day] = helpers.get_ROIs(mouse, arena, day)
 
-    def plot_raster_across_days(self, cell_id, events='freeze_onset', base_day=1, days_plot=[4, 1, 2],
-                                labelx=True, ax=None, batch_map=True, **kwargs):
-        """Plots a cell's peri-event raster on base_day and tracks backward/forward to all other days_plot.
+        # Initialize map between sessions
+        self.map = {'map': None, 'base_day': None, 'base_arena': None}
+
+    def plot_raster_across_days(self, cell_id, base_arena='Shock', base_day=1,
+                                labelx=True, ax=None, batch_map=True, plot_ROI=True, **kwargs):
+        """Plots a cell's peri-event raster on base_day and tracks backward/forward to all other days in object.
         e.g. if you have a freezing cell emerge on day1 and want to see what it looked like right before/after,
-        use base_day=1 and days_plot=[4, 1, 2]
+        use base_day=1
 
         :param cell_id: int, cell to plot on base_day and track forward/backward to other days_plot
-        :param events: either 'freeze_onset' or 'move_onset'
+        :param base_arena: str in ['Open', 'Shock']
         :param base_day: int
-        :param days_plot: list or ndarray of ints
         :param labelx: bool
         :param ax: axes to plot into, default = create new figure with 1 x len(days_plot) subplots
         :param batch_map: use batch map for registering neurons across days as opposed to direct session-to-session reg.
+        :param plot_ROI: bool, True (default) = plot ROI shape at bottom row.
         :param **kwargs: see MotionTuning.gen_pe_rasters
         :return:
         """
 
-        # Generate rasters if not already done
-        [mt.gen_pe_rasters(events=events, **kwargs) for mt in self.motion_tuning.values() if mt.pe_rasters[events] is None]
+        days = self.days
+        arenas = self.arenas
+        events = self.events
 
         # Set up figure if not specified
         if ax is None:
-            fig, ax = plt.subplots(1, len(days_plot))
-            fig.set_size_inches([2.25 * len(days_plot), 2.75])
+            if not plot_ROI:  # one row only if no ROI plotting
+                fig, ax = plt.subplots(1, len(days))
+                fig.set_size_inches([2.25 * len(days), 2.75])
+            else:  # set up rows for plotting rois below - this format keeps roi plots nice and square(ish)
+                fig = plt.figure(figsize=[2.25 * len(days), 6])
+                gs = gridspec.GridSpec(4, len(days))
+                ax, axroi = [], []
+                for idd, _ in enumerate(days):
+                    ax.append(fig.add_subplot(gs[0:2, idd]))
+                    axroi.append(fig.add_subplot(gs[3, idd]))
 
         # First get map between days
-        for idd, day in enumerate(days_plot):
-            neuron_map = pfs.get_neuronmap(self.mouse, self.arena, base_day, self.arena, day,
-                                           batch_map_use=batch_map)
-            id_plot = neuron_map[cell_id]
+        # reg_id = []  # initialize ids of registered cells
+        # for idd, (arena, day) in enumerate(zip(arenas, days)):
+        #     neuron_map = pfs.get_neuronmap(self.mouse, base_arena, base_day, arena, day,
+        #                                    batch_map_use=batch_map)
+        #     reg_id.append(neuron_map[cell_id])  # Get neuron to plot
+        self.assemble_map(base_day=base_day, base_arena=base_arena)  # Create/get neuron map
+        # Get column to use for base session
+        base_id = np.where([base_day == day and base_arena == arena for arena, day in
+                            zip(self.arenas, self.days)])[0][0]
+        reg_id = self.map['map'][cell_id]
+
+        # Identify last good neuron for plotting purposes
+        last_good_neuron = np.where(np.asarray(reg_id) > 0)[0].max()
+
+        # Now loop through and plot everything!
+        ylabel_added = False
+        for idd, (arena, day, id_plot) in enumerate(zip(arenas, days, reg_id)):
+
             if id_plot >= 0:  # only plot if valid mapping between neurons
-                raster_plot = self.motion_tuning[day].pe_rasters[events][id_plot]
-                bs_rate = self.motion_tuning[day].event_rates[id_plot]
-                labely = True if idd == 0 else False
-                labely2 = True if idd == len(days_plot) else False
-                plot_raster(raster_plot, cell_id=id_plot, bs_rate=bs_rate, events=events, labelx=labelx,
-                            labely=labely, labely2=labely2, ax=ax[idd])
-                ax[idd].set_title('Day ' + str(day) + ': Cell ' + str(id_plot))
-            else:
+                raster_plot = self.motion_tuning[arena][day].pe_rasters[events][id_plot]  # get raster
+                bs_rate = self.motion_tuning[arena][day].event_rates[id_plot]  # get baseline rate
+
+                labely = True if idd == 0 or not ylabel_added else False  # label y if on left side
+                labely2 = True if idd == last_good_neuron else False  # label y2 if on right side
+
+                # plot rasters
+                _, secax = plot_raster(raster_plot, cell_id=id_plot, bs_rate=bs_rate, events=events,
+                                       labelx=labelx, labely=labely, labely2=labely2, ax=ax[idd])
+                ax[idd].set_title(arena + ' Day ' + str(day) + ': Cell ' + str(id_plot))
+                if idd == base_id:  # Make title bold if base day
+                    ax[idd].set_title(ax[idd].get_title(), fontweight='bold')
+
+                # Clean it up
+                helpers.set_ticks_to_lim(ax[idd])
+                ylabel_added = True  # don't label any more y axes...
+
+                if plot_ROI:
+                    pfs.plot_ROI_centered(self.rois[arena][day][id_plot], ax=axroi[idd])
+
+            else:  # label things if there is no neuron detected on that day
                 ax[idd].text(0.1, 0.5, 'Not detected')
+                ax[idd].set_xticks([])
+                ax[idd].set_yticks([])
                 sns.despine(ax=ax[idd], left=True, bottom=True)
 
-        fig.suptitle(self.mouse + ': ' + self.arena + ' Arena Across Days')
+                if plot_ROI:  # Clean up bottom plots if no neuron
+                    axroi[idd].set_xticks([])
+                    axroi[idd].set_yticks([])
+                    sns.despine(ax=axroi[idd], left=True, bottom=True)
+
+        fig.suptitle(self.mouse + ': Across Days')
 
         return ax
+
+    def assemble_map(self, base_day: int in [-2, -1, 4, 1, 2, 7], base_arena: str in ['Open', 'Shock'],
+                     batch_map: bool = False):
+        """
+        Assembles all neuron mappings from base day to other days in self.days
+        :param base_day:
+        :param base_arena:
+        :param batch_map: bool, how to register neurons across day: via batch map (False) or direct mapping (True, default).
+        :return:
+        """
+
+        if self.map['map'] is not None and self.map['base_day'] == base_day and \
+                self.map['base_arena'] == base_arena:
+            # use previously calculated map.
+            map = self.map['map']
+        else:
+            print('Assembling neuron map for base_day=' + str(base_day) + ' and base_arena=' + base_arena)
+            # Loop through each session and assemble map
+            map = []
+            for id, (arena, day) in enumerate(zip(self.arenas, self.days)):
+                map.append(pfs.get_neuronmap(self.mouse, base_arena, base_day, arena, day,
+                                               batch_map_use=batch_map))
+
+            self.map['map'] = np.asarray(map).swapaxes(0, 1)
+            self.map['base_arena'] = base_arena
+            self.map['base_day'] = base_day
+
+        return map
+
+    def get_pval_across_days(self, base_day: int in [-2, -1, 0, 4, 1, 2, 7], adj_bins: int = 1):
+        """
+        Grab mean pval at peak of tuning curve and +/- adj_bins next to the peak.  Evaluates
+        the extent to which a cell maintains its freeze or motion related tuning across days.
+        Or should this just evaluate if the cell has significant tuning or not the next day?
+        :return:
+        """
+        pass
+
+    def get_tuning_loc_diff(self, cell_id, base_day: int in [-2, -1, 0, 4, 1, 2, 7],
+                            base_arena: str in ['Shock', 'Open'], smooth_window: int = 4):
+        """
+        Grab location of peak tuning curve and track across days! Finer grained
+        look at how well a cell maintains its freeze or motion related tuning.  Compare to chance?
+        Not sure how to get - take peak from uniform distribution across all bins and calculate dist for
+        each cell?
+        :return:
+        """
+
+        self.assemble_map(base_day=base_day, base_arena=base_arena)  # Create/get neuron map
+        # Get column to use for base session
+        base_id = np.where([base_day == day and base_arena == arena for arena, day in
+                            zip(self.arenas, self.days)])[0][0]
+        reg_id = self.map['map'][cell_id]
+
+        locs, event_rates = np.ones(len(self.days))*np.nan, np.ones(len(self.days))*np.nan
+        pvals = np.ones(len(self.days))*np.nan
+
+        window_half = smooth_window/2  # Get half of smoothing window
+        for idd, (arena, day, id) in enumerate(zip(self.arenas, self.days, reg_id)):
+
+            if id >= 0:  # only calculate if valid mapping between neurons
+                tuning_curves = gen_motion_tuning_curve(self.motion_tuning[arena][day].pe_rasters[self.events])
+
+                # Get max event rate and its location (time)
+                locs[idd], event_rates[idd] = get_tuning_max(tuning_curves[id], window=smooth_window)
+
+                # Grab pvalues for tuning curve
+                p_use = self.motion_tuning[base_arena][day].sig[self.events]['pval'][id]
+
+                # Calculate mean p-value along the curve at the location of the peak
+                pvals[idd] = np.mean(p_use[int(locs[idd]-window_half):int(locs[idd]+window_half)])
+
+        return locs, event_rates, pvals
 
 
 def get_freezing_times(mouse, arena, day, **kwargs):
@@ -559,6 +695,30 @@ def gen_motion_tuning_curve(pe_rasters):
     return tuning_curves
 
 
+def get_tuning_max(tuning_curve: np.ndarray, window: int = 4):
+    """
+    Finds the bin where the maximum of the tuning curve occurs.
+    :param tuning_curve: ndarray, tuning curve for a neuron centered on a freeze or move onset event
+    :param window: int, # bins to smooth prior to finding max (default = 5)
+    :return:
+    """
+
+    curve_smooth = pd.Series(tuning_curve.squeeze()).rolling(window, center=True).mean()
+
+    max_val = curve_smooth.max()
+
+    # If multiple max values take the average of them
+    if (npts := (max_val == curve_smooth).sum()) > 1:
+        if npts >= 4:
+            print('More than 4 max points found, check and validate code for more points')
+        max_loc = np.where(max_val == curve_smooth)[0].mean()
+    elif npts == 1:
+        print('one point found!')
+        max_loc = curve_smooth.argmax()
+
+    return max_loc, max_val
+
+
 def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.2, events='trial',
                 labelx=True, labely=True, labely2=True, sr_image=20, ax=None):
     """Plot peri-event raster with tuning curve overlaid.
@@ -601,9 +761,11 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.2, 
         pass
 
     if labely:  # Label left side
-        ax.set_yticks([0, nevents])
+        ax.set_yticks([0.5, nevents - 0.5])
+        ax.set_yticklabels(['0', str(nevents)])
         ax.set_ylabel(events + ' #')
 
+    secax = None
     if labely2:  # Add second axis and label
         secax = ax.secondary_yaxis('right', functions=(lambda y1: y2scale * (nevents - y1) / nevents,
                                                        lambda y: nevents * (1 - y / y2scale)))
@@ -613,7 +775,7 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.2, 
 
     sns.despine(ax=ax)
 
-    return ax
+    return ax, secax
 
 
 def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax=None, inactive_cells='black',

@@ -154,7 +154,6 @@ def rescale_tmaps(tmaps, new_size):
     return tmaps_rescale
 
 
-
 def placefields(mouse, arena, day, cmperbin=1, nshuf=1000, speed_thresh=1.5, half=None,
                 lims_method='auto', save_file='placefields_cm1.pkl', list_dir=master_directory,
                 align_from_end=False, keep_shuffled=False, isrunning_custom=None):

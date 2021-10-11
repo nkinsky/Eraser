@@ -204,7 +204,7 @@ def fix_neuronmap(map_import):
 
 
 def plot_ROI_centered(ROI, buffer=20, ax=None):
-    """Plot neuron ROI zoomed in
+    """Plot neuron ROI zoomed in.
 
     :param ROI: 2d ndarray
     :param buffer: # pixels to zoom out from ROI center-of-mass

@@ -6,6 +6,44 @@ General helper functions
 
 import numpy as np
 import matplotlib.pyplot as plt
+from session_directory import find_eraser_directory as get_dir
+from scipy.io import loadmat
+from pathlib import Path
+
+def set_ticks_to_lim(ax: plt.axes, x: bool = True, y: bool = True):
+    """
+    Sets ticks and labels to max/min of values on a plot
+    :param ax: axes to clean up
+    :param x, y: bool, True = set to lims, False = leave alone
+    :return:
+    """
+
+    if x:
+        ax.set_xticks(ax.get_xticks()[[0, -1]])
+
+    if y:
+        ax.set_yticks(ax.get_yticks()[[0, -1]])
+
+    return ax
+
+def get_ROIs(mouse: str, arena: str, day: int in [-2, -1, 0, 1, 4, 2, 7], **kwargs):
+    """
+    Get neuron ROI array.
+    :param mouse: str of the format 'Marble##'
+    :param arena: str in ['Open', Shock']
+    :param day: int in [-2, -1, 0, 4, 1, 2, 7]
+    :param **kwargs: input to session_directory.find_eraser_directory
+    :return: rois an ncells x npixx x npixy ndarray of neuron ROIs
+    """
+    dir_use = Path(get_dir(mouse, arena, day, **kwargs))
+    neural_data = loadmat(dir_use / 'FinalOutput.mat')
+    neuron_image = neural_data['NeuronImage']
+
+    # Convert from a series of xpix x ypix arrays to a 3d ndarray
+    assert neuron_image.shape[0] == 1, 'Inappropriate format for NeuronImage in FinalOutput.mat - write code!'
+    rois = np.asarray([roi for roi in neuron_image[0]])
+
+    return rois
 
 
 def get_CI(data, pct=95):
