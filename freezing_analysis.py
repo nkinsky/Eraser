@@ -417,30 +417,40 @@ class MotionTuningMultiDay:
         """
         pass
 
-    def get_tuning_loc_diff(self, cell_id, base_day: int in [-2, -1, 0, 4, 1, 2, 7],
-                            base_arena: str in ['Shock', 'Open'], smooth_window: int = 4):
+    def get_tuning_loc_diff(self, cell_id: int, base_day: int in [-2, -1, 0, 4, 1, 2, 7] = 1,
+                            base_arena: str in ['Shock', 'Open'] = 'Shock', smooth_window: int = 4):
         """
         Grab location of peak tuning curve and track across days! Finer grained
         look at how well a cell maintains its freeze or motion related tuning.  Compare to chance?
         Not sure how to get - take peak from uniform distribution across all bins and calculate dist for
         each cell?
-        :return:
+        :return: locs: location of peak tuning after smoothing
+        :return: event_rates: event rate at peak tuning location (mean of all bins within smoothing window)
+        :return: pvals: pval at peak tuning location (mean of all bins within smoothing window)
+        :return: corr: spearman corr of tuning curve in dict with key 'corrs' and 'pvals'
         """
 
+        # Get map between neurons
         self.assemble_map(base_day=base_day, base_arena=base_arena)  # Create/get neuron map
+        reg_id = self.map['map'][cell_id]
+
         # Get column to use for base session
         base_id = np.where([base_day == day and base_arena == arena for arena, day in
                             zip(self.arenas, self.days)])[0][0]
-        reg_id = self.map['map'][cell_id]
 
+        # pre-allocate arrays
         locs, event_rates = np.ones(len(self.days))*np.nan, np.ones(len(self.days))*np.nan
         pvals = np.ones(len(self.days))*np.nan
 
         window_half = smooth_window/2  # Get half of smoothing window
+
+        # Loop through each day, compare to base_day, and get peak tuning location and pval
+        tuning_curve_all = []
         for idd, (arena, day, id) in enumerate(zip(self.arenas, self.days, reg_id)):
 
             if id >= 0:  # only calculate if valid mapping between neurons
                 tuning_curves = gen_motion_tuning_curve(self.motion_tuning[arena][day].pe_rasters[self.events])
+                tuning_curve_all.append(tuning_curves[id])
 
                 # Get max event rate and its location (time)
                 locs[idd], event_rates[idd] = get_tuning_max(tuning_curves[id], window=smooth_window)
@@ -448,10 +458,19 @@ class MotionTuningMultiDay:
                 # Grab pvalues for tuning curve
                 p_use = self.motion_tuning[base_arena][day].sig[self.events]['pval'][id]
 
-                # Calculate mean p-value along the curve at the location of the peak
+                # Calculate mean p-value along the curve at the location of the peak (within the smoothing window)
                 pvals[idd] = np.mean(p_use[int(locs[idd]-window_half):int(locs[idd]+window_half)])
 
-        return locs, event_rates, pvals
+        # Now run correlation between all days
+        corrs, pcorrs = np.ones_like(tuning_curve_all)*np.nan, np.ones_like(tuning_curve_all)*np.nan
+        for idd, (curve, id) in enumerate(zip(tuning_curve_all, reg_id)):
+
+            if id >= 0:  # only get legit mapping values
+                corrs[idd], pcorrs[idd], _ = pfs.spearmanr_nan(curve, tuning_curve_all[base_id])
+
+        corr = {'corrs': corrs, 'pvals': pcorrs}
+
+        return locs, event_rates, pvals, corr
 
 
 def get_freezing_times(mouse, arena, day, **kwargs):
