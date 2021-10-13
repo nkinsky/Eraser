@@ -460,9 +460,11 @@ class MotionTuningMultiDay:
 
                 # Calculate mean p-value along the curve at the location of the peak (within the smoothing window)
                 pvals[idd] = np.mean(p_use[int(locs[idd]-window_half):int(locs[idd]+window_half)])
+            else:
+                tuning_curve_all.append([])
 
         # Now run correlation between all days
-        corrs, pcorrs = np.ones_like(tuning_curve_all)*np.nan, np.ones_like(tuning_curve_all)*np.nan
+        corrs, pcorrs = np.ones(len(self.days))*np.nan, np.ones(len(self.days))*np.nan
         for idd, (curve, id) in enumerate(zip(tuning_curve_all, reg_id)):
 
             if id >= 0:  # only get legit mapping values
@@ -1020,6 +1022,6 @@ if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')
     mmd = MotionTuningMultiDay('Marble24', 'Shock', days=[-1, 4, 1, 2])
-    mmd.plot_raster_across_days(40, days_plot=[-1, 4, 1, 2], batch_map=False)
+    locs, event_rates, pvals, corr = mmd.get_tuning_loc_diff(143, base_day=1, base_arena='Shock')
 
     pass
