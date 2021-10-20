@@ -15,6 +15,7 @@ import placefield_stability as pfs
 import session_directory as sd
 import helpers
 from helpers import contiguous_regions
+import eraser_reference as err
 
 
 class MotionTuning:
@@ -473,6 +474,117 @@ class MotionTuningMultiDay:
         corr = {'corrs': corrs, 'pvals': pcorrs}
 
         return locs, event_rates, pvals, corr
+
+
+class TuningStability:
+    """Class to examine within arena stability of tuning curves across days"""
+    def __init__(self, arena, events, alpha):
+        self.arena = arena
+        self.events = events
+        self.alpha = alpha
+        self.days = [-1, 4, 1, 2]
+
+        # First, try loading in previously saved class
+        file_use = path.join(err.working_dir, events + '_' + arena + '_tuning_across_days_alpha' +
+                             str(alpha).replace('.', '_') + '.pkl')
+        if path.exists(file_use):
+            with open(file_use, 'rb') as f:
+                self.tuning_stability = load(f)
+        else:  # calculate everything if not already saved
+            self.tuning_stability = assemble_tuning_stability(arena=arena, events=events, alpha=alpha)
+
+        # Double check tuning_stability fields are compatible with save name (backwards compatibility)
+        assert events == self.tuning_stability['events'], '"events" field incompatible with saved value in ' + file_use
+        assert arena == self.tuning_stability['base_arena'], \
+            '"arena" field incompatible with saved value in ' + file_use
+        assert self.days == self.tuning_stability['days'], '"days" field incompatible with saved value in ' + file_use
+
+    def plot_metric_stability(self, base_day=4, group='Learners', metric_plot='event_rates', ax=None):
+        """Plots a metric across days"""
+        sr_image = 20  # Make this an input or come from that animal's class since one animal has sr=10 Hz
+
+        # Figure out ylabel
+        metrics = ["locs", "event_rates", "pvals", "corr_corrs", "corr_pvals"]
+        metric_labels = [r'$\Delta_t$', r'$\Delta{ER} (1/s)$', 'p at peak', r'$\rho$', r'$p_{\rho}$']
+        met_ind = np.where([metric_plot == met for met in metrics])[0][0]
+        met_label = metric_labels[met_ind]
+
+        a = pd.concat([pd.DataFrame.from_dict(_) for _ in self.tuning_stability[group][base_day][metric_plot]])
+        b = a.rename({key: value for key, value in zip([0, 1, 2, 3], self.days)}, axis=1).copy()
+
+        # Set up axes to plot into
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        if metric_plot in ['locs', 'event_rates']:
+            data_use = b.subtract(b[base_day], axis='rows').abs()
+        else:
+            data_use = b
+
+        sns.stripplot(data=data_use, ax=ax)
+        ax.plot(ax.get_xticks(), data_use.mean())
+        if metric_plot == 'locs':  # Adjust y-axis to get
+            ax.set_yticklabels([str(ytick / sr_image) for ytick in ax.get_yticks()])
+        ax.set_ylabel(met_label)  # NRK, automate this
+        ax.set_xlabel('Session')
+        ax.set_title(group + ': Base_day = ' + str(base_day))
+
+        sns.despine(ax=ax)
+
+
+class TuningGeneralization:
+    """Class to examine tuning curve generalization between arenas"""
+    def __init__(self, events, alpha):
+        pass
+
+
+def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
+    mice_groups = [err.learners, err.nonlearners, err.ani_mice_good]
+    group_names = ['Learners', 'Nonlearners', 'ANI']
+    base_arena = arena
+    days = [-1, 4, 1, 2]  # Start with post-learning cells + one pre-learning day
+    base_days = [4, 1]
+
+    # Pre-allocate dictionary for keeping track of everything
+    tuning_stability = dict.fromkeys(group_names)
+    for group in group_names:
+        tuning_stability[group] = dict.fromkeys(base_days)
+        for base_day in base_days:
+            tuning_stability[group][base_day] = {'locs': [], 'event_rates': [], 'pvals': [], 'corr_corrs': [],
+                                                 'corr_pvals': []}
+
+    for gname, group in zip(group_names, mice_groups):
+        for mouse in group:
+            print('Running Mouse ' + mouse)
+            if mouse == 'Marble14':
+                print('Running Marble14. MAKE SURE TO ADJUST all CODE FOR 10Hz FRAME RATE!!!')
+            mmd = MotionTuningMultiDay(mouse, 'Shock', days=days, events=events)
+            for base_day in [4, 1]:
+                # Get sig neurons here!
+                sig_neurons = mmd.motion_tuning[base_arena][base_day].get_sig_neurons(alpha=alpha)
+
+                # Start up list for each mouse/day pair
+                locs_all, event_rates_all, pvals_all, corr_corrs_all, corr_pvals_all = [], [], [], [], []
+                for sig_neuron in sig_neurons:
+                    # Track each neuron across days!
+                    locs, event_rates, pvals, corr = mmd.get_tuning_loc_diff(sig_neuron, base_day=base_day,
+                                                                             base_arena=base_arena)
+                    locs_all.append(locs)
+                    event_rates_all.append(event_rates)
+                    pvals_all.append(pvals)
+                    corr_corrs_all.append(corr['corrs'])
+                    corr_pvals_all.append(corr['pvals'])
+
+                # Now add this into dictionary
+                for var, name in zip([locs_all, event_rates_all, pvals_all, corr_corrs_all, corr_pvals_all],
+                                     ["locs", "event_rates", "pvals", "corr_corrs", "corr_pvals"]):
+                    tuning_stability[gname][base_day][name].append(np.asarray(var))
+
+    tuning_stability['days'] = days
+    tuning_stability['events'] = events
+    tuning_stability['base_arena'] = 'Shock'
+
+    return tuning_stability
 
 
 def get_freezing_times(mouse, arena, day, **kwargs):
