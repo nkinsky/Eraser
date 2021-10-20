@@ -21,7 +21,8 @@ nonlearners = ["Marble06", "Marble11", "Marble29"]
 
 learners = ["Marble07", "Marble12", "Marble24", "Marble27"]
 
-plot_dir = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'  # Plotting folder
+working_dir = '/Users/nkinsky/Documents/BU/Working/Eraser/'
+plot_dir = '/Users/nkinsky/Dropbox/Imaging Project/Manuscripts/Eraser/Figures'  # Plotting folder
 
 # from os import environ
 # try:
