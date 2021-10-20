@@ -629,6 +629,18 @@ def load_all_mi(mice, arenas=['Open', 'Shock'], days=[-2, -1, 4, 1, 2, 7], pf_fi
     return mimean_all
 
 
+def get_im_sample_rate(mouse, arena, day):
+    """Gets sample rate for imaging data"""
+    dir_use = get_dir(mouse, arena, day)
+    im_data_file = path.join(dir_use, 'FinalOutput.mat')
+    im_data = sio.loadmat(im_data_file, variable_names='SampleRate')
+    try:
+        sr_image = im_data['SampleRate'].squeeze()
+    except KeyError:
+        sr_image = 20
+
+    return sr_image
+
 class PlaceFieldObject:
     def __init__(self, tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,
                  xEdges, yEdges, xBin, yBin, tcounts, pval, mi, pos_align, PSAbool_align,
