@@ -19,11 +19,14 @@ import eraser_reference as err
 
 
 class MotionTuning:
-    def __init__(self, mouse, arena, day):
+    """
+    **kwargs: inputs for getting freezing in eraser_plot_functions.get_freezing.
+    """
+    def __init__(self, mouse, arena, day, **kwargs):
         self.session = {'mouse': mouse, 'arena': arena, 'day': day}
 
         # Get PSAbool and freezing info
-        self.PSAbool, self.freeze_bool = get_freeze_bool(mouse, arena, day)
+        self.PSAbool, self.freeze_bool = get_freeze_bool(mouse, arena, day, **kwargs)
         self.event_rates = self.PSAbool.sum(axis=1)/self.PSAbool.shape[1]
         self.freezing_indices, self.freezing_times = get_freezing_times(mouse, arena, day)
 
@@ -262,13 +265,15 @@ class MotionTuning:
 
 
 class MotionTuningMultiDay:
-    def __init__(self, mouse: str, arena: str or list, days: list = [-1, 4, 1, 2], events: str = 'freeze_onset'):
+    def __init__(self, mouse: str, arena: str or list, days: list = [-1, 4, 1, 2], events: str = 'freeze_onset',
+                 **kwargs):
         """
         Create class for tracking motion or freezing tuning of cells across days.
         :param mouse: str of form 'Marble##'
         :param arena: str in ['Open', 'Shock'] or list matching len(days)
         :param days: int in [-2, -1, 0, 4, 1, 2, 7] though day 0 generally not analyzed in 'Shock' due to short
         (60 sec) recording time
+        :param **kwargs: see MotionTuning.gen_pe_rasters - inputs for calculating freezing.
         """
         self.mouse = mouse
         self.days = days
@@ -285,7 +290,7 @@ class MotionTuningMultiDay:
         self.motion_tuning = {'Open': dict.fromkeys(days), 'Shock': dict.fromkeys(days)}
         self.rois = {'Open': dict.fromkeys(days), 'Shock': dict.fromkeys(days)}
         for arena, day in zip(self.arenas, days):
-            self.motion_tuning[arena][day] = MotionTuning(mouse, arena, day)  # Get motion tuning for each day above.
+            self.motion_tuning[arena][day] = MotionTuning(mouse, arena, day, **kwargs)  # Get motion tuning for each day above.
             self.motion_tuning[arena][day].gen_pe_rasters(events=events)  # generate freeze_onset rasters by default
             self.rois[arena][day] = helpers.get_ROIs(mouse, arena, day)
 
@@ -332,7 +337,7 @@ class MotionTuningMultiDay:
         #     neuron_map = pfs.get_neuronmap(self.mouse, base_arena, base_day, arena, day,
         #                                    batch_map_use=batch_map)
         #     reg_id.append(neuron_map[cell_id])  # Get neuron to plot
-        self.assemble_map(base_day=base_day, base_arena=base_arena)  # Create/get neuron map
+        self.assemble_map(base_day=base_day, base_arena=base_arena, batch_map=batch_map)  # Create/get neuron map
         # Get column to use for base session
         base_id = np.where([base_day == day and base_arena == arena for arena, day in
                             zip(self.arenas, self.days)])[0][0]
@@ -422,9 +427,7 @@ class MotionTuningMultiDay:
                             base_arena: str in ['Shock', 'Open'] = 'Shock', smooth_window: int = 4):
         """
         Grab location of peak tuning curve and track across days! Finer grained
-        look at how well a cell maintains its freeze or motion related tuning.  Compare to chance?
-        Not sure how to get - take peak from uniform distribution across all bins and calculate dist for
-        each cell?
+        look at how well a cell maintains its freeze or motion related tuning.
         :return: locs: location of peak tuning after smoothing
         :return: event_rates: event rate at peak tuning location (mean of all bins within smoothing window)
         :return: pvals: pval at peak tuning location (mean of all bins within smoothing window)
@@ -454,7 +457,8 @@ class MotionTuningMultiDay:
                 tuning_curve_all.append(tuning_curves[id])
 
                 # Get max event rate and its location (time)
-                locs[idd], event_rates[idd] = get_tuning_max(tuning_curves[id], window=smooth_window)
+                loc_bins, event_rates[idd] = get_tuning_max(tuning_curves[id], window=smooth_window)
+                locs[idd] = loc_bins/self.motion_tuning[arena][day].sr_image  # convert to image
 
                 # Grab pvalues for tuning curve
                 p_use = self.motion_tuning[base_arena][day].sig[self.events]['pval'][id]
@@ -499,6 +503,39 @@ class TuningStability:
             '"arena" field incompatible with saved value in ' + file_use
         assert self.days == self.tuning_stability['days'], '"days" field incompatible with saved value in ' + file_use
 
+    def plot_prop_tuned(self, group='Learners', plot_by='mouse', ax=None):
+        """This will plot the proportion of total cells that are tuned to freeze/motion onset events"""
+        pass
+
+    def plot_off_ratio(self, base_day=4, group='Learners', plot_by='mouse', ax=None):
+        """Plots the probability a event-tuned cell turns off from one session to the next"""
+
+        # Set up axes to plot into
+        if ax is None:
+            fig, ax = plt.subplots()
+
+        # Get probability a cells turns off for each mouse - should be a nan if it does.
+        assert plot_by in ('mouse', 'group'), '"plot_by" must be either "mouse" or "group"'
+        locs_ = []
+        if plot_by == 'mouse':
+            # Get proportion of cells turning off for each mouse
+            for locs in self.tuning_stability[group][base_day]['locs']:
+                locs_.append(np.isnan(locs).sum(axis=0)/locs.shape[0])
+            off_ratio = np.asarray(locs_)
+        elif plot_by == 'group':
+            for locs in self.tuning_stability[group][base_day]['locs']:
+                locs_.append(locs)
+            off_ratio = np.isnan(np.asarray(locs_)).sum(axis=0)/np.asarray(locs_).shape[0]
+            off_ratio = off_ratio.reshape(1, -1)  # Make this a 1 x ndays array
+
+        for ratio in off_ratio:
+            ax.plot(list(range(len(self.days))), ratio)
+
+        ax.set_xticks(list(range(len(self.days))))
+        ax.set_xticklabels([str(day) for day in self.days])
+        ax.set_title(group)
+
+
     def plot_metric_stability(self, base_day=4, group='Learners', metric_plot='event_rates', ax=None):
         """Plots a metric across days"""
         sr_image = 20  # Make this an input or come from that animal's class since one animal has sr=10 Hz
@@ -509,23 +546,26 @@ class TuningStability:
         met_ind = np.where([metric_plot == met for met in metrics])[0][0]
         met_label = metric_labels[met_ind]
 
+        # Assemble cross-day stability metrics from list into pandas array
         a = pd.concat([pd.DataFrame.from_dict(_) for _ in self.tuning_stability[group][base_day][metric_plot]])
-        b = a.rename({key: value for key, value in zip([0, 1, 2, 3], self.days)}, axis=1).copy()
+        # Rename rows to match each day.
+        b = a.rename({key: value for key, value in enumerate(self.days)}, axis=1).copy()
 
         # Set up axes to plot into
         if ax is None:
             fig, ax = plt.subplots()
 
+        # Subtract base day value if looking at tuning curve location or event rate across days
         if metric_plot in ['locs', 'event_rates']:
-            data_use = b.subtract(b[base_day], axis='rows').abs()
+            data_use = b.subtract(b[base_day], axis='rows')
         else:
             data_use = b
 
         sns.stripplot(data=data_use, ax=ax)
-        ax.plot(ax.get_xticks(), data_use.mean())
-        if metric_plot == 'locs':  # Adjust y-axis to get
-            ax.set_yticklabels([str(ytick / sr_image) for ytick in ax.get_yticks()])
-        ax.set_ylabel(met_label)  # NRK, automate this
+        ax.plot(ax.get_xticks(), data_use.mean())  # plot mean
+        # if metric_plot == 'locs':  # Adjust y-axis for time
+        #     ax.set_yticklabels([str(ytick / sr_image) for ytick in ax.get_yticks()])
+        ax.set_ylabel(met_label)  # Label metric appropriately
         ax.set_xlabel('Session')
         ax.set_title(group + ': Base_day = ' + str(base_day))
 
@@ -560,6 +600,8 @@ def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
                 print('Running Marble14. MAKE SURE TO ADJUST all CODE FOR 10Hz FRAME RATE!!!')
             mmd = MotionTuningMultiDay(mouse, 'Shock', days=days, events=events)
             for base_day in [4, 1]:
+
+                # NRK todo: fold all the code below into MotionTuningMultiDay class!!! Spit out times for tuning curve locations too.
                 # Get sig neurons here!
                 sig_neurons = mmd.motion_tuning[base_arena][base_day].get_sig_neurons(alpha=alpha)
 
