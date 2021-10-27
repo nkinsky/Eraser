@@ -507,6 +507,67 @@ class TuningStability:
         """This will plot the proportion of total cells that are tuned to freeze/motion onset events"""
         pass
 
+    def get_off_ratio(self, group, base_day):
+        locs_ = []
+        for locs in self.tuning_stability[group][base_day]['locs']:
+            locs_.append(np.isnan(locs).sum(axis=0) / locs.shape[0])
+        off_ratio = np.asarray(locs_)
+
+        return off_ratio
+
+    def off_ratio_to_df(self, base_day):
+        """Send all off ratio data to a nicely organized dataframe"""
+        # First loop through and get all off data
+        df_list = []
+        for exp_group, group in zip(['Control', 'Control', 'ANI'], ['Learners', 'Nonlearners', 'ANI']):
+            off_ratio = self.get_off_ratio(group, base_day)
+            # Now assign appropriate day and mouse and group to each data point
+            mouse, group_names, day, base, exp_group_names = [], [], [], [], []
+            for idr, ratio in enumerate(off_ratio):
+                day.extend(self.days)
+                mouse.extend(np.ones_like(ratio, dtype=int)*idr)
+                base.extend(np.ones_like(ratio)*base_day)
+                group_names.extend([group for _ in ratio])
+                exp_group_names.extend([exp_group for _ in ratio])
+
+            df_temp = pd.DataFrame({'Exp Group': exp_group_names, 'Group': group_names, 'Mouse': mouse,
+                                    'Base Day': base, 'Day': day, 'Off Ratio': off_ratio.reshape(-1)})
+            df_list.append(df_temp)
+
+        df_all = pd.concat(df_list)
+
+        return df_all
+
+    def metric_to_df(self, base_day, metric, delta=False):
+        """Send stability metric to a nicely organized dataframe. if delta=True it will subtract everything from the base day"""
+        # First loop through and get all off data
+        df_list = []
+        day_bool = np.asarray([d == base_day for d in self.days])
+        for exp_group, group in zip(['Control', 'Control', 'ANI'], ['Learners', 'Nonlearners', 'ANI']):
+            metric_use = self.tuning_stability[group][base_day][metric]
+            # Now assign appropriate day and mouse and group to each data point
+            mouse, group_names, day, base, exp_group_names = [], [], [], [], []
+            for idr, met in enumerate(metric_use):
+                ncells = met.shape[0]
+                day.extend(np.matlib.repmat(self.days, ncells, 1).reshape(-1))
+                mouse.extend(np.ones_like(met, dtype=int).reshape(-1)*idr)
+                base.extend(np.ones_like(met, dtype=int).reshape(-1)*base_day)
+                group_names.extend([group] * (ncells*len(self.days)))
+                exp_group_names.extend([exp_group] * (ncells*len(self.days)))
+
+            if not delta:
+                metric_final, met_name = np.vstack(metric_use), metric
+            elif delta:  # subtract out base day values to get delta
+                metric_final = np.vstack(metric_use) - np.vstack(metric_use)[:, day_bool]
+                met_name = '\Delta' + metric
+            df_temp = pd.DataFrame({'Exp Group': exp_group_names, 'Group': group_names, 'Mouse': mouse,
+                                    'Base Day': base, 'Day': day, met_name: np.vstack(metric_final).reshape(-1)})
+            df_list.append(df_temp)
+
+        df_all = pd.concat(df_list)
+
+        return df_all
+
     def plot_off_ratio(self, base_day=4, group='Learners', plot_by='mouse', ax=None):
         """Plots the probability a event-tuned cell turns off from one session to the next"""
 
@@ -533,8 +594,12 @@ class TuningStability:
 
         ax.set_xticks(list(range(len(self.days))))
         ax.set_xticklabels([str(day) for day in self.days])
+        ax.set_xlabel('Session')
+        ax.set_ylabel('Off proportion')
         ax.set_title(group)
+        sns.despine(ax=ax)
 
+        return ax
 
     def plot_metric_stability(self, base_day=4, group='Learners', metric_plot='event_rates', ax=None):
         """Plots a metric across days"""
