@@ -360,7 +360,7 @@ class MotionTuningMultiDay:
                 # plot rasters
                 _, secax = plot_raster(raster_plot, cell_id=id_plot, bs_rate=bs_rate, events=events,
                                        labelx=labelx, labely=labely, labely2=labely2, ax=ax[idd])
-                ax[idd].set_title(arena + ' Day ' + str(day) + ': Cell ' + str(id_plot))
+                ax[idd].set_title(arena + ' Day ' + str(day) + '\n Cell ' + str(id_plot))
                 if idd == base_id:  # Make title bold if base day
                     ax[idd].set_title(ax[idd].get_title(), fontweight='bold')
 
@@ -508,6 +508,7 @@ class TuningStability:
         pass
 
     def get_off_ratio(self, group, base_day):
+        """Determine how many freeze or motion related cells are turning off from base day to other days"""
         locs_ = []
         for locs in self.tuning_stability[group][base_day]['locs']:
             locs_.append(np.isnan(locs).sum(axis=0) / locs.shape[0])
@@ -539,7 +540,8 @@ class TuningStability:
         return df_all
 
     def metric_to_df(self, base_day, metric, delta=False):
-        """Send stability metric to a nicely organized dataframe. if delta=True it will subtract everything from the base day"""
+        """Send stability metric to a nicely organized dataframe.
+        if delta=True it will subtract everything from the base day"""
         # First loop through and get all off data
         df_list = []
         day_bool = np.asarray([d == base_day for d in self.days])
@@ -559,7 +561,7 @@ class TuningStability:
                 metric_final, met_name = np.vstack(metric_use), metric
             elif delta:  # subtract out base day values to get delta
                 metric_final = np.vstack(metric_use) - np.vstack(metric_use)[:, day_bool]
-                met_name = '\Delta' + metric
+                met_name = 'Delta' + metric
             df_temp = pd.DataFrame({'Exp Group': exp_group_names, 'Group': group_names, 'Mouse': mouse,
                                     'Base Day': base, 'Day': day, met_name: np.vstack(metric_final).reshape(-1)})
             df_list.append(df_temp)
@@ -990,7 +992,7 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.2, 
     ax.plot(nevents - curve * nevents * 4, 'r-')
     ax.axvline(nframes / 2, color='g')
     if bs_rate is not None:
-        ax.axhline(nevents - bs_rate * nevents * 4, color='b', linestyle='--')
+        ax.axhline(nevents - bs_rate * nevents * 4, color='g', linestyle='--')
     ax.set_title('Cell ' + str(cell_id))
     if labelx:  # Label bottom row
         ax.set_xticks([0, nframes / 2, nframes])
