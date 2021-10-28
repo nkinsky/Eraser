@@ -603,8 +603,59 @@ class TuningStability:
 
         return ax
 
+    def plot_off_ratio_by_group(self, base_day, group='Exp Group'):
+        """
+        Plot off ratio in bar/scatter format between groups
+        :param base_day:
+        :param group:
+        :return:
+        """
+        # Set up color palette
+        assert group in ['Group', 'Exp Group'], 'group must be "Exp Group" or "Group"'
+        if group == 'Exp Group':
+            pal_use = [(0, 0, 0), (0, 1, 0)]
+            pal_use2 = [(0.2, 0.2, 0.2, 0.1), (0, 1, 0, 0.1)]  # Necessary to make sure scatterplot visible over bar
+        elif group == 'Group':
+            pal_use, pal_use2 = 'Set2', 'Set2'
+
+        df = self.off_ratio_to_df(base_day)  # Make data into a dataframe
+        fig, ax = plt.subplots(1, 2)  # set up figures
+        fig.set_size_inches((12.9, 4.75))
+        # Plot scatterplot
+        sns.stripplot(x='Day', y='Off Ratio', data=df, hue=group, dodge=True, ax=ax[0], palette=pal_use,
+                      order=[-1, 4, 1, 2])
+
+        # This is necessary to prevent duplicated in legend
+        group_rows = df.loc[:, group].copy()
+        group_rows_ = ["_" + row for row in df[group]]
+        df.loc[:, group] = group_rows_
+
+        # Now plot bars overlaying
+        sns.barplot(x='Day', y='Off Ratio', data=df, hue=group, dodge=True, ax=ax[0], palette=pal_use2,
+                    order=[-1, 4, 1, 2])
+
+        # Clean up and label
+        sns.despine(ax=ax[0])
+        ax[0].set_title('Freeze cells')
+        ax[0].set_xlabel('Session Before/After')
+
+        df.loc[:, group] = group_rows  # set labels back to normal
+
+        # Now do stats!
+        days_test = [-1, 4, 2] if base_day == 1 else [-1, 1, 2]
+        for ycoord, day in zip([0.3, 0.5, 0.7], days_test):
+            ctrl = df[np.bitwise_and(df['Exp Group'] == 'Control', df['Day'] == day)]
+            ani = df[np.bitwise_and(df['Exp Group'] == 'ANI', df['Day'] == day)]
+            stat, pval = stats.ttest_ind(ctrl['Off Ratio'], ani['Off Ratio'])
+            print(f'2sided t-test Day {day} : pval={pval:.3g} tstat={stat:.3g}')
+            ax[1].text(0.1, ycoord, f'2sided t-test Day {day} : pval={pval:.3g} tstat={stat:.3g}')
+        sns.despine(ax=ax[1], left=True, bottom=True)
+        ax[1].axis(False)
+
+        return fig, ax
+
     def plot_metric_stability(self, base_day=4, group='Learners', metric_plot='event_rates', ax=None):
-        """Plots a metric across days"""
+        """Plots a metric across days for a single group"""
         sr_image = 20  # Make this an input or come from that animal's class since one animal has sr=10 Hz
 
         # Figure out ylabel
@@ -638,6 +689,89 @@ class TuningStability:
 
         sns.despine(ax=ax)
 
+    def plot_metric_stability_by_group(self, base_day: int, metric_plot: str, delta: bool = True,
+                                       days_plot: list or int or None = None,
+                                       group_by: str in ['Group', 'Exp Group'] = 'Group'):
+
+
+        # plotting info
+        metrics = ['locs', 'event_rates', 'pvals', 'corr_corrs', 'corr_pvals']
+        metric_labels_delta = [r'$\Delta_t$', r'$\Delta{ER}_{peak}$ (1/s)', 'p at peak', r'$\rho$', r'$p_{\rho}$']
+        metric_labels = [r'$t (s)$', r'$ER_{peak} (1/s)$', 'p at peak', r'$\rho$', r'$p_{\rho}$']
+        pal_use, pal_use_bar = get_palettes(group_by)  # Get colors to plot into
+
+        # First, get delta in event rates across days as a dataframe for day1 cells
+        if days_plot is None:  # Automatically pick days before/after
+            days = [-2, -1, 4, 1, 2, 7]
+            base_ind = np.where([base_day == d for d in days])[0][0]
+            days_plot = days[slice(base_ind-1, base_ind+2, 2)]
+        elif days_plot is int:
+            days_plot = [days_plot]
+
+        # Now send tuning data to dataframe and pick out only days of interest
+        df_full = self.metric_to_df(base_day, metric_plot, delta=delta)
+        df = df_full[[d in days_plot for d in df_full['Day']]]  # Keep only days indicated in days_plot
+
+        # set up figure
+        fig, ax = plt.subplots(1, 2)
+        fig.set_size_inches((12.9, 4.75))
+        met_name = metric_plot if not delta else 'Delta' + metric_plot
+
+        # Plot scatter
+        sns.stripplot(x='Day', y=met_name, data=df, hue=group_by, dodge=True, order=days_plot,
+                      palette=pal_use, ax=ax[0])
+
+        # This is the only easy way I could figure out to NOT duplicate labels in the legend
+        group_rows = df.loc[:, group_by].copy()  # This generates warnings about chained indexing for some reason
+        group_rows_ = ["_" + row for row in df[group_by]]
+        df.loc[:, group_by] = group_rows_
+
+        # Plot overlaying bar graph
+        sns.barplot(x='Day', y=met_name, data=df, hue=group_by, dodge=True, order=days_plot,
+                    palette=pal_use_bar, facecolor=(1, 1, 1, 0), edgecolor=(1, 1, 1, 0), ax=ax[0])
+
+        # Cleanup
+        ax[0].legend(loc='upper right')
+        df.loc[:, group_by] = group_rows
+        sns.despine(ax=ax[0])
+
+        # Label y-axis nicely
+        met_ind = np.where([met == metric_plot for met in metrics])[0][
+            0]  # find out index for which metric you are plotting
+        met_label = metric_labels_delta[met_ind] if delta else metric_labels[met_ind]
+        ax[0].set_ylabel(met_label)
+        ax[0].set_xlabel('Session Before/After')
+
+        # Label title
+        ax[0].set_title('Freeze cells on Day ' + str(base_day))
+
+        # now get stats and print out
+        ycoord = 0.9
+        if group_by == 'Group':  # NRK todo: learn how to use itertools! This works but is super non-elegant!
+            for day in np.asarray(days_plot)[[base_day != d for d in days_plot]]:
+                learners = df[np.bitwise_and(df['Group'] == 'Learners', df['Day'] == day)]
+                nonlearners = df[np.bitwise_and(df['Group'] == 'Nonlearners', df['Day'] == day)]
+                ani = df[np.bitwise_and(df['Group'] == 'ANI', df['Day'] == day)]
+                stat, pval = stats.ttest_ind(learners[met_name], nonlearners[met_name], nan_policy='omit')
+                print(f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+                ax[1].text(0.1, ycoord, f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+                ycoord -= 0.1
+                stat, pval = stats.ttest_ind(learners[met_name], ani[met_name], nan_policy='omit')
+                print(f'2sided t-test Learners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+                ax[1].text(0.1, ycoord,f'2sided t-test Learners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+                ycoord -= 0.1
+                stat, pval = stats.ttest_ind(nonlearners[met_name], ani[met_name], nan_policy='omit')
+                print(f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+                ax[1].text(0.1, ycoord, f'2sided t-test Nonlearners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+                ycoord -= 0.1
+
+        else:
+            print('Stats not yet enabled for "Exp Group" plotting')
+            ax[1].text(0.1, 0.5, 'Stats not yet enabled for "Exp Group" plotting')
+
+        ax[1].axis(False)
+
+        return fig, ax
 
 class TuningGeneralization:
     """Class to examine tuning curve generalization between arenas"""
@@ -959,6 +1093,18 @@ def get_tuning_max(tuning_curve: np.ndarray, window: int = 4):
         max_loc = curve_smooth.argmax()
 
     return max_loc, max_val
+
+
+def get_palettes(group: str in ['Group', 'Exp Group']):
+    """Returns appropriate color palettes to use for plotting by 'Group' or 'Exp Group' with data points
+    and a bar plot"""
+    if group == 'Exp Group':
+        pal_use = [(0, 0, 0), (0, 1, 0)]
+        pal_use_bar = [(0.2, 0.2, 0.2, 0.1), (0, 1, 0, 0.1)]  # Necessary to make sure scatterplot visible over bar
+    elif group == 'Group':
+        pal_use, pal_use_bar = 'Set2', 'Set2'
+
+    return pal_use, pal_use_bar
 
 
 def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.2, events='trial',
