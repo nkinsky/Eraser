@@ -19,7 +19,7 @@ import eraser_reference as err
 
 
 class MotionTuning:
-    """
+    """Identify and plot freeze and motion related cells
     **kwargs: inputs for getting freezing in eraser_plot_functions.get_freezing.
     """
     def __init__(self, mouse, arena, day, **kwargs):
@@ -53,7 +53,20 @@ class MotionTuning:
         try:  # Load in previously calculated tunings
             self.load_sig_tuning()
         except FileNotFoundError:  # if not saved, initialize
+            print('No tunings found for this session - run .get_tuning_sig() and .save_sig_tuning()')
             self.sig = {'freeze_onset': {}, 'move_onset': {}}
+
+    def get_prop_tuned(self, events: str = 'freeze_onset', **kwargs):
+        """
+        Gets proportion of neurons that exhibit freeze or motion related tuning
+        :param events: str, 'freeze_onset' (default) or 'move_onset'
+        :param kwargs: inputs to get_sig_neurons() to classify freeze or motion related movement
+        :return:
+        """
+        ntuned = self.get_sig_neurons(events=events, **kwargs).shape[0]
+        ntotal = self.sig[events]['pval'].shape[0]
+
+        return ntuned/ntotal
 
     def gen_pe_rasters(self, events='freeze_onset', buffer_sec=[2, 2]):
         """Generate the rasters for all cells and dump them into a dictionary"""
@@ -297,7 +310,19 @@ class MotionTuningMultiDay:
         # Initialize map between sessions
         self.map = {'map': None, 'base_day': None, 'base_arena': None}
 
-    def plot_raster_across_days(self, cell_id, base_arena='Shock', base_day=1,
+    def get_prop_tuned(self, **kwargs):
+        """
+        Gets proportion of cells tuned to freezing or movement onset on each day
+        :param kwargs: parameters/inputs to MotionTuning.get_sig_neurons() to determine freeze and motion related tuning.
+        :return:
+        """
+        prop_tuned = []
+        for arena, day in zip(self.arenas, self.days):
+            prop_tuned.append(self.motion_tuning[arena][day].get_prop_tuned(events=self.events, **kwargs))
+
+        return np.asarray(prop_tuned)
+
+    def plot_raster_across_days(self, cell_id, base_arena='Shock', base_day=1, alpha=0.01,
                                 labelx=True, ax=None, batch_map=True, plot_ROI=True, **kwargs):
         """Plots a cell's peri-event raster on base_day and tracks backward/forward to all other days in object.
         e.g. if you have a freezing cell emerge on day1 and want to see what it looked like right before/after,
@@ -306,6 +331,7 @@ class MotionTuningMultiDay:
         :param cell_id: int, cell to plot on base_day and track forward/backward to other days_plot
         :param base_arena: str in ['Open', 'Shock']
         :param base_day: int
+        :param alpha: value to use for calculating and plotting significant bins
         :param labelx: bool
         :param ax: axes to plot into, default = create new figure with 1 x len(days_plot) subplots
         :param batch_map: use batch map for registering neurons across days as opposed to direct session-to-session reg.
@@ -353,13 +379,15 @@ class MotionTuningMultiDay:
             if id_plot >= 0:  # only plot if valid mapping between neurons
                 raster_plot = self.motion_tuning[arena][day].pe_rasters[events][id_plot]  # get raster
                 bs_rate = self.motion_tuning[arena][day].event_rates[id_plot]  # get baseline rate
+                sig_bins = np.where(self.motion_tuning[arena][day].sig[events]['pval'][id_plot] < alpha)[0]
 
                 labely = True if idd == 0 or not ylabel_added else False  # label y if on left side
                 labely2 = True if idd == last_good_neuron else False  # label y2 if on right side
 
                 # plot rasters
                 _, secax = plot_raster(raster_plot, cell_id=id_plot, bs_rate=bs_rate, events=events,
-                                       labelx=labelx, labely=labely, labely2=labely2, ax=ax[idd])
+                                       labelx=labelx, labely=labely, labely2=labely2, ax=ax[idd],
+                                       sig_bins=sig_bins)
                 ax[idd].set_title(arena + ' Day ' + str(day) + '\n Cell ' + str(id_plot))
                 if idd == base_id:  # Make title bold if base day
                     ax[idd].set_title(ax[idd].get_title(), fontweight='bold')
@@ -780,6 +808,7 @@ class TuningGeneralization:
 
 
 def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
+    """Get freeze cell stability tuning across days"""
     mice_groups = [err.learners, err.nonlearners, err.ani_mice_good]
     group_names = ['Learners', 'Nonlearners', 'ANI']
     base_arena = arena
@@ -802,7 +831,6 @@ def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
             mmd = MotionTuningMultiDay(mouse, 'Shock', days=days, events=events)
             for base_day in [4, 1]:
 
-                # NRK todo: fold all the code below into MotionTuningMultiDay class!!! Spit out times for tuning curve locations too.
                 # Get sig neurons here!
                 sig_neurons = mmd.motion_tuning[base_arena][base_day].get_sig_neurons(alpha=alpha)
 
@@ -1107,7 +1135,7 @@ def get_palettes(group: str in ['Group', 'Exp Group']):
     return pal_use, pal_use_bar
 
 
-def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.2, events='trial',
+def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25, events='trial',
                 labelx=True, labely=True, labely2=True, sr_image=20, ax=None):
     """Plot peri-event raster with tuning curve overlaid.
 
@@ -1134,19 +1162,21 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.2, 
     nevents, nframes = raster.shape
     buffer = np.floor(nframes / 2 / sr_image)
 
-    sns.heatmap(raster, ax=ax, cbar=False)
-    ax.plot(nevents - curve * nevents * 4, 'r-')
-    ax.axvline(nframes / 2, color='g')
+    sns.heatmap(raster, ax=ax, cbar=False)  # plot raster
+    ax.plot(nevents - curve * nevents/y2scale, 'r-')  # plot tuning curve
+    ax.axvline(nframes / 2, color='g')  # plot event time
     if bs_rate is not None:
-        ax.axhline(nevents - bs_rate * nevents * 4, color='g', linestyle='--')
+        ax.axhline(nevents - bs_rate * nevents/y2scale, color='g', linestyle='--')  # plot baseline rate
     ax.set_title('Cell ' + str(cell_id))
     if labelx:  # Label bottom row
         ax.set_xticks([0, nframes / 2, nframes])
         ax.set_xticklabels([str(-buffer), '0', str(buffer)])
         ax.set_xlabel('Time from ' + events + '(s)')
 
-    if sig_bins:  # add a start over all bins with significant tuning
-        pass
+    if np.any(sig_bins):  # add a start over all bins with significant tuning
+        curve_plot = nevents - curve * nevents/y2scale
+        # ax.plot(sig_bins, curve_plot[sig_bins] - 5, 'r*')
+        ax.plot(sig_bins, np.ones_like(sig_bins), 'r.')
 
     if labely:  # Label left side
         ax.set_yticks([0.5, nevents - 0.5])
