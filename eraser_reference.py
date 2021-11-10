@@ -9,6 +9,8 @@ control_mice_good = ['Marble06', 'Marble07', 'Marble11', 'Marble12', 'Marble14',
 
 ani_mice = ['Marble17', 'Marble18', 'Marble19', 'Marble20', 'Marble21', 'Marble25']
 
+# Note that Marble25 has good imaging but exhibits tons of freezing on open arena prior to shock and then high
+# freezing in both arenas after shock. So maybe we need to exclude from any behavioral analyses?
 ani_mice_good = ['Marble17', 'Marble18', 'Marble19', 'Marble20', 'Marble25']  # 'Marble18 ?'
 
 all_mice = control_mice.copy()
