@@ -27,7 +27,7 @@ class MotionTuning:
 
         # Get PSAbool and freezing info
         self.PSAbool, self.freeze_bool = get_freeze_bool(mouse, arena, day, **kwargs)
-        self.event_rates = self.PSAbool.sum(axis=1)/self.PSAbool.shape[1]
+        self.event_rates = self.PSAbool.sum(axis=1)/self.PSAbool.shape[1]  # NRK todo: Adjust this to be an event rate, currently a prob of firing in a given frame.
         self.freezing_indices, self.freezing_times = get_freezing_times(mouse, arena, day)
 
         # Get initial estimate of motion-modulated vs freeze modulated cells - very rough
@@ -472,7 +472,7 @@ class MotionTuningMultiDay:
 
         # pre-allocate arrays
         locs, event_rates = np.ones(len(self.days))*np.nan, np.ones(len(self.days))*np.nan
-        pvals = np.ones(len(self.days))*np.nan
+        pvals, is_tuned = np.ones(len(self.days))*np.nan, np.ones(len(self.days))*np.nan
 
         window_half = smooth_window/2  # Get half of smoothing window
 
@@ -493,6 +493,9 @@ class MotionTuningMultiDay:
 
                 # Calculate mean p-value along the curve at the location of the peak (within the smoothing window)
                 pvals[idd] = np.mean(p_use[int(locs[idd]-window_half):int(locs[idd]+window_half)])
+
+                # Figure out if it is a freeze cell on that day
+                is_tuned[idd] = id in self.motion_tuning[base_arena][day].get_sig_neurons()
             else:
                 tuning_curve_all.append([])
 
@@ -505,7 +508,7 @@ class MotionTuningMultiDay:
 
         corr = {'corrs': corrs, 'pvals': pcorrs}
 
-        return locs, event_rates, pvals, corr
+        return locs, event_rates, pvals, corr, is_tuned
 
 
 class TuningStability:
@@ -524,6 +527,8 @@ class TuningStability:
                 self.tuning_stability = load(f)
         else:  # calculate everything if not already saved
             self.tuning_stability = assemble_tuning_stability(arena=arena, events=events, alpha=alpha)
+            with open(file_use, 'wb') as f:  # save it!
+                dump(self.tuning_stability, f)
 
         # Double check tuning_stability fields are compatible with save name (backwards compatibility)
         assert events == self.tuning_stability['events'], '"events" field incompatible with saved value in ' + file_use
@@ -544,15 +549,24 @@ class TuningStability:
 
         return off_ratio
 
+    def get_overlap_ratio(self, group, base_day):
+        """Determines the probability a motion-tuned cell on basd day retains that tuning on a different day """
+        tuned = []
+        for is_tuned in self.tuning_stability[group][base_day]['is_tuned']:
+            tuned.append(np.nansum(is_tuned, axis=0) / is_tuned.shape[0])
+
+        return np.asarray(tuned)
+
     def off_ratio_to_df(self, base_day):
-        """Send all off ratio data to a nicely organized dataframe"""
+        """Send all off ratio data to a nicely organized dataframe. Also sends overlap ratio"""
         # First loop through and get all off data
         df_list = []
         for exp_group, group in zip(['Control', 'Control', 'ANI'], ['Learners', 'Nonlearners', 'ANI']):
-            off_ratio = self.get_off_ratio(group, base_day)
+            off_ratio = self.get_off_ratio(group, base_day)  # NRK todo: this should move into loop below!!! Leave for now.
+            overlap_ratio = self.get_overlap_ratio(group, base_day)
             # Now assign appropriate day and mouse and group to each data point
             mouse, group_names, day, base, exp_group_names = [], [], [], [], []
-            for idr, ratio in enumerate(off_ratio):
+            for idr, (ratio, overlap) in enumerate(zip(off_ratio, overlap_ratio)):
                 day.extend(self.days)
                 mouse.extend(np.ones_like(ratio, dtype=int)*idr)
                 base.extend(np.ones_like(ratio)*base_day)
@@ -560,7 +574,8 @@ class TuningStability:
                 exp_group_names.extend([exp_group for _ in ratio])
 
             df_temp = pd.DataFrame({'Exp Group': exp_group_names, 'Group': group_names, 'Mouse': mouse,
-                                    'Base Day': base, 'Day': day, 'Off Ratio': off_ratio.reshape(-1)})
+                                    'Base Day': base, 'Day': day, 'Off Ratio': off_ratio.reshape(-1),
+                                    'Overlap Ratio': overlap_ratio.reshape(-1)})
             df_list.append(df_temp)
 
         df_all = pd.concat(df_list)
@@ -808,7 +823,7 @@ class TuningGeneralization:
 
 
 def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
-    """Get freeze cell stability tuning across days"""
+    """Get freeze cell stability tuning across days - probably should live in TuningStability class"""
     mice_groups = [err.learners, err.nonlearners, err.ani_mice_good]
     group_names = ['Learners', 'Nonlearners', 'ANI']
     base_arena = arena
@@ -821,8 +836,9 @@ def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
         tuning_stability[group] = dict.fromkeys(base_days)
         for base_day in base_days:
             tuning_stability[group][base_day] = {'locs': [], 'event_rates': [], 'pvals': [], 'corr_corrs': [],
-                                                 'corr_pvals': []}
+                                                 'corr_pvals': [], 'is_tuned': []}
 
+    # Now run everything
     for gname, group in zip(group_names, mice_groups):
         for mouse in group:
             print('Running Mouse ' + mouse)
@@ -836,19 +852,21 @@ def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
 
                 # Start up list for each mouse/day pair
                 locs_all, event_rates_all, pvals_all, corr_corrs_all, corr_pvals_all = [], [], [], [], []
+                is_tuned_all = []
                 for sig_neuron in sig_neurons:
                     # Track each neuron across days!
-                    locs, event_rates, pvals, corr = mmd.get_tuning_loc_diff(sig_neuron, base_day=base_day,
+                    locs, event_rates, pvals, corr, is_tuned = mmd.get_tuning_loc_diff(sig_neuron, base_day=base_day,
                                                                              base_arena=base_arena)
                     locs_all.append(locs)
                     event_rates_all.append(event_rates)
                     pvals_all.append(pvals)
                     corr_corrs_all.append(corr['corrs'])
                     corr_pvals_all.append(corr['pvals'])
+                    is_tuned_all.append(is_tuned)
 
                 # Now add this into dictionary
-                for var, name in zip([locs_all, event_rates_all, pvals_all, corr_corrs_all, corr_pvals_all],
-                                     ["locs", "event_rates", "pvals", "corr_corrs", "corr_pvals"]):
+                for var, name in zip([locs_all, event_rates_all, pvals_all, corr_corrs_all, corr_pvals_all, is_tuned_all],
+                                     ["locs", "event_rates", "pvals", "corr_corrs", "corr_pvals", "is_tuned"]):
                     tuning_stability[gname][base_day][name].append(np.asarray(var))
 
     tuning_stability['days'] = days
@@ -1137,6 +1155,7 @@ def get_palettes(group: str in ['Group', 'Exp Group']):
 
 def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25, events='trial',
                 labelx=True, labely=True, labely2=True, sr_image=20, ax=None):
+    #NRK todo: change bs_rate plot to incorporate sample rate. currently too high!!!
     """Plot peri-event raster with tuning curve overlaid.
 
     :param raster: nevents x nframes array
