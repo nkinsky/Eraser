@@ -13,8 +13,11 @@ import matplotlib as mp
 import scipy.io as sio
 import scipy.ndimage as sim
 from os import path
-from session_directory import find_eraser_directory as get_dir
-from session_directory import load_session_list, master_directory
+try:
+    from session_directory import find_eraser_directory as get_dir
+    from session_directory import load_session_list, master_directory
+except ModuleNotFoundError:
+    print('Can''t find session_directory.py - must work out of current working directory')
 import er_plot_functions as er
 from mouse_sessions import make_session_list
 from plot_helper import ScrollPlot
@@ -38,6 +41,8 @@ def load_pf(mouse, arena, day, session_index=None, pf_file='placefields_cm1_manl
         dir_use = session_list[session_index]["Location"]
     elif session_index == 'cwd':
         dir_use = os.getcwd()
+    elif os.path.exists(session_index):
+        dir_use = session_index
 
     position_path = path.join(dir_use, pf_file)
     with open(position_path, 'rb') as file:
