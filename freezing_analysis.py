@@ -8,6 +8,8 @@ import scipy.io as sio
 from pickle import dump, load
 from pathlib import Path
 import pandas as pd
+from sklearn.datasets import load_digits
+from sklearn.decomposition import FastICA, PCA
 
 import er_plot_functions as erp
 import Placefields as pf
@@ -25,10 +27,15 @@ class MotionTuning:
     def __init__(self, mouse, arena, day, **kwargs):
         self.session = {'mouse': mouse, 'arena': arena, 'day': day}
 
+        # ID working directory
+        dir_use = pf.get_dir(mouse, arena, day)
+        self.dir_use = Path(dir_use)
+
         # Get PSAbool and freezing info
+        self.sr_image = pf.get_im_sample_rate(mouse, arena, day)
         self.PSAbool, self.freeze_bool = get_freeze_bool(mouse, arena, day, **kwargs)
-        self.event_rates = self.PSAbool.sum(axis=1)/self.PSAbool.shape[1]  # NRK todo: Adjust this to be an event rate, currently a prob of firing in a given frame.
-        self.freezing_indices, self.freezing_times = get_freezing_times(mouse, arena, day)
+        self.event_rates = self.PSAbool.sum(axis=1)/self.PSAbool.shape[1] * self.sr_image
+        self.freezing_indices, self.freezing_times = get_freezing_times(mouse, arena, day, zero_start=True)
 
         # Get initial estimate of motion-modulated vs freeze modulated cells - very rough
         # don't really use - calculate later through function if needs be!
@@ -38,14 +45,12 @@ class MotionTuning:
         # self.move_cells_rough = np.where(self.p['MMI'] < 0.05)[0]
 
         # Get sample rate
-        dir_use = pf.get_dir(mouse, arena, day)
-        self.dir_use = Path(dir_use)
-        im_data_file = path.join(dir_use, 'FinalOutput.mat')
-        im_data = sio.loadmat(im_data_file)
-        try:
-            self.sr_image = im_data['SampleRate'].squeeze()
-        except KeyError:
-            self.sr_image = 20
+        # im_data_file = path.join(dir_use, 'FinalOutput.mat')
+        # im_data = sio.loadmat(im_data_file)
+        # try:
+        #     self.sr_image = im_data['SampleRate'].squeeze()
+        # except KeyError:
+        #     self.sr_image = 20
 
         self.pe_rasters = {'freeze_onset': None, 'move_onset': None}
         self.perm_rasters = {'freeze_onset': None, 'move_onset': None}
@@ -822,6 +827,194 @@ class TuningGeneralization:
         pass
 
 
+class DimReduction:
+    """"Perform dimensionality reduction on cell activity to pull out coactive ensembles of cells"""
+    def __init__(self, mouse: str, arena: str, day: int, bin_size=0.5, nICs=20):
+        """Initialize ICA on data. Can also run PCA later if you want.
+
+        :param mouse: str
+        :param arena: str
+        :param day: int
+        :param bin_size: float, seconds, 0.5 = default
+        :param nICs: int, 20 = default
+        """
+
+        # Load in relevant data
+        self.PF = pf.load_pf(mouse, arena, day)
+        _, self.freeze_bool = get_freeze_bool(mouse, arena, day)
+        self.freeze_ind = np.where(self.freeze_bool)[0]
+        md = MotionTuning(mouse, arena, day)
+        self.freeze_starts = md.select_events('freeze_onset')
+        # Fix previously calculated occmap
+        self.PF.occmap = pf.remake_occmap(self.PF.xBin, self.PF.yBin, self.PF.runoccmap)
+
+        # First bin events
+        PSAsmooth, PSAbin = [], []
+        for psa in self.PF.PSAbool_align:
+            PSAbin.append(bin_array(psa, int(bin_size * self.PF.sr_image)))  # Create non-overlapping bin array
+        self.PSAbin = np.asarray(PSAbin)
+        # PSAbinz = stats.zscore(PSAbin, axis=1)  # Seems to give same results
+
+        # Now calculate covariance matrix for all your cells using binned array
+        self.cov_mat = np.cov(PSAbin)
+
+        # Run ICA
+        self._init_ICA(nICs=nICs)
+
+    def _init_ICA(self, nICs=20):
+        """Perform ICA"""
+        # Run ICA on the binned PSA
+        self.transformer = FastICA(n_components=nICs, random_state=0)
+        self.cov_trans = self.transformer.fit_transform(self.cov_mat)
+
+        # Make into a dataframe for easy plotting
+        self.ct_df = self.to_df(self.cov_trans)
+        self.activations = self.get_activations(self.ct_df, self.PF.PSAbool_align)
+
+        self.dim_red_type = 'ICA'
+        self.dim_prefix = 'IC'
+
+    def _init_PCA(self, nPCs=10):
+        """Perform PCA. Will overwrite ICA results"""
+        # Run PCA on binned PSA
+        self.transformer = PCA(n_components=nPCs)
+        self.cov_trans = self.transformer.fit_transform()
+
+        # Make into a dataframe for easy plotting
+        self.ct_df = self.to_df(self.cov_trans)
+
+        # Get activations of each PC
+        self.activations = self.get_activations(self.ct_df, self.PF.PSAbool_align)
+
+        self.dim_red_type = 'PCA'
+        self.dim_prefix = 'PC'
+
+    def plot_rasters(self):
+        """Plot rasters of assembly activation in relation to freezing"""
+        ncomps = self.activations.shape[0]  # Get # assemblies
+        ncols = 5
+        nrows = np.ceil(ncomps / ncols).astype(int)
+        fig, ax = plt.subplots(nrows, ncols)
+        fig.set_size_inches([3 * nrows, 15])
+
+        ntrials = self.freeze_starts.shape[0]
+        buffer = 6
+        for ida, (a, act) in enumerate(zip(ax.reshape(-1), self.activations)):
+            # Assemble raster for assembly and calculate mean activation
+            assemb_raster = get_PE_raster(act, event_starts=self.freeze_starts, buffer_sec=[buffer, buffer],
+                                             sr_image=self.PF.sr_image)
+            act_mean = act.mean()
+            # Hack to switch up signs - necessary?
+            if act_mean < 0:
+                assemb_raster = assemb_raster * -1
+                act_mean = act_mean * -1
+                suffix = 'f'
+            else:
+                suffix = ''
+
+            plot_raster(assemb_raster, cell_id=ida, bs_rate=act_mean, sr_image=self.PF.sr_image, ax=a,
+                        y2scale=0.35, y2zero=ntrials / 5, cmap='rocket')
+            a.set_title(f'ICA {ida}{suffix}')
+
+        return ax
+
+    def plot_PSA_w_activation(self, comp_plot: int ):
+        """Plots all calcium activity with activation of a particular assembly overlaid"""
+
+        # First grab activity of a given assembly
+        activation = self.activations[comp_plot]
+
+        # Next, sort PSA according to that assembly
+        isort = self.ct_df[comp_plot].argsort()
+        # PSAsort_bin = self.PSAbin[isort[::-1]]
+        PSAsort = self.PF.PSAbool_align[isort[::-1]]
+
+        # Now, set up the plot
+        fig, ax = plt.subplots()
+        fig.set_size_inches([6, 3.1])
+        sns.heatmap(PSAsort, ax=ax)
+        ax.set_title(f'{self.dim_prefix} # {comp_plot}')
+        # sns.heatmap(PSAsort_bin, ax=ax[1])
+        # ax[1].set_title('PSAbin ICA = ' + str(ica_plot))
+
+        # plot freezing times
+        ax.plot(self.freeze_ind, np.ones_like(self.freeze_ind), 'r.')
+        ax.plot(self.freeze_ind, np.ones_like(self.freeze_ind) * (self.PF.PSAbool_align.shape[0] / 2 - 20), 'r.')
+        ax.plot(self.freeze_ind, np.ones_like(self.freeze_ind) * (self.PF.PSAbool_align.shape[0] - 5), 'r.')
+        ax.plot(-activation * 100 + self.PF.PSAbool_align.shape[0] / 2, 'g-')
+        ax.plot(-self.PF.speed_sm*10 + self.PF.PSAbool_align.shape[0]/2, 'b-')
+
+        # Label things
+        ax.set_ylabel('Sorted cell #')
+        ax.set_xticklabels([f'{tick/self.PF.sr_image:0.0f}' for tick in ax.get_xticks()])
+        ax.set_xlabel('Time (s)')
+
+        return ax
+
+    def calc_speed_corr(self, plot=True):
+        """Correlate activation of each component with speed or project onto freezing to visualize any freeze-related
+        assemblies"""
+        # Now correlate with speed and multiply by freezing
+        freeze_proj, speed_corr = [], []
+        for act in self.activations:
+            act = np.asarray(act, dtype=float)
+            corr_mat = np.corrcoef(np.stack((act, self.PF.speed_sm), axis=1).T)
+            speed_corr.append(corr_mat[0, 1])
+            freeze_proj.append((act * self.freeze_bool).sum())
+
+        freeze_proj = np.asarray(freeze_proj)
+        speed_corr = np.asarray(speed_corr)
+
+        # Plot
+        if plot:
+            fig, ax = plt.subplots()
+            ax.scatter(speed_corr, freeze_proj)
+            ax.set_xlabel('speed correlation')
+            ax.set_ylabel('freeze PSAbool projection')
+            for idc, (x, y) in enumerate(zip(speed_corr, freeze_proj)):
+                ax.text(x, y, str(idc))
+            ax.set_title(self.dim_red_type)
+            sns.despine(ax=ax)
+
+        return speed_corr, freeze_proj
+
+    def activation_v_speed(self):
+        """Scatterplot of all components versus speed"""
+        figc, axc = plt.subplots(4, 5)
+        figc.set_size_inches([18, 12])
+        for ida, (act, a) in enumerate(zip(self.activations, axc.reshape(-1))):
+            a.scatter(self.PF.speed_sm, act, s=1)
+            a.set_title(f'{self.dim_prefix} #{ida}')
+            a.set_xlabel('Speed (cm/s)')
+            a.set_ylabel(self.dim_red_type + ' activation')
+        sns.despine(fig=figc)
+
+    @staticmethod
+    def to_df(cov_trans):
+        """Transforms a reduced covariance matrix array to a dataframe"""
+        ct_df = pd.DataFrame(cov_trans)  # Convert to df
+
+        # Add in cell # column - helpful for some plots later
+        ct_df["cell"] = [str(_) for _ in np.arange(0, ct_df.shape[0])]
+        cols = ct_df.columns.to_list()
+
+        # put cell # in first column
+        cols = cols[-1:] + cols[:-1]
+        ct_df = ct_df[cols]
+
+        return ct_df
+
+    @staticmethod
+    def get_activations(ct_df, PSAbool_align):
+        """Pull out activation of each component (IC or PC) over the course of the recording session"""
+        # Create array of activations
+        activation = []
+        for ica_weight in ct_df.iloc[:, ct_df.columns != 'cell'].values.swapaxes(0, 1):
+            activation.append(np.matmul(ica_weight, PSAbool_align))
+        act_array = np.asarray(activation)
+
+        return act_array
+
 def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
     """Get freeze cell stability tuning across days - probably should live in TuningStability class"""
     mice_groups = [err.learners, err.nonlearners, err.ani_mice_good]
@@ -876,21 +1069,28 @@ def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
     return tuning_stability
 
 
-def get_freezing_times(mouse, arena, day, **kwargs):
-    """Identify chunks of frames and timestamps during which the mouse was freezing
+def get_freezing_times(mouse, arena, day, zero_start=True, **kwargs):
+    """Identify chunks of frames and timestamps during which the mouse was freezing in behavioral movie!
 
     :param mouse: str
     :param arena: 'Open' or 'Shock'
     :param day: int from [-2, -1, 0, 4, 1, 2, 7]
+    :param zero_start: boolean, True (default) sets first behavioral time point to 0. Use if your imaging and behavioral
+    data are already aligned!
     :param kwargs: Freezing parameters to use. See er_plot_functions.detect_freezing()
     :return: freezing_epochs: list of start and end indices of each freezing epoch in behavioral video
              freezing_times: list of start and end times of each freezing epoch
     """
     dir_use = erp.get_dir(mouse, arena, day)
 
-    video_t = erp.get_timestamps(str(dir_use))
-    freezing, velocity = erp.detect_freezing(str(dir_use), arena=arena, **kwargs)
+    # Get freezing times
+    freezing, velocity, video_t = erp.detect_freezing(str(dir_use), arena=arena, return_time=True, **kwargs)
+    assert video_t.shape[0] == (velocity.shape[0] + 1), 'Mismatch between time and velocity arrays'
     video_t = video_t[:-1]  # Chop off last timepoint to make this the same length as freezing and velocity arrays
+
+    # Set first tracking time to 0 if specified
+    if zero_start:
+        video_t = video_t - video_t[0]
 
     # convert freezing indices to timestamps
     freezing_indices = erp.get_freezing_epochs(freezing)
@@ -899,13 +1099,15 @@ def get_freezing_times(mouse, arena, day, **kwargs):
     return np.asarray(freezing_indices), np.asarray(freezing_times)
 
 
-def align_freezing_to_PSA(PSAbool, sr_image, freezing, video_t):
+def align_freezing_to_PSA(PSAbool, sr_image, freezing, video_t, PSAaligned=True):
     """
     Align freezing times to neural data.
     :param PSAbool: nneurons x nframes_imaging boolean ndarray of putative spiking activity
     :param sr_image: frames/sec (int)
     :param freezing: output of er_plot_functions.detect_freezing() function.
     :param video_t: video frame timestamps, same shape as `freezing`
+    :param PSAaligned: bool, True (default) indicates PSAbool data is aligned to behavioral data and have the same
+    start time.
     :return: freeze_bool: boolean ndarray of shape (nframes_imaging,) indicating frames where animals was freezing.
     """
 
@@ -917,6 +1119,8 @@ def align_freezing_to_PSA(PSAbool, sr_image, freezing, video_t):
     # Set up boolean to match neural data shape
     freeze_bool = np.zeros(nframes, dtype='bool')
     PSAtime = np.arange(0, nframes)/sr_image
+    if PSAaligned:  # Make PSA start at behavioral video start time if data is already aligned
+        PSAtime = PSAtime + video_t[0]
 
     # Interpolate freezing times in video time to imaging time
     for freeze_time in freezing_times:
@@ -955,17 +1159,18 @@ def move_event_rate(PSAbool, freeze_bool):
 
 
 def get_freeze_bool(mouse, arena, day, **kwargs):
+    """ Gets boolean of freezing times aligned to neural data!"""
     # First get directory and neural data
     dir_use = erp.get_dir(mouse, arena, day)
     PF = pf.load_pf(mouse, arena, day)
 
     # Now get behavioral timestamps and freezing times
-    video_t = erp.get_timestamps(str(dir_use))
-    freezing, velocity = erp.detect_freezing(str(dir_use), arena=arena, **kwargs)
+    freezing, velocity, video_t = erp.detect_freezing(str(dir_use), arena=arena, return_time=True, **kwargs)
+    assert video_t.shape[0] == (velocity.shape[0] + 1), 'Mismatch between time and velocity arrays'
     video_t = video_t[:-1]  # Chop off last timepoint to make this the same length as freezing and velocity arrays
 
     # Now align freezing to neural data!
-    freeze_bool = align_freezing_to_PSA(PF.PSAbool_align, PF.sr_image, freezing, video_t)
+    freeze_bool = align_freezing_to_PSA(PF.PSAbool_align, PF.sr_image, freezing, video_t, PSAaligned=True)
 
     return PF.PSAbool_align, freeze_bool
 
@@ -1049,9 +1254,21 @@ def calc_sig_modulation(mouse, arena, day, nperms=1000, **kwargs):
     return p, ER
 
 
+def moving_average(arr, n=10):
+    """Get a moving average of calcium activity"""
+    ret = np.cumsum(arr, dtype=float)
+    ret[n:] = ret[n:] - ret[:-n]
+    return ret[n - 1:] / n
+
+
+def bin_array(arr, n=10):
+    """Get total counts of calcium activity in n frame bins (10 by default)"""
+    return np.add.reduceat(arr, np.arange(0, len(arr), n))
+
+
 def get_PE_raster(psa, event_starts, buffer_sec=[2, 2], sr_image=20):
     """ Gets peri-event rasters for +/-buffers sec from all event start times in event_starts
-    :param psa: activity for one cell at sr_image
+    :param psa: activity for one cell at sr_image, frame 0 = time 0 in event_starts
     :param event_starts: list of event start times in seconds.
     :param buffer_sec: float, sec or length 2 array/list of buffer times before/after
     :param sr_image: frame rate for imaging data
@@ -1154,7 +1371,7 @@ def get_palettes(group: str in ['Group', 'Exp Group']):
 
 
 def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25, events='trial',
-                labelx=True, labely=True, labely2=True, sr_image=20, ax=None):
+                labelx=True, labely=True, labely2=True, sr_image=20, ax=None, y2zero=0, cmap='rocket'):
     #NRK todo: change bs_rate plot to incorporate sample rate. currently too high!!!
     """Plot peri-event raster with tuning curve overlaid.
 
@@ -1169,6 +1386,7 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25,
     :param labely2: bool
     :param sr_image: int, default = 20 fps
     :param ax: ax to plot into, default = None -> create new fig
+    :param y2zero: location of y2 axis zero point in # trials
     :return:
     """
 
@@ -1181,31 +1399,31 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25,
     nevents, nframes = raster.shape
     buffer = np.floor(nframes / 2 / sr_image)
 
-    sns.heatmap(raster, ax=ax, cbar=False)  # plot raster
-    ax.plot(nevents - curve * nevents/y2scale, 'r-')  # plot tuning curve
+    sns.heatmap(raster, ax=ax, cbar=False, cmap=cmap)  # plot raster
+    ax.plot(nevents - curve * nevents/y2scale - y2zero, 'r-')  # plot tuning curve
     ax.axvline(nframes / 2, color='g')  # plot event time
     if bs_rate is not None:
-        ax.axhline(nevents - bs_rate * nevents/y2scale, color='g', linestyle='--')  # plot baseline rate
+        ax.axhline(nevents - bs_rate * nevents/y2scale - y2zero, color='g', linestyle='--')  # plot baseline rate
     ax.set_title('Cell ' + str(cell_id))
     if labelx:  # Label bottom row
         ax.set_xticks([0, nframes / 2, nframes])
         ax.set_xticklabels([str(-buffer), '0', str(buffer)])
         ax.set_xlabel('Time from ' + events + '(s)')
 
-    if np.any(sig_bins):  # add a start over all bins with significant tuning
-        curve_plot = nevents - curve * nevents/y2scale
+    if np.any(sig_bins):  # add a star/dot over all bins with significant tuning
+        curve_plot = nevents - curve * nevents/y2scale - y2zero
         # ax.plot(sig_bins, curve_plot[sig_bins] - 5, 'r*')
         ax.plot(sig_bins, np.ones_like(sig_bins), 'r.')
 
     if labely:  # Label left side
-        ax.set_yticks([0.5, nevents - 0.5])
-        ax.set_yticklabels(['0', str(nevents)])
-        ax.set_ylabel(events + ' #')
+            ax.set_yticks([0.5, nevents - 0.5])
+            ax.set_yticklabels(['0', str(nevents)])
+            ax.set_ylabel(events + ' #')
 
     secax = None
     if labely2:  # Add second axis and label
-        secax = ax.secondary_yaxis('right', functions=(lambda y1: y2scale * (nevents - y1) / nevents,
-                                                       lambda y: nevents * (1 - y / y2scale)))
+        secax = ax.secondary_yaxis('right', functions=(lambda y1: y2scale * (nevents - y1 - y2zero) / nevents,
+                                                       lambda y: nevents * (1 - y / y2scale) - y2zero))
         secax.set_yticks([0, y2scale])
         secax.tick_params(labelcolor='r')
         secax.set_ylabel(r'$p_{event}$', color='r')
@@ -1437,7 +1655,7 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')
-    mmd = MotionTuningMultiDay('Marble24', 'Shock', days=[-1, 4, 1, 2])
-    locs, event_rates, pvals, corr = mmd.get_tuning_loc_diff(143, base_day=1, base_arena='Shock')
+
+    DR = DimReduction('Marble07', 'Open', -2)
 
     pass
