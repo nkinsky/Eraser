@@ -269,8 +269,8 @@ def axis_on(ax):
         labelleft='on')
 
 
-def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, arena='Shock',
-                    pix2cm=0.0969):
+def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, arena='Shock', return_time=False,
+                    ds_method='interp'):
     # NK - need to update thresholds and min_freeze_duration above to reflect actual times/velocities,
     # NOT frames so that we can generalize between cages
     """
@@ -283,8 +283,12 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
             min_freeze_duration: also, the epoch needs to be longer than
                 this scalar. Frames.
                 plot_freezing: logical, whether you want to see the results.
+            return_time: returns third output of timestamps, default = False
+            ds_method: 'interpolate' (default) or 'decimate'. Decimate gives slightly smoother, un-aliased
+            values but has weird edge effects that can cause issues. Interpolate seems to be good enough.
         :return:
             freezing: boolean of if mouse is freezing that frame or not
+            velocity: float, same shape as freezing
     """
 
     pos = get_pos(dir_use)
@@ -298,13 +302,23 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
     # Downsample Cineplex data to approximately match freezeframe acquisition rate
     # Lucky for us 30 Hz / 3.75 Hz = 8!!!
     if arena == 'Open':
-        pos = decimate(pos, 8, axis=1, zero_phase=True, ftype='fir')
-        video_t = decimate(video_t, 8, zero_phase=True, ftype='fir')
+        t_int = np.arange(video_t[0], video_t[-1], 1 / 3.75)
+        if ds_method == 'decimate':
+            pos_ds = decimate(pos, 8, axis=1, zero_phase=True, ftype='fir')
+            pos, video_t = pos_ds, t_int
+        elif ds_method == 'interp':
+            posx_int = np.interp(t_int, video_t[:-1], pos[0, :])
+            posy_int = np.interp(t_int, video_t[:-1], pos[1, :])
+            pos_int = np.vstack((posx_int, posy_int))
+            pos, video_t = pos_int, t_int
 
         # Add in an extra point to the end of the time stamp in the event they end up the same
         # length after downsampling - bugfix
-        if pos.shape[1] == video_t.__len__():
+        assert pos.shape[1] >= video_t.shape[0], 'Mismatch between time and position arrays after downsampling'
+        if pos.shape[1] == video_t.shape[0]:
             video_t = np.append(video_t, video_t[-1])
+
+    pix2cm = get_conv_factors(arena)
 
     try:
         pos = pos*pix2cm  # convert to centimeters
@@ -323,13 +337,15 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
     # Get duration of freezing in frames.
     freezing_duration = np.diff(freezing_epochs)
 
-    # If any freezing epochs were less than ~3 seconds long (2.67 at SR = 3.75), get rid of
+    # If any freezing epochs were less than 2.67 seconds (10 frames) long (SR = 3.75), get rid of
     # them.
     for this_epoch in freezing_epochs:
         if np.diff(this_epoch) < min_freeze_duration:
             freezing[this_epoch[0]:this_epoch[1]] = False
-
-    return freezing, velocity
+    if not return_time:
+        return freezing, velocity
+    else:
+        return freezing, velocity, video_t
 
 
 def get_pos(dir_use):
@@ -574,7 +590,7 @@ def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
         # SR = 3.75  # frames/sec
 
     elif arena == 'Kelton':
-        pix2cm=0.13
+        pix2cm = 0.13
 
     # velocity_threshold = vthresh/pix2cm  # in pixels/sec
     # velocity_threshold = 1.5  # cm/sec
@@ -917,16 +933,7 @@ def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel
 
 
 if __name__ == '__main__':
-
-    # plot_all_freezing(err.control_mice)
-    pf_rot_plot('Marble06', 'Open', 1, 'Shock', 1, nshuf=100)
-    # x = np.asarray([0, 1, 2, 3, 4, 5, 4, 7, 3, 4, 5, 6, 4, 7, 2, 3, 5, 4, 1, 6, 7, 4, 2, 5, 1])
-    # data = np.random.normal(x, scale=1, size=x.shape)
-    # # scatterbar(data, x, group_names=[str(a) for a in x])
-    # open1 = np.random.normal(x, scale=1, size=x.shape)
-    # shock1 = np.random.normal(x, scale=1, size=x.shape) + 0.5
-    # open2 = np.random.normal(x, scale=1, size=x.shape)
-    # shock2 = np.random.normal(x, scale=1, size=x.shape) - 0.5
-    # pfcorr_compare(open1, shock1, open2, shock2, group_names=['Ctrl', 'Ani'], colors=['k', 'g'])
+    dir_use = get_dir('Marble07', 'Open', -2)
+    detect_freezing(dir_use, arena='Open')
 
     pass
