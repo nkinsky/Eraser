@@ -13,11 +13,11 @@ import matplotlib as mp
 import scipy.io as sio
 import scipy.ndimage as sim
 from os import path
-try:
-    from session_directory import find_eraser_directory as get_dir
-    from session_directory import load_session_list, master_directory
-except ModuleNotFoundError:
-    print('Can''t find session_directory.py - must work out of current working directory')
+
+import session_directory
+from session_directory import find_eraser_directory as get_dir
+from session_directory import load_session_list, master_directory, make_session_list
+session_list = load_session_list()
 import er_plot_functions as er
 from mouse_sessions import make_session_list
 from plot_helper import ScrollPlot
@@ -30,8 +30,6 @@ from skimage.transform import resize as sk_resize
 # Might want these later
 # import csv
 # import pandas as pd
-
-session_list = load_session_list()
 
 
 def load_pf(mouse, arena, day, session_index=None, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
@@ -663,6 +661,7 @@ def remake_occmap(xBin, yBin, runoccmap, good_bool: None or np.ndarray or list =
     occmap, _, _ = np.histogram2d(x_use, y_use, bins=[xEdges + 0.5, yEdges + 0.5])
     occmap = np.rot90(occmap, 1)
     return occmap
+
 
 class PlaceFieldObject:
     def __init__(self, tmap_us, tmap_gauss, xrun, yrun, PSAboolrun, occmap, runoccmap,

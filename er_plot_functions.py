@@ -16,15 +16,18 @@ from os import path
 import skvideo.io
 from glob import glob
 from session_directory import find_eraser_directory as get_dir
-from scipy.signal import decimate
 import session_directory as sd
+try:
+    sd.make_session_list()  # update session list
+except KeyError:
+    print('bad/empty SessionDirectories.csv file - must enter all directories manually')
+from scipy.signal import decimate
 import placefield_stability as pfs
 import scipy.stats as s
 from pathlib import Path
-sd.make_session_list()  # update session list
+
 plt.rcParams['pdf.fonttype'] = 42
 import helpers as hlp
-
 
 def display_frame(ax, vidfile):
 

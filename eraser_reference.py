@@ -44,7 +44,7 @@ plot_dir = '/Users/nkinsky/Dropbox/Imaging Project/Manuscripts/Eraser/Figures'  
 def get_comp_name():
     """Get computer name and path(s) to figure location and working directory"""
 
-    working_dir = ''
+    working_dir, comp_name, pathname, session_dir = '', '', '', '.'
     try:
         comp_name = environ['COMPUTERNAME']
     except KeyError:  # Above does NOT work for Unix-based systems
