@@ -874,6 +874,8 @@ class DimReduction:
         self.dim_red_type = 'ICA'
         self.dim_prefix = 'IC'
 
+        self.n_assemblies = nICs
+
     def _init_PCA(self, nPCs=10):
         """Perform PCA. Will overwrite ICA results"""
         # Run PCA on binned PSA
@@ -889,7 +891,85 @@ class DimReduction:
         self.dim_red_type = 'PCA'
         self.dim_prefix = 'PC'
 
-    def plot_rasters(self):
+        self.n_assemblies = nPCs
+
+    def plot_assembly_fields(self, assembly: int, ncells_plot: int = 7, tmap_type: str in ['sm', 'us'] = 'sm'):
+
+        assert assembly < self.n_assemblies, 'assembly must be less than # of ICs or PCs'
+
+        # Identify top ncells_plot cells that most contribute to the assembly
+        assemb_wts = self.ct_df.iloc[:, assembly + 1]
+        top_cells = np.argsort(np.abs(assemb_wts))[-ncells_plot:][::-1]
+
+        # Set up plots
+        nplots = ncells_plot + 1
+        nrows = np.ceil(nplots / 4).astype(int)
+        fig, ax = plt.subplots(nrows, 4)
+        fig.set_size_inches((nrows*5, 4.75))
+
+        # Plot assembly spatial tuning first
+        assemb_pf = self.make_assembly_field(assembly)
+        # pf.imshow_nan(assemb_pf, ax=ax[0][0])
+        ax[0][0].imshow(assemb_pf)
+        ax[0][0].set_title(self.dim_prefix + ' #' + str(assembly))
+        if tmap_type == 'sm':
+            tmap_use = self.PF.tmap_sm
+        elif tmap_type == 'us':
+            tmap_use = self.PF.tmap_us
+
+        for a, cell in zip(ax.reshape(-1)[1:nplots], top_cells):
+            # pf.imshow_nan(self.PF.tmap_sm[cell], ax=a)
+            a.imshow(tmap_use[cell])
+            a.set_title(f'Cell {cell} wt: {assemb_wts[cell]:0.3g}')
+        sns.despine(fig=fig, left=True, bottom=True)
+
+    def make_occ_map(self, type: str in ['run', 'occ', 'immobile', 'freeze']):
+        """Grab specific types of occupancy maps quickly and easily"""
+
+        if type == 'run':
+            occ_map_nan = self.PF.runoccmap.copy()
+        elif type == 'occ':
+            occ_map_nan = pf.remake_occmap(self.PF.xBin, self.PF.yBin, self.PF.runoccmap)
+        elif type == 'immobile':  # grab all immobility times
+            good_bool = np.bitwise_not(self.PF.isrunning)
+            occ_map_nan = pf.remake_occmap(self.PF.xBin, self.PF.yBin, self.PF.runoccmap, good_bool=good_bool)
+        elif type == 'freeze':  # grab only extended immobility times that count as actual freezing events
+            good_bool = self.freeze_bool
+            occ_map_nan = pf.remake_occmap(self.PF.xBin, self.PF.yBin, self.PF.runoccmap, good_bool=good_bool)
+
+        return occ_map_nan
+
+    def make_assembly_field(self, assembly: int):
+        map_use = 'occ'  # 'occ' or 'run'
+
+        # Bug below - runoccmap is occmap due to old bug in Placefields.placefields(). So I need to reconstruct it!
+        if map_use == 'occ':
+            occ_map_nan = pf.remake_occmap(self.PF.xBin, self.PF.yBin, self.PF.runoccmap)
+        elif map_use == 'run':
+            occ_map_nan = self.PF.runoccmap.copy()
+        occ_map_nan[occ_map_nan == 0] = np.nan
+
+        assemb_pf = np.zeros_like(np.rot90(self.PF.occmap, -1))
+        occ_map_check = np.zeros_like(np.rot90(self.PF.occmap, -1))
+        nx, ny = assemb_pf.shape
+
+        # Loop through each bin and add up assembly values in that bin
+        for xb in range(nx):
+            for yb in range(ny):
+                in_bin_bool = np.bitwise_and((self.PF.xBin - 1) == xb, (self.PF.yBin - 1) == yb)
+                assemb_pf[xb, yb] = self.activations[assembly][in_bin_bool].sum()
+                occ_map_check[xb, yb] = in_bin_bool.sum()
+
+        assemb_pf = np.rot90(assemb_pf, 1)
+        occ_map_check = np.rot90(occ_map_check, 1)
+        occ_map_check[occ_map_check == 0] = np.nan
+
+        assemb_pf = assemb_pf * self.PF.occmap / np.nansum(self.PF.occmap.reshape(-1))
+        assemb_pf[np.bitwise_or(self.PF.occmap == 0, np.isnan(self.PF.occmap))] = np.nan
+
+        return assemb_pf
+
+    def plot_rasters(self, buffer: int = 6):
         """Plot rasters of assembly activation in relation to freezing"""
         ncomps = self.activations.shape[0]  # Get # assemblies
         ncols = 5
@@ -898,7 +978,6 @@ class DimReduction:
         fig.set_size_inches([3 * nrows, 15])
 
         ntrials = self.freeze_starts.shape[0]
-        buffer = 6
         for ida, (a, act) in enumerate(zip(ax.reshape(-1), self.activations)):
             # Assemble raster for assembly and calculate mean activation
             assemb_raster = get_PE_raster(act, event_starts=self.freeze_starts, buffer_sec=[buffer, buffer],
@@ -918,7 +997,7 @@ class DimReduction:
 
         return ax
 
-    def plot_PSA_w_activation(self, comp_plot: int ):
+    def plot_PSA_w_activation(self, comp_plot: int):
         """Plots all calcium activity with activation of a particular assembly overlaid"""
 
         # First grab activity of a given assembly
@@ -1655,7 +1734,7 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')
-
     DR = DimReduction('Marble07', 'Open', -2)
+    DR.plot_assembly_fields(0)
 
     pass
