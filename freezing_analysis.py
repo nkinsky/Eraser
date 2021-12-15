@@ -839,6 +839,10 @@ class DimReduction:
         :param nICs: int, 20 = default
         """
 
+        self.mouse = mouse
+        self.arena = arena
+        self.day = day
+
         # Load in relevant data
         self.PF = pf.load_pf(mouse, arena, day)
         _, self.freeze_bool = get_freeze_bool(mouse, arena, day)
@@ -853,47 +857,94 @@ class DimReduction:
         for psa in self.PF.PSAbool_align:
             PSAbin.append(bin_array(psa, int(bin_size * self.PF.sr_image)))  # Create non-overlapping bin array
         self.PSAbin = np.asarray(PSAbin)
-        # PSAbinz = stats.zscore(PSAbin, axis=1)  # Seems to give same results
+        PSAbinz = stats.zscore(PSAbin, axis=1)  # Seems to give same results
 
         # Now calculate covariance matrix for all your cells using binned array
         self.cov_mat = np.cov(PSAbin)
+        self.cov_matz = np.cov(PSAbinz)
 
         # Run ICA
         self._init_ICA(nICs=nICs)
 
+    def _init_PCA_ICA(self, nPCs=50):
+        """Initialize asssemblies based on PCA/ICA method from Lopes dos Santos (2013) and later
+        van de Ven (2016) and Trouche (2016) """
+        # Run PCA on binned PSA
+        self.pca.transformer = PCA(n_components=nPCs)
+        self.pca.covz_trans = self.pca.transformer.fit_transform(self.cov_matz)
+
+        # Make into a dataframe for easy plotting
+        self.pca.ct_df = self.to_df(self.pca.covz_trans)
+
+        # Calculated threshold for significant PCs
+        q = self.PSAbinz.shape[1] / self.PSAbinz.shape[0]
+        rho2 = 1
+        self.pca.lambdamin = rho2 * np.square(1 - np.sqrt(1 / q))
+        self.pca.lambdamax = rho2 * np.square(1 + np.sqrt(1 / q))
+
+        # Identify assemblies whose eigenvalues exceed the threshold
+        self.pcaica.nA = np.max(np.where(self.pca.transformer.singular_values_ > self.pca.lambdamax)[0])
+
+        # Create PCA-reduced activity matrix
+        self.pcaica.psign = self.transformer.components_[0:self.pcaica.nA].T  # Grab top nA vector weights for neurons
+        self.pcaica.zproj = np.matmul(self.pcaica.psign.T, self.PSAbin)  # Project neurons onto top nA PCAs
+        self.pcaica.cov_zproj = np.cov(self.pcaica.zproj)  # Get covariance matrix of PCA-projected activity
+        self.pcaica.transformer = FastICA(random_state=0, whiten=False, max_iter=10000)  # Set up ICA
+        self.pcaica.w_mat = self.transformer.fit_transform(self.pcaica.cov_zproj)  # Fit it
+
+        # Get final weights of all neurons on PCA/ICA assemblies!
+        self.pcaica.v = np.matmul(self.pcaica.psign, self.pcaica.w_mat)
+
+        # Keep these around for easy plotting later AND to track which method you have used
+        self.dim_red_type = 'PCA/ICA'
+        self.dim_prefix = 'Assembly #'
+
     def _init_ICA(self, nICs=20):
         """Perform ICA"""
         # Run ICA on the binned PSA
-        self.transformer = FastICA(n_components=nICs, random_state=0)
-        self.cov_trans = self.transformer.fit_transform(self.cov_mat)
+        self.ica.transformer = FastICA(n_components=nICs, random_state=0)
+        self.ica.cov_trans = self.ica.transformer.fit_transform(self.cov_matz)
 
         # Make into a dataframe for easy plotting
-        self.ct_df = self.to_df(self.cov_trans)
-        self.activations = self.get_activations(self.ct_df, self.PF.PSAbool_align)
+        self.ica.ct_df = self.to_df(self.cov_trans)
+        self.ica.activations = self.get_activations(self.ica.ct_df, self.PF.PSAbool_align)
 
+        # Keep for plotting? Or is this unnecessary?
         self.dim_red_type = 'ICA'
         self.dim_prefix = 'IC'
-
-        self.n_assemblies = nICs
+        self.ica.nA = nICs
 
     def _init_PCA(self, nPCs=10):
         """Perform PCA. Will overwrite ICA results"""
         # Run PCA on binned PSA
-        self.transformer = PCA(n_components=nPCs)
-        self.cov_trans = self.transformer.fit_transform()
+        self.pca.transformer = PCA(n_components=nPCs)
+        self.pca.cov_trans = self.pca.transformer.fit_transform(self.cov_matz)
 
         # Make into a dataframe for easy plotting
-        self.ct_df = self.to_df(self.cov_trans)
+        self.pca.ct_df = self.to_df(self.pca.cov_trans)
 
         # Get activations of each PC
-        self.activations = self.get_activations(self.ct_df, self.PF.PSAbool_align)
+        self.pca.activations = self.get_activations(self.pca.ct_df, self.PF.PSAbool_align)
 
         self.dim_red_type = 'PCA'
         self.dim_prefix = 'PC'
+        self.pca.nA = nPCs
 
-        self.n_assemblies = nPCs
+    def get_titles(self, dr_type: str in ['pcaica', 'pca', 'ica']):
+        """Get plotting titles for different DR types"""
+        if dr_type == 'pcaica':
+            dim_red_type = 'PCA/ICA'
+            dim_prefix = 'Assembly'
+        elif dr_type == 'pca':
+            dim_red_type = 'PCA'
+            dim_prefix = 'PC'
+        elif dr_type == 'ica':
+            dim_red_type = 'ICA'
+            dim_prefix = 'IC'
 
-    def plot_assembly_fields(self, assembly: int, ncells_plot: int = 7, tmap_type: str in ['sm', 'us'] = 'sm'):
+    def plot_assembly_fields(self, assembly: int, ncells_plot: int = 7,
+                             dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica',
+                             tmap_type: str in ['sm', 'us'] = 'sm', isrunning: bool = False):
 
         assert assembly < self.n_assemblies, 'assembly must be less than # of ICs or PCs'
 
@@ -908,7 +959,7 @@ class DimReduction:
         fig.set_size_inches((nrows*5, 4.75))
 
         # Plot assembly spatial tuning first
-        assemb_pf = self.make_assembly_field(assembly)
+        assemb_pf = self.make_assembly_field(assembly, dr_type, isrunning=isrunning)
         # pf.imshow_nan(assemb_pf, ax=ax[0][0])
         ax[0][0].imshow(assemb_pf)
         ax[0][0].set_title(self.dim_prefix + ' #' + str(assembly))
@@ -939,24 +990,27 @@ class DimReduction:
 
         return occ_map_nan
 
-    def make_assembly_field(self, assembly: int):
-        map_use = 'occ'  # 'occ' or 'run'
+    def make_assembly_field(self, assembly: int, dr_type: str in ['pcaica', 'pca', 'ica'], isrunning: bool = False):
 
-        # Bug below - runoccmap is occmap due to old bug in Placefields.placefields(). So I need to reconstruct it!
-        if map_use == 'occ':
-            occ_map_nan = pf.remake_occmap(self.PF.xBin, self.PF.yBin, self.PF.runoccmap)
-        elif map_use == 'run':
-            occ_map_nan = self.PF.runoccmap.copy()
+        # Grab occ map to get correct size and shape for 2-d assembly field
+        occ_map_nan = self.PF.runoccmap.copy()
         occ_map_nan[occ_map_nan == 0] = np.nan
 
+        # Initialize maps - keep occ_map_check in case you change code later and need a sanity check!
         assemb_pf = np.zeros_like(np.rot90(self.PF.occmap, -1))
         occ_map_check = np.zeros_like(np.rot90(self.PF.occmap, -1))
         nx, ny = assemb_pf.shape
+
+        # Get appropriate activations!
+        ## NRK todo: pickup here from 12/15/21 - need to make sure you are identifying activations of PCA/ICA properly!
+        # using different nomenclature than PCA/ICA - standardize it!
 
         # Loop through each bin and add up assembly values in that bin
         for xb in range(nx):
             for yb in range(ny):
                 in_bin_bool = np.bitwise_and((self.PF.xBin - 1) == xb, (self.PF.yBin - 1) == yb)
+                if isrunning:
+                    in_bin_bool = np.bitwise_and(in_bin_bool, self.PF.isrunning)
                 assemb_pf[xb, yb] = self.activations[assembly][in_bin_bool].sum()
                 occ_map_check[xb, yb] = in_bin_bool.sum()
 
