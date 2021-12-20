@@ -864,17 +864,16 @@ class DimReduction:
         self.cov_matz = np.cov(PSAbinz)
 
         # Run ICA
-        self._init_ICA(nICs=nICs)
+        self._PCA_ICA(nICs=nICs)
 
     def _init_PCA_ICA(self, nPCs=50):
         """Initialize asssemblies based on PCA/ICA method from Lopes dos Santos (2013) and later
         van de Ven (2016) and Trouche (2016) """
         # Run PCA on binned PSA
-        self.pca.transformer = PCA(n_components=nPCs)
-        self.pca.covz_trans = self.pca.transformer.fit_transform(self.cov_matz)
+        self.pca = PCA(self.cov_matz, nPCs)
 
         # Make into a dataframe for easy plotting
-        self.pca.ct_df = self.to_df(self.pca.covz_trans)
+        self.pca.df = self.to_df(self.pca.covz_trans)
 
         # Calculated threshold for significant PCs
         q = self.PSAbinz.shape[1] / self.PSAbinz.shape[0]
@@ -883,55 +882,51 @@ class DimReduction:
         self.pca.lambdamax = rho2 * np.square(1 + np.sqrt(1 / q))
 
         # Identify assemblies whose eigenvalues exceed the threshold
-        self.pcaica.nA = np.max(np.where(self.pca.transformer.singular_values_ > self.pca.lambdamax)[0])
+        self.nA = np.max(np.where(self.pca.transformer.singular_values_ > self.pca.lambdamax)[0])
+        assert self.nA < nPCs, '# assemblies = # PCs, re-run with a larger value for nPCs'
 
         # Create PCA-reduced activity matrix
-        self.pcaica.psign = self.transformer.components_[0:self.pcaica.nA].T  # Grab top nA vector weights for neurons
-        self.pcaica.zproj = np.matmul(self.pcaica.psign.T, self.PSAbin)  # Project neurons onto top nA PCAs
-        self.pcaica.cov_zproj = np.cov(self.pcaica.zproj)  # Get covariance matrix of PCA-projected activity
-        self.pcaica.transformer = FastICA(random_state=0, whiten=False, max_iter=10000)  # Set up ICA
-        self.pcaica.w_mat = self.transformer.fit_transform(self.pcaica.cov_zproj)  # Fit it
+        self.psign = self.transformer.components_[0:self.nA].T  # Grab top nA vector weights for neurons
+        self.zproj = np.matmul(self.psign.T, self.PSAbin)  # Project neurons onto top nA PCAs
+        self.cov_zproj = np.cov(self.zproj)  # Get covariance matrix of PCA-projected activity
+        self.transformer = FastICA(random_state=0, whiten=False, max_iter=10000)  # Set up ICA
+        self.w_mat = self.transformer.fit_transform(self.cov_zproj)  # Fit it
 
         # Get final weights of all neurons on PCA/ICA assemblies!
-        self.pcaica.v = np.matmul(self.pcaica.psign, self.pcaica.w_mat)
+        self.v = np.matmul(self.psign, self.w_mat)
 
-        # Keep these around for easy plotting later AND to track which method you have used
-        self.dim_red_type = 'PCA/ICA'
-        self.dim_prefix = 'Assembly #'
+        # NRK todo: verify this works! Slightly different than other methods!
+        # Dump into dataframe and get assembly activations over time
+        self.df = self.to_df(self.v)
+        self.activations = self.calc_activations('pcaica')
 
     def _init_ICA(self, nICs=20):
         """Perform ICA"""
         # Run ICA on the binned PSA
-        self.ica.transformer = FastICA(n_components=nICs, random_state=0)
-        self.ica.cov_trans = self.ica.transformer.fit_transform(self.cov_matz)
+        self.ica = ICA(self.cov_matz, nICs)
 
         # Make into a dataframe for easy plotting
-        self.ica.ct_df = self.to_df(self.cov_trans)
-        self.ica.activations = self.get_activations(self.ica.ct_df, self.PF.PSAbool_align)
+        self.ica.df = self.to_df(self.cov_trans)
 
-        # Keep for plotting? Or is this unnecessary?
-        self.dim_red_type = 'ICA'
-        self.dim_prefix = 'IC'
+        # Get activations for each IC over time
+        self.ica.activations = self.calc_activations('ica')
         self.ica.nA = nICs
 
-    def _init_PCA(self, nPCs=10):
+    def _init_PCA(self, nPCs=50):
         """Perform PCA. Will overwrite ICA results"""
         # Run PCA on binned PSA
-        self.pca.transformer = PCA(n_components=nPCs)
-        self.pca.cov_trans = self.pca.transformer.fit_transform(self.cov_matz)
+        self.pca = PCA(self.cov_matz, nPCs)
 
         # Make into a dataframe for easy plotting
-        self.pca.ct_df = self.to_df(self.pca.cov_trans)
+        self.pca.df = self.to_df(self.pca.cov_trans)
 
         # Get activations of each PC
-        self.pca.activations = self.get_activations(self.pca.ct_df, self.PF.PSAbool_align)
-
-        self.dim_red_type = 'PCA'
-        self.dim_prefix = 'PC'
+        self.pca.activations = self.calc_activations('pca')
         self.pca.nA = nPCs
 
-    def get_titles(self, dr_type: str in ['pcaica', 'pca', 'ica']):
-        """Get plotting titles for different DR types"""
+    @staticmethod
+    def get_titles(dr_type: str in ['pcaica', 'pca', 'ica']):
+        """Get plotting titles for different DR types - not sure if this is really used!"""
         if dr_type == 'pcaica':
             dim_red_type = 'PCA/ICA'
             dim_prefix = 'Assembly'
@@ -942,14 +937,17 @@ class DimReduction:
             dim_red_type = 'ICA'
             dim_prefix = 'IC'
 
+        return dim_red_type, dim_prefix
+
     def plot_assembly_fields(self, assembly: int, ncells_plot: int = 7,
                              dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica',
                              tmap_type: str in ['sm', 'us'] = 'sm', isrunning: bool = False):
 
-        assert assembly < self.n_assemblies, 'assembly must be less than # of ICs or PCs'
+        assert assembly < self.get_nA(dr_type), 'assembly must be less than # of ICs or PCs'
 
         # Identify top ncells_plot cells that most contribute to the assembly
-        assemb_wts = self.ct_df.iloc[:, assembly + 1]
+        df = self.get_df(dr_type)
+        assemb_wts = df.iloc[:, assembly + 1]
         top_cells = np.argsort(np.abs(assemb_wts))[-ncells_plot:][::-1]
 
         # Set up plots
@@ -962,12 +960,15 @@ class DimReduction:
         assemb_pf = self.make_assembly_field(assembly, dr_type, isrunning=isrunning)
         # pf.imshow_nan(assemb_pf, ax=ax[0][0])
         ax[0][0].imshow(assemb_pf)
-        ax[0][0].set_title(self.dim_prefix + ' #' + str(assembly))
+
+        _, dim_prefix = self.get_titles(dr_type)
+        ax[0][0].set_title(dim_prefix + ' #' + str(assembly))
         if tmap_type == 'sm':
             tmap_use = self.PF.tmap_sm
         elif tmap_type == 'us':
             tmap_use = self.PF.tmap_us
 
+        # Plot each cell's tuning also
         for a, cell in zip(ax.reshape(-1)[1:nplots], top_cells):
             # pf.imshow_nan(self.PF.tmap_sm[cell], ax=a)
             a.imshow(tmap_use[cell])
@@ -1002,8 +1003,7 @@ class DimReduction:
         nx, ny = assemb_pf.shape
 
         # Get appropriate activations!
-        ## NRK todo: pickup here from 12/15/21 - need to make sure you are identifying activations of PCA/ICA properly!
-        # using different nomenclature than PCA/ICA - standardize it!
+        activations = self.get_activations(dr_type)
 
         # Loop through each bin and add up assembly values in that bin
         for xb in range(nx):
@@ -1011,7 +1011,7 @@ class DimReduction:
                 in_bin_bool = np.bitwise_and((self.PF.xBin - 1) == xb, (self.PF.yBin - 1) == yb)
                 if isrunning:
                     in_bin_bool = np.bitwise_and(in_bin_bool, self.PF.isrunning)
-                assemb_pf[xb, yb] = self.activations[assembly][in_bin_bool].sum()
+                assemb_pf[xb, yb] = activations[assembly][in_bin_bool].sum()
                 occ_map_check[xb, yb] = in_bin_bool.sum()
 
         assemb_pf = np.rot90(assemb_pf, 1)
@@ -1023,19 +1023,23 @@ class DimReduction:
 
         return assemb_pf
 
-    def plot_rasters(self, buffer: int = 6):
+    def plot_rasters(self, dr_type: str in ['pcaica', 'pca', 'ica'], buffer: int = 6):
         """Plot rasters of assembly activation in relation to freezing"""
-        ncomps = self.activations.shape[0]  # Get # assemblies
+
+        # Get appropriate activations
+        activations = self.get_activations(dr_type)
+
+        ncomps = activations.shape[0]  # Get # assemblies
         ncols = 5
         nrows = np.ceil(ncomps / ncols).astype(int)
         fig, ax = plt.subplots(nrows, ncols)
         fig.set_size_inches([3 * nrows, 15])
 
         ntrials = self.freeze_starts.shape[0]
-        for ida, (a, act) in enumerate(zip(ax.reshape(-1), self.activations)):
+        for ida, (a, act) in enumerate(zip(ax.reshape(-1), activations)):
             # Assemble raster for assembly and calculate mean activation
             assemb_raster = get_PE_raster(act, event_starts=self.freeze_starts, buffer_sec=[buffer, buffer],
-                                             sr_image=self.PF.sr_image)
+                                          sr_image=self.PF.sr_image)
             act_mean = act.mean()
             # Hack to switch up signs - necessary?
             if act_mean < 0:
@@ -1051,14 +1055,18 @@ class DimReduction:
 
         return ax
 
-    def plot_PSA_w_activation(self, comp_plot: int):
+    def plot_PSA_w_activation(self, comp_plot: int, dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica'):
         """Plots all calcium activity with activation of a particular assembly overlaid"""
 
+        # Get appropriate activations
+        activations = self.get_activations(dr_type)
+
         # First grab activity of a given assembly
-        activation = self.activations[comp_plot]
+        activation = activations[comp_plot]
 
         # Next, sort PSA according to that assembly
-        isort = self.ct_df[comp_plot].argsort()
+        df = self.get_df(dr_type)
+        isort = df[comp_plot].argsort()
         # PSAsort_bin = self.PSAbin[isort[::-1]]
         PSAsort = self.PF.PSAbool_align[isort[::-1]]
 
@@ -1066,7 +1074,8 @@ class DimReduction:
         fig, ax = plt.subplots()
         fig.set_size_inches([6, 3.1])
         sns.heatmap(PSAsort, ax=ax)
-        ax.set_title(f'{self.dim_prefix} # {comp_plot}')
+        _, dim_prefix = self.get_titles(dr_type)
+        ax.set_title(f'{dim_prefix} # {comp_plot}')
         # sns.heatmap(PSAsort_bin, ax=ax[1])
         # ax[1].set_title('PSAbin ICA = ' + str(ica_plot))
 
@@ -1084,12 +1093,16 @@ class DimReduction:
 
         return ax
 
-    def calc_speed_corr(self, plot=True):
+    def calc_speed_corr(self, plot=True, dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica'):
         """Correlate activation of each component with speed or project onto freezing to visualize any freeze-related
         assemblies"""
+
+        # Get appropriate activations
+        activations = self.get_activations(dr_type)
+
         # Now correlate with speed and multiply by freezing
         freeze_proj, speed_corr = [], []
-        for act in self.activations:
+        for act in activations:
             act = np.asarray(act, dtype=float)
             corr_mat = np.corrcoef(np.stack((act, self.PF.speed_sm), axis=1).T)
             speed_corr.append(corr_mat[0, 1])
@@ -1106,47 +1119,103 @@ class DimReduction:
             ax.set_ylabel('freeze PSAbool projection')
             for idc, (x, y) in enumerate(zip(speed_corr, freeze_proj)):
                 ax.text(x, y, str(idc))
-            ax.set_title(self.dim_red_type)
+            dim_red_type, _ = self.get_titles(dr_type)
+            ax.set_title(dim_red_type)
             sns.despine(ax=ax)
 
         return speed_corr, freeze_proj
 
-    def activation_v_speed(self):
+    def activation_v_speed(self, dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica'):
         """Scatterplot of all components versus speed"""
+
+        # Get appropriate activations
+        activations = self.get_activations(dr_type)
+
         figc, axc = plt.subplots(4, 5)
         figc.set_size_inches([18, 12])
-        for ida, (act, a) in enumerate(zip(self.activations, axc.reshape(-1))):
+        dim_red_type, dim_prefix = self.get_titles(dr_type)
+        for ida, (act, a) in enumerate(zip(activations, axc.reshape(-1))):
             a.scatter(self.PF.speed_sm, act, s=1)
-            a.set_title(f'{self.dim_prefix} #{ida}')
+            a.set_title(f'{dim_prefix} #{ida}')
             a.set_xlabel('Speed (cm/s)')
-            a.set_ylabel(self.dim_red_type + ' activation')
+            a.set_ylabel(dim_red_type + ' activation')
         sns.despine(fig=figc)
 
     @staticmethod
     def to_df(cov_trans):
         """Transforms a reduced covariance matrix array to a dataframe"""
-        ct_df = pd.DataFrame(cov_trans)  # Convert to df
+        df = pd.DataFrame(cov_trans)  # Convert to df
 
         # Add in cell # column - helpful for some plots later
-        ct_df["cell"] = [str(_) for _ in np.arange(0, ct_df.shape[0])]
-        cols = ct_df.columns.to_list()
+        df["cell"] = [str(_) for _ in np.arange(0, df.shape[0])]
+        cols = df.columns.to_list()
 
         # put cell # in first column
         cols = cols[-1:] + cols[:-1]
-        ct_df = ct_df[cols]
+        df = df[cols]
 
-        return ct_df
+        return df
 
-    @staticmethod
-    def get_activations(ct_df, PSAbool_align):
+    def calc_activations(self, dr_type: str in ['pcaica', 'pca', 'ica']):
         """Pull out activation of each component (IC or PC) over the course of the recording session"""
+
+        # Get appropriate dataframe
+        if dr_type == 'pcaica':
+            df = self.df
+        else:
+            df = getattr(self, dr_type).df
+
         # Create array of activations
         activation = []
-        for ica_weight in ct_df.iloc[:, ct_df.columns != 'cell'].values.swapaxes(0, 1):
-            activation.append(np.matmul(ica_weight, PSAbool_align))
+        for ica_weight in df.iloc[:, df.columns != 'cell'].values.swapaxes(0, 1):
+            activation.append(np.matmul(ica_weight, self.PSAbool_align))
         act_array = np.asarray(activation)
 
         return act_array
+
+    def get_activations(self, dr_type: str in ['pcaica', 'pca', 'ica']):
+
+        if dr_type == 'pcaica':
+            activations = self.activations
+        else:
+            activations = getattr(self, dr_type).activations
+
+        return activations
+
+    def get_nA(self, dr_type: str in ['pcaica', 'pca', 'ica']):
+
+        if dr_type == 'pcaica':
+            nA = self.nA
+        else:
+            nA = getattr(self, dr_type).nA
+
+        return nA
+
+    def get_df(self, dr_type: str in ['pcaica', 'pca', 'ica']):
+
+        if dr_type == 'pcaica':
+            df = self.df
+        else:
+            df = getattr(self, dr_type).df
+
+        return df
+
+
+class PCA:
+    def __init__(self, cov_matz: np.ndarray, nPCs: int = 50):
+        """Perform PCA on z-scored covariance matrix"""
+        # Run PCA on binned PSA
+        self.transformer = PCA(n_components=nPCs)
+        self.cov_trans = self.transformer.fit_transform(cov_matz)
+
+
+class ICA:
+    def __init__(self, cov_matz: np.ndarray, nICs: int = 20):
+        """Perform ICA on z-scored covariance matrix"""
+        # Run ICA on the binned PSA
+        self.transformer = FastICA(n_components=nICs, random_state=0)
+        self.cov_trans = self.transformer.fit_transform(cov_matz)
+
 
 def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
     """Get freeze cell stability tuning across days - probably should live in TuningStability class"""
