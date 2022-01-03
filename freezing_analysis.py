@@ -1605,7 +1605,7 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25,
     ax.plot(nevents - curve * nevents/y2scale - y2zero, 'r-')  # plot tuning curve
     ax.axvline(nframes / 2, color='g')  # plot event time
     if bs_rate is not None:
-        ax.axhline(nevents - bs_rate * nevents/y2scale - y2zero, color='g', linestyle='--')  # plot baseline rate
+        ax.axhline(nevents - bs_rate / sr_image * nevents/y2scale - y2zero, color='g', linestyle='--')  # plot baseline rate
     ax.set_title('Cell ' + str(cell_id))
     if labelx:  # Label bottom row
         ax.set_xticks([0, nframes / 2, nframes])
