@@ -9,7 +9,8 @@ from pickle import dump, load
 from pathlib import Path
 import pandas as pd
 from sklearn.datasets import load_digits
-from sklearn.decomposition import FastICA, PCA
+from sklearn.decomposition import FastICA as skFastICA
+from sklearn.decomposition import PCA as skPCA
 
 import er_plot_functions as erp
 import Placefields as pf
@@ -73,7 +74,7 @@ class MotionTuning:
 
         return ntuned/ntotal
 
-    def gen_pe_rasters(self, events='freeze_onset', buffer_sec=[2, 2]):
+    def gen_pe_rasters(self, events='freeze_onset', buffer_sec=(2, 2)):
         """Generate the rasters for all cells and dump them into a dictionary"""
         # Get appropriate event times to use
         if events in ['freeze_onset', 'move_onset']:
@@ -87,7 +88,7 @@ class MotionTuning:
 
         return pe_rasters
 
-    def gen_perm_rasters(self, events='freeze_onset', buffer_sec=[2, 2], nperm=1000):
+    def gen_perm_rasters(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000):
         """Generate shuffled rasters and dump them into a dictionary"""
         # Get appropriate cells and event times to use
         event_starts = self.select_events(events)
@@ -100,10 +101,9 @@ class MotionTuning:
 
         return perm_rasters
 
-    def get_tuning_sig(self, events='freeze_onset', buffer_sec=[2, 2], nperm=1000):
+    def get_tuning_sig(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000):
         """This function will calculate significance values by comparing event-centered tuning curves to
         chance (calculated from circular permutation of neural activity).
-        :param cells:
         :param events:
         :param buffer_sec:
         :return:
@@ -139,7 +139,7 @@ class MotionTuning:
 
         return pval
 
-    def get_sig_neurons(self, events='freeze_onset', buffer_sec=[2, 2], nperm=1000,
+    def get_sig_neurons(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000,
                         alpha=0.01, nbins=3, active_prop=0.25):
         """Find freezing neurons as those which have sig < alpha for nbins (consecutive) or more AND are active on
         at least active_prop of events."""
@@ -163,7 +163,7 @@ class MotionTuning:
 
         return sig_neurons
 
-    def check_rasters_run(self, events='freeze_onset', buffer_sec=[2, 2],  nperm=1000):
+    def check_rasters_run(self, events='freeze_onset', buffer_sec=(2, 2),  nperm=1000):
         """ Verifies if you have already created rasters and permuted rasters and checks to make sure they match.
 
         :param cells:
@@ -211,8 +211,33 @@ class MotionTuning:
         with open(self.dir_use / "sig_motion_tuning.pkl", 'rb') as f:
             self.sig = load(f)
 
-    def plot_pe_rasters(self, cells='freeze_fine', events='freeze_onset', buffer_sec=[2, 2], **kwargs):
-        """ Plot rasters of cells at either movement or freezing onsets.
+    def select_cells(self, cells, buffer_sec=(2, 2), **kwargs):
+        """Select different types of cells for plotting
+
+        :param cells: 'freeze_rough', 'move_rough', 'freeze_fine', 'move_fine', or list of cells to use
+        'rough' selects cells that are more tuned to ALL freezing (or moving) times, 'fine' zeros in on
+        times within buffer_sec of freezing (or moving) onset
+        :param buffer_sec: time before/after freeze (or move) onset to consider when calculating 'fine' tuning
+        :param kwargs: See .get_sig_tuning for tweaking motion tuning parameters
+        :return: list of cell ids to use that meet the criteria
+        """
+
+        # Note, rough tunings not calculated by default, but are kept here in case I need them later
+        if cells == 'freeze_rough':
+            cell_ids = self.freeze_cells_rough
+        elif cells == 'move_rough':
+            cell_ids = self.move_cells_rough
+        elif cells == 'freeze_fine':
+            cell_ids = self.get_sig_neurons(events='freeze_onset', buffer_sec=buffer_sec, **kwargs)
+        elif cells == 'move_fine':
+            cell_ids = self.get_sig_neurons(events='move_onset', buffer_sec=buffer_sec, **kwargs)
+        elif isinstance(cells, np.ndarray) or isinstance(cells, list):
+            cell_ids = cells
+
+        return cell_ids
+
+    def plot_pe_rasters(self, cells='freeze_fine', events='freeze_onset', buffer_sec=(2, 2), **kwargs):
+        """Plot rasters of cells at either movement or freezing onsets.
 
         :param cells: str to auto-select either cells that have significant tuning to move or freeze onset
         at a fine ('move_fine' or 'freeze_fine' calculated with buffer_sec of motion/freezing onset)
@@ -224,17 +249,7 @@ class MotionTuning:
         :return:
         """
 
-        # NRK todo: better yet, fold this into a wrapper function. User must specify cells to plot.
-        if cells == 'freeze_rough':
-            cell_ids = self.freeze_cells_rough
-        elif cells == 'move_rough':
-            cell_ids = self.move_cells_rough
-        elif cells == 'freeze_fine':
-            cell_ids = self.get_sig_neurons(events='freeze_onset', buffer_sec=buffer_sec, **kwargs)
-        elif cells == 'move_fine':
-            cell_ids = self.get_sig_neurons(events='move_onset', buffer_sec=buffer_sec, **kwargs)
-        elif isinstance(cells, np.ndarray) or isinstance(cells, list):
-            cell_ids = cells
+        cell_ids = self.select_cells(cells) # grab cells to use
         raster_use = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)[cell_ids]
         baseline_rates = self.event_rates[cell_ids]
 
@@ -425,7 +440,8 @@ class MotionTuningMultiDay:
         Assembles all neuron mappings from base day to other days in self.days
         :param base_day:
         :param base_arena:
-        :param batch_map: bool, how to register neurons across day: via batch map (False) or direct mapping (True, default).
+        :param batch_map: bool, how to register neurons across day: via batch map (False)
+        or direct mapping (True, default).
         :return:
         """
 
@@ -829,14 +845,15 @@ class TuningGeneralization:
 
 class DimReduction:
     """"Perform dimensionality reduction on cell activity to pull out coactive ensembles of cells"""
-    def __init__(self, mouse: str, arena: str, day: int, bin_size=0.5, nICs=20):
+    def __init__(self, mouse: str, arena: str, day: int, bin_size: float = 0.5, nPCs: int = 50,
+                 tol=1e-4):
         """Initialize ICA on data. Can also run PCA later if you want.
 
         :param mouse: str
         :param arena: str
         :param day: int
         :param bin_size: float, seconds, 0.5 = default
-        :param nICs: int, 20 = default
+        :param nPCs: int, 50 = default
         """
 
         self.mouse = mouse
@@ -854,19 +871,20 @@ class DimReduction:
 
         # First bin events
         PSAsmooth, PSAbin = [], []
+        self.bin_size = bin_size
         for psa in self.PF.PSAbool_align:
             PSAbin.append(bin_array(psa, int(bin_size * self.PF.sr_image)))  # Create non-overlapping bin array
         self.PSAbin = np.asarray(PSAbin)
-        PSAbinz = stats.zscore(PSAbin, axis=1)  # Seems to give same results
+        self.PSAbinz = stats.zscore(PSAbin, axis=1)  # Seems to give same results
 
         # Now calculate covariance matrix for all your cells using binned array
-        self.cov_mat = np.cov(PSAbin)
-        self.cov_matz = np.cov(PSAbinz)
+        self.cov_mat = np.cov(self.PSAbin)
+        self.cov_matz = np.cov(self.PSAbinz)
 
         # Run ICA
-        self._PCA_ICA(nICs=nICs)
+        self._init_PCA_ICA(nPCs=nPCs)
 
-    def _init_PCA_ICA(self, nPCs=50):
+    def _init_PCA_ICA(self, nPCs):
         """Initialize asssemblies based on PCA/ICA method from Lopes dos Santos (2013) and later
         van de Ven (2016) and Trouche (2016) """
         # Run PCA on binned PSA
@@ -886,10 +904,10 @@ class DimReduction:
         assert self.nA < nPCs, '# assemblies = # PCs, re-run with a larger value for nPCs'
 
         # Create PCA-reduced activity matrix
-        self.psign = self.transformer.components_[0:self.nA].T  # Grab top nA vector weights for neurons
+        self.psign = self.pca.transformer.components_[0:self.nA].T  # Grab top nA vector weights for neurons
         self.zproj = np.matmul(self.psign.T, self.PSAbin)  # Project neurons onto top nA PCAs
         self.cov_zproj = np.cov(self.zproj)  # Get covariance matrix of PCA-projected activity
-        self.transformer = FastICA(random_state=0, whiten=False, max_iter=10000)  # Set up ICA
+        self.transformer = skFastICA(random_state=0, whiten=False, max_iter=10000)  # Set up ICA
         self.w_mat = self.transformer.fit_transform(self.cov_zproj)  # Fit it
 
         # Get final weights of all neurons on PCA/ICA assemblies!
@@ -900,13 +918,16 @@ class DimReduction:
         self.df = self.to_df(self.v)
         self.activations = self.calc_activations('pcaica')
 
+        # Calculate Dupret style activations
+        self.pmat = self.calc_pmat()
+
     def _init_ICA(self, nICs=20):
         """Perform ICA"""
         # Run ICA on the binned PSA
         self.ica = ICA(self.cov_matz, nICs)
 
         # Make into a dataframe for easy plotting
-        self.ica.df = self.to_df(self.cov_trans)
+        self.ica.df = self.to_df(self.ica.covz_trans)
 
         # Get activations for each IC over time
         self.ica.activations = self.calc_activations('ica')
@@ -918,7 +939,7 @@ class DimReduction:
         self.pca = PCA(self.cov_matz, nPCs)
 
         # Make into a dataframe for easy plotting
-        self.pca.df = self.to_df(self.pca.cov_trans)
+        self.pca.df = self.to_df(self.pca.covz_trans)
 
         # Get activations of each PC
         self.pca.activations = self.calc_activations('pca')
@@ -941,14 +962,16 @@ class DimReduction:
 
     def plot_assembly_fields(self, assembly: int, ncells_plot: int = 7,
                              dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica',
-                             tmap_type: str in ['sm', 'us'] = 'sm', isrunning: bool = False):
+                             tmap_type: str in ['sm', 'us'] = 'sm', isrunning: bool = False,
+                             plot_anti: bool = False):
 
         assert assembly < self.get_nA(dr_type), 'assembly must be less than # of ICs or PCs'
 
         # Identify top ncells_plot cells that most contribute to the assembly
         df = self.get_df(dr_type)
         assemb_wts = df.iloc[:, assembly + 1]
-        top_cells = np.argsort(np.abs(assemb_wts))[-ncells_plot:][::-1]
+        bottom_cells = np.argsort(assemb_wts)[-ncells_plot:][::-1]
+        top_cells = np.argsort(assemb_wts)[:ncells_plot]
 
         # Set up plots
         nplots = ncells_plot + 1
@@ -958,22 +981,40 @@ class DimReduction:
 
         # Plot assembly spatial tuning first
         assemb_pf = self.make_assembly_field(assembly, dr_type, isrunning=isrunning)
-        # pf.imshow_nan(assemb_pf, ax=ax[0][0])
-        ax[0][0].imshow(assemb_pf)
+        im = ax[0][0].imshow(assemb_pf)
+        plt.colorbar(im, ax=ax[0][0])
 
         _, dim_prefix = self.get_titles(dr_type)
         ax[0][0].set_title(dim_prefix + ' #' + str(assembly))
+        ax[0][0].axis('off')
         if tmap_type == 'sm':
             tmap_use = self.PF.tmap_sm
         elif tmap_type == 'us':
             tmap_use = self.PF.tmap_us
 
+        # Determine if assembly has a positive or negative weight
+        assemb_max = assemb_pf.reshape(-1).max()
+        assemb_min = assemb_pf.reshape(-1).min()
+        if np.abs(assemb_max) > np.abs(assemb_min):
+            if not plot_anti:
+                cells_plot = top_cells
+            else:
+                cells_plot = bottom_cells
+        else:
+            if not plot_anti:
+                cells_plot = bottom_cells
+            else:
+                cells_plot = top_cells
+
         # Plot each cell's tuning also
-        for a, cell in zip(ax.reshape(-1)[1:nplots], top_cells):
+        for a, cell in zip(ax.reshape(-1)[1:nplots], cells_plot):
             # pf.imshow_nan(self.PF.tmap_sm[cell], ax=a)
             a.imshow(tmap_use[cell])
             a.set_title(f'Cell {cell} wt: {assemb_wts[cell]:0.3g}')
+            a.axis('off')
         sns.despine(fig=fig, left=True, bottom=True)
+
+        fig.suptitle(f'{self.mouse} {self.arena}: Day {self.day}')
 
     def make_occ_map(self, type: str in ['run', 'occ', 'immobile', 'freeze']):
         """Grab specific types of occupancy maps quickly and easily"""
@@ -1023,7 +1064,7 @@ class DimReduction:
 
         return assemb_pf
 
-    def plot_rasters(self, dr_type: str in ['pcaica', 'pca', 'ica'], buffer: int = 6):
+    def plot_rasters(self, dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica', buffer: int = 6, **kwargs):
         """Plot rasters of assembly activation in relation to freezing"""
 
         # Get appropriate activations
@@ -1038,7 +1079,7 @@ class DimReduction:
         ntrials = self.freeze_starts.shape[0]
         for ida, (a, act) in enumerate(zip(ax.reshape(-1), activations)):
             # Assemble raster for assembly and calculate mean activation
-            assemb_raster = get_PE_raster(act, event_starts=self.freeze_starts, buffer_sec=[buffer, buffer],
+            assemb_raster = get_PE_raster(act, event_starts=self.freeze_starts, buffer_sec=(buffer, buffer),
                                           sr_image=self.PF.sr_image)
             act_mean = act.mean()
             # Hack to switch up signs - necessary?
@@ -1050,12 +1091,15 @@ class DimReduction:
                 suffix = ''
 
             plot_raster(assemb_raster, cell_id=ida, bs_rate=act_mean, sr_image=self.PF.sr_image, ax=a,
-                        y2scale=0.35, y2zero=ntrials / 5, cmap='rocket')
+                        y2zero=ntrials / 5, **kwargs)
             a.set_title(f'ICA {ida}{suffix}')
+
+        fig.suptitle(f'{self.mouse} {self.arena} : Day {self.day}')
 
         return ax
 
-    def plot_PSA_w_activation(self, comp_plot: int, dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica'):
+    def plot_PSA_w_activation(self, comp_plot: int, dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica',
+                              plot_freezing=True):
         """Plots all calcium activity with activation of a particular assembly overlaid"""
 
         # Get appropriate activations
@@ -1072,19 +1116,24 @@ class DimReduction:
 
         # Now, set up the plot
         fig, ax = plt.subplots()
-        fig.set_size_inches([6, 3.1])
-        sns.heatmap(PSAsort, ax=ax)
+        fig.set_size_inches([11, 6])
+        sns.heatmap(PSAsort, ax=ax, cbar=False)
         _, dim_prefix = self.get_titles(dr_type)
         ax.set_title(f'{dim_prefix} # {comp_plot}')
         # sns.heatmap(PSAsort_bin, ax=ax[1])
         # ax[1].set_title('PSAbin ICA = ' + str(ica_plot))
 
-        # plot freezing times
-        ax.plot(self.freeze_ind, np.ones_like(self.freeze_ind), 'r.')
-        ax.plot(self.freeze_ind, np.ones_like(self.freeze_ind) * (self.PF.PSAbool_align.shape[0] / 2 - 20), 'r.')
-        ax.plot(self.freeze_ind, np.ones_like(self.freeze_ind) * (self.PF.PSAbool_align.shape[0] - 5), 'r.')
-        ax.plot(-activation * 100 + self.PF.PSAbool_align.shape[0] / 2, 'g-')
-        ax.plot(-self.PF.speed_sm*10 + self.PF.PSAbool_align.shape[0]/2, 'b-')
+        # plot freezing times and speed
+        if plot_freezing:
+            ax.plot(self.freeze_ind, np.ones_like(self.freeze_ind), 'r.', color=[1, 0, 0, 0.5])
+            ax.plot(self.freeze_ind, np.ones_like(self.freeze_ind) * (self.PF.PSAbool_align.shape[0] / 2 - 20), '.',
+                    color=[1, 0, 0, 0.5])
+            ax.plot(self.freeze_ind, np.ones_like(self.freeze_ind) * (self.PF.PSAbool_align.shape[0] - 5), '.',
+                    color=[1, 0, 0, 0.5])
+            ax.plot(-self.PF.speed_sm * 10 + self.PF.PSAbool_align.shape[0] / 2, '-', color=[0, 0, 1, 0.5])
+        # plot activations
+        ax.plot(-activation * 100/2 + self.PF.PSAbool_align.shape[0] / 2, '-', color=[0, 1, 0, 0.5])
+
 
         # Label things
         ax.set_ylabel('Sorted cell #')
@@ -1156,6 +1205,54 @@ class DimReduction:
 
         return df
 
+    def calc_pmat(self):
+        """Calculates projection matrix for each IC"""
+        pmat = []
+        for v in self.v.T:  # Step through each weight vector
+            ptemp = np.outer(v, v)
+            ptemp[np.eye(np.shape(ptemp)[0]).astype(bool)] = 0  # Set diagonal to zero
+            pmat.append(ptemp)
+        pmat = np.asarray(pmat)
+
+        # NRK todo: set it up so that projection is positive
+
+        return pmat
+
+    @staticmethod
+    def calc_dupret_activation(pmat, psa):
+        """Calculate assembly activation from projection matrix for a given assembly
+
+        :param pmat:  projection matrix for a given assembly, shape ncells x ncells
+        :param psa: ncells x nbins array of neural activity
+        :return: nbins array of assembly activation strengths.
+        """
+
+        act = []
+        for psa_t in psa.T:
+            act_at_t = np.matmul(np.matmul(psa_t, pmat), psa_t)
+            act.append(act_at_t)
+
+        return np.asarray(act)
+
+    def calc_dupret_activations(self, psa_use: str in ['raw', 'binnned', 'binnned_z'] = 'binned'):
+        """Calculate assembly activations in line with Trouche et al (2016). Zeros out diagonal of projection
+        matrix so that only CO-ACTIVATIONS of neurons contribute to assembly activation"""
+
+        # Select neural activity array to use - should add in gaussian too to compare to Dupret work...
+        if psa_use == 'raw':
+            psa = self.PF.PSAbool_align
+        elif psa_use == 'binned':
+            psa = self.PSAbin
+        elif psa_use == 'binned_z':
+            psa = self.PSAbinz
+
+        # Calculate activity for each assembly
+        d_activations = []
+        for p in self.pmat:
+            d_activations.append(self.calc_dupret_activation(p, psa))
+
+        return d_activations
+
     def calc_activations(self, dr_type: str in ['pcaica', 'pca', 'ica']):
         """Pull out activation of each component (IC or PC) over the course of the recording session"""
 
@@ -1168,7 +1265,7 @@ class DimReduction:
         # Create array of activations
         activation = []
         for ica_weight in df.iloc[:, df.columns != 'cell'].values.swapaxes(0, 1):
-            activation.append(np.matmul(ica_weight, self.PSAbool_align))
+            activation.append(np.matmul(ica_weight, self.PF.PSAbool_align))
         act_array = np.asarray(activation)
 
         return act_array
@@ -1205,16 +1302,16 @@ class PCA:
     def __init__(self, cov_matz: np.ndarray, nPCs: int = 50):
         """Perform PCA on z-scored covariance matrix"""
         # Run PCA on binned PSA
-        self.transformer = PCA(n_components=nPCs)
-        self.cov_trans = self.transformer.fit_transform(cov_matz)
+        self.transformer = skPCA(n_components=nPCs)
+        self.covz_trans = self.transformer.fit_transform(cov_matz)
 
 
 class ICA:
     def __init__(self, cov_matz: np.ndarray, nICs: int = 20):
         """Perform ICA on z-scored covariance matrix"""
         # Run ICA on the binned PSA
-        self.transformer = FastICA(n_components=nICs, random_state=0)
-        self.cov_trans = self.transformer.fit_transform(cov_matz)
+        self.transformer = skFastICA(n_components=nICs, random_state=0)
+        self.covz_trans = self.transformer.fit_transform(cov_matz)
 
 
 def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
@@ -1351,7 +1448,7 @@ def move_event_rate(PSAbool, freeze_bool):
     """
         Calculate event rate during motinon (non-freezing) times only.
         :param PSAbool: nneurons x nframes_imaging boolean ndarray of putative spiking activity
-        :param freezingPSA: boolean ndarray of shape (nframes_imaging,) indicating frames where animals was freezing.
+        :param freeze_bool: boolean ndarray of shape (nframes_imaging,) indicating frames where animals was freezing.
         Get from function `align_freezing_to_PSA`.
         :return: event_rate_moving: ndarray of each neuron's event rate during freezing epochs.
         """
@@ -1468,7 +1565,7 @@ def bin_array(arr, n=10):
     return np.add.reduceat(arr, np.arange(0, len(arr), n))
 
 
-def get_PE_raster(psa, event_starts, buffer_sec=[2, 2], sr_image=20):
+def get_PE_raster(psa, event_starts, buffer_sec=(2, 2), sr_image=20):
     """ Gets peri-event rasters for +/-buffers sec from all event start times in event_starts
     :param psa: activity for one cell at sr_image, frame 0 = time 0 in event_starts
     :param event_starts: list of event start times in seconds.
@@ -1500,7 +1597,7 @@ def get_PE_raster(psa, event_starts, buffer_sec=[2, 2], sr_image=20):
     return pe_raster
 
 
-def shuffle_raster(psa, event_starts, buffer_sec=[2, 2], sr_image=20, nperm=1000):
+def shuffle_raster(psa, event_starts, buffer_sec=(2, 2), sr_image=20, nperm=1000):
     """Calculates shuffled event rasters by circularly permuting psa.
 
     :param psa: ndarray of event activity at sr_image
@@ -1549,7 +1646,7 @@ def get_tuning_max(tuning_curve: np.ndarray, window: int = 4):
     max_val = curve_smooth.max()
 
     # If multiple max values take the average of them
-    if (npts := (max_val == curve_smooth).sum()) > 1:
+    if (npts := np.sum(max_val == curve_smooth)) > 1:
         if npts >= 4:
             print('More than 4 max points found, check and validate code for more points')
         max_loc = np.where(max_val == curve_smooth)[0].mean()
