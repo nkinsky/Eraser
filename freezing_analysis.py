@@ -248,8 +248,8 @@ class MotionTuning:
         :param kwargs:
         :return:
         """
-
-        cell_ids = self.select_cells(cells) # grab cells to use
+        cells_name = cells if isinstance(cells, str) else 'custom'
+        cell_ids = self.select_cells(cells)  # grab cells to use
         raster_use = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)[cell_ids]
         baseline_rates = self.event_rates[cell_ids]
 
@@ -265,7 +265,7 @@ class MotionTuning:
             fig, ax = plt.subplots(5, 5, sharex=True, sharey=True)
             fig.set_size_inches([12, 6.9])
             fig.suptitle(self.session['mouse'] + ' ' + self.session['arena'] + ' day ' +
-                         str(self.session['day']) + ': ' + cells + ' cells: plot ' + str(plot))
+                         str(self.session['day']) + ': ' + cells_name + ' cells: plot ' + str(plot))
 
             range_use = slice(25*plot, np.min((25*(plot + 1), ncells)))
 
@@ -846,7 +846,7 @@ class TuningGeneralization:
 class DimReduction:
     """"Perform dimensionality reduction on cell activity to pull out coactive ensembles of cells"""
     def __init__(self, mouse: str, arena: str, day: int, bin_size: float = 0.5, nPCs: int = 50,
-                 tol=1e-4):
+                 **kwargs):
         """Initialize ICA on data. Can also run PCA later if you want.
 
         :param mouse: str
@@ -854,6 +854,7 @@ class DimReduction:
         :param day: int
         :param bin_size: float, seconds, 0.5 = default
         :param nPCs: int, 50 = default
+        :param **kwargs: inputs to  sklearn.decomposition.FastICA, e.g. 'tol', 'random_state', etc.
         """
 
         self.mouse = mouse
@@ -882,6 +883,7 @@ class DimReduction:
         self.cov_matz = np.cov(self.PSAbinz)
 
         # Run ICA
+        self._init_ica_params()
         self._init_PCA_ICA(nPCs=nPCs)
 
     def _init_PCA_ICA(self, nPCs):
@@ -907,19 +909,29 @@ class DimReduction:
         self.psign = self.pca.transformer.components_[0:self.nA].T  # Grab top nA vector weights for neurons
         self.zproj = np.matmul(self.psign.T, self.PSAbin)  # Project neurons onto top nA PCAs
         self.cov_zproj = np.cov(self.zproj)  # Get covariance matrix of PCA-projected activity
-        self.transformer = skFastICA(random_state=0, whiten=False, max_iter=10000)  # Set up ICA
+        self.transformer = skFastICA(random_state=self.random_state, whiten=self.whiten, max_iter=self.max_iter)  # Set up ICA
         self.w_mat = self.transformer.fit_transform(self.cov_zproj)  # Fit it
 
         # Get final weights of all neurons on PCA/ICA assemblies!
         self.v = np.matmul(self.psign, self.w_mat)
 
-        # NRK todo: verify this works! Slightly different than other methods!
         # Dump into dataframe and get assembly activations over time
+        # NRK todo: make the largest value positive here
         self.df = self.to_df(self.v)
         self.activations = self.calc_activations('pcaica')
 
         # Calculate Dupret style activations
         self.pmat = self.calc_pmat()
+
+    def _init_ica_params(self, **kwargs):
+        """Sets up parameters for running ICA following PCA."""
+        self.random_state = 0
+        self.tol = 1e-4
+        self.whiten = False
+        self.max_iter = 10000
+        for key in ('random_state', 'tol', 'whiten', 'max_iter'):
+            if key in kwargs:
+                setattr(self, key, kwargs[key])
 
     def _init_ICA(self, nICs=20):
         """Perform ICA"""
@@ -1064,11 +1076,17 @@ class DimReduction:
 
         return assemb_pf
 
-    def plot_rasters(self, dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica', buffer: int = 6, **kwargs):
+    def plot_rasters(self, dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica', buffer: int = 6,
+                     act_type: 'str' in ['kinsky', 'dupret'] = 'dupret',
+                     psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw', **kwargs):
         """Plot rasters of assembly activation in relation to freezing"""
 
         # Get appropriate activations
-        activations = self.get_activations(dr_type)
+        if act_type == 'kinsky':
+            activations = self.get_activations(dr_type)
+        elif act_type == 'dupret':  # NRK note - fix this up to calculate during _init functions!
+            print('calculating Dupret activations for plotting')
+            activations = self.calc_dupret_activations(psa_use=psa_use)
 
         ncomps = activations.shape[0]  # Get # assemblies
         ncols = 5
@@ -1214,13 +1232,12 @@ class DimReduction:
             pmat.append(ptemp)
         pmat = np.asarray(pmat)
 
-        # NRK todo: set it up so that projection is positive
-
         return pmat
 
     @staticmethod
     def calc_dupret_activation(pmat, psa):
-        """Calculate assembly activation from projection matrix for a given assembly
+        """Calculate assembly activations in line with Trouche et al (2016). Zeros out diagonal of projection
+        matrix so that only CO-ACTIVATIONS of neurons contribute to assembly activation
 
         :param pmat:  projection matrix for a given assembly, shape ncells x ncells
         :param psa: ncells x nbins array of neural activity
@@ -1251,10 +1268,11 @@ class DimReduction:
         for p in self.pmat:
             d_activations.append(self.calc_dupret_activation(p, psa))
 
-        return d_activations
+        return np.asarray(d_activations)
 
     def calc_activations(self, dr_type: str in ['pcaica', 'pca', 'ica']):
-        """Pull out activation of each component (IC or PC) over the course of the recording session"""
+        """Pull out activation of each component (IC or PC) over the course of the recording session. Simple
+        multiplication of ica with PSAbool."""
 
         # Get appropriate dataframe
         if dr_type == 'pcaica':
