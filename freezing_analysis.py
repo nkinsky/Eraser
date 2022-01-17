@@ -846,7 +846,7 @@ class TuningGeneralization:
 class DimReduction:
     """"Perform dimensionality reduction on cell activity to pull out coactive ensembles of cells"""
     def __init__(self, mouse: str, arena: str, day: int, bin_size: float = 0.5, nPCs: int = 50,
-                 **kwargs):
+                 ica_method: str in ['ica_on_cov', 'ica_on_zproj'] = 'ica_on_zproj', **kwargs):
         """Initialize ICA on data. Can also run PCA later if you want.
 
         :param mouse: str
@@ -883,12 +883,23 @@ class DimReduction:
         self.cov_matz = np.cov(self.PSAbinz)
 
         # Run ICA
-        self._init_ica_params()
-        self._init_PCA_ICA(nPCs=nPCs)
+        self._init_ica_params(**kwargs)
+        self._init_PCA_ICA(nPCs=nPCs, ica_method=ica_method)
 
-    def _init_PCA_ICA(self, nPCs):
+    def _init_PCA_ICA(self, nPCs: int, ica_method: str in ['ica_on_cov', 'ica_on_zproj']):
         """Initialize asssemblies based on PCA/ICA method from Lopes dos Santos (2013) and later
-        van de Ven (2016) and Trouche (2016) """
+        van de Ven (2016) and Trouche (2016)
+
+        :param: nPCs (int) # PCs to look for - should be higher than the expected # of assemblies
+        :param: ica_method: (str)
+            'ica_on_cov': applies ICA to the covariance matrix of the PCs. Works ok, but in many cases
+            does not converge and spits out redundant ICs.
+            'ica_on_zproj': applies ICA to the projection of z onto the PCs. Hard to tell, but this is MOST LIKELY
+            the intended implementation of the assembly detection method from the above cited literature.
+        """
+        # Set method type
+        self.ica_method = ica_method
+
         # Run PCA on binned PSA
         self.pca = PCA(self.cov_matz, nPCs)
 
@@ -910,24 +921,36 @@ class DimReduction:
         self.zproj = np.matmul(self.psign.T, self.PSAbin)  # Project neurons onto top nA PCAs
         self.cov_zproj = np.cov(self.zproj)  # Get covariance matrix of PCA-projected activity
         self.transformer = skFastICA(random_state=self.random_state, whiten=self.whiten, max_iter=self.max_iter)  # Set up ICA
-        self.w_mat = self.transformer.fit_transform(self.cov_zproj)  # Fit it
+
+        if ica_method == 'ica_on_cov':  # Most likely my mistaken first interpretation of method
+            self.w_mat = self.transformer.fit_transform(self.cov_zproj)  # Fit it
+        elif ica_method == 'ica_on_zproj':  # Most likely method from literature
+            self.y = self.transformer.fit_transform(self.zproj.T).T
+            if not self.whiten:  # If already white
+                self.w_mat = self.transformer.components_
+            elif self.whiten:  # if whitening performed during ICA, separate out un-mixing matrix
+                self.w_mat = np.dot(self.transformer.components_, np.linalg.inv(self.transformer.whitening_))
 
         # Get final weights of all neurons on PCA/ICA assemblies!
-        self.v = np.matmul(self.psign, self.w_mat)
+        v = np.matmul(self.psign, self.w_mat)
+        self.v = self.scale_weights(v)  # Scale vectors to length 1 and make max weight of each positive
 
         # Dump into dataframe and get assembly activations over time
-        # NRK todo: make the largest value positive here
         self.df = self.to_df(self.v)
         self.activations = self.calc_activations('pcaica')
 
         # Calculate Dupret style activations
         self.pmat = self.calc_pmat()
 
+        # Initialize activations using raw PSAbool
+        self.dupret_activations = {'raw': self.calc_dupret_activations(psa_use='raw'),
+                                   'binned': None, 'binned_z': None}
+
     def _init_ica_params(self, **kwargs):
         """Sets up parameters for running ICA following PCA."""
         self.random_state = 0
         self.tol = 1e-4
-        self.whiten = False
+        self.whiten = True
         self.max_iter = 10000
         for key in ('random_state', 'tol', 'whiten', 'max_iter'):
             if key in kwargs:
@@ -956,6 +979,21 @@ class DimReduction:
         # Get activations of each PC
         self.pca.activations = self.calc_activations('pca')
         self.pca.nA = nPCs
+
+    @staticmethod
+    def scale_weights(weights):
+        """Scale vmat weights to one and set maximum weight to positive"""
+
+        # First, scale weights so that all assemblies have length = 1
+        vscale = weights / np.linalg.norm(weights, axis=0)
+
+        # Next, ensure the highest weight is positive. This shouldn't matter since you later take the outer product
+        # of vscale when computing activation patterns, keep here to be consistent with the literature.
+        flip_sign = np.greater(np.abs(vscale).max(axis=0), vscale.max(axis=0))
+        vscale_pos = vscale.copy()
+        vscale_pos.T[flip_sign] = vscale.T[flip_sign] * -1
+
+        return vscale_pos
 
     @staticmethod
     def get_titles(dr_type: str in ['pcaica', 'pca', 'ica']):
@@ -1085,7 +1123,6 @@ class DimReduction:
         if act_type == 'kinsky':
             activations = self.get_activations(dr_type)
         elif act_type == 'dupret':  # NRK note - fix this up to calculate during _init functions!
-            print('calculating Dupret activations for plotting')
             activations = self.calc_dupret_activations(psa_use=psa_use)
 
         ncomps = activations.shape[0]  # Get # assemblies
@@ -1233,6 +1270,17 @@ class DimReduction:
         pmat = np.asarray(pmat)
 
         return pmat
+
+    def get_dupret_activations(self, psa_use: str in ['raw', 'binnned', 'binnned_z'] = 'binned'):
+        """Quickly grabs Dupret style activations and calculates if not already done"""
+        if self.dupret_activations[psa_use] is not None:
+            print('Grabbing pre-calculated Dupret activations for ' + psa_use + ' data')
+            dupret_activations = self.dupret_activations[psa_use]
+        else:
+            print('Calculating Dupret activations using ' + psa_use + ' data')
+            dupret_activations = self.calc_dupret_activations(psa_use)
+
+        return dupret_activations
 
     @staticmethod
     def calc_dupret_activation(pmat, psa):
