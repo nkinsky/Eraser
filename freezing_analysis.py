@@ -922,11 +922,12 @@ class DimReduction:
         self.cov_zproj = np.cov(self.zproj)  # Get covariance matrix of PCA-projected activity
         self.transformer = skFastICA(random_state=self.random_state, whiten=self.whiten, max_iter=self.max_iter)  # Set up ICA
 
+        # Get ICA weights
         if ica_method == 'ica_on_cov':  # Most likely my mistaken first interpretation of method
             self.w_mat = self.transformer.fit_transform(self.cov_zproj)  # Fit it
         elif ica_method == 'ica_on_zproj':  # Most likely method from literature
             self.y = self.transformer.fit_transform(self.zproj.T).T
-            if not self.whiten:  # If already white
+            if not self.whiten:  # If already
                 self.w_mat = self.transformer.components_
             elif self.whiten:  # if whitening performed during ICA, separate out un-mixing matrix
                 self.w_mat = np.dot(self.transformer.components_, np.linalg.inv(self.transformer.whitening_))
@@ -2020,7 +2021,6 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')
-    DR = DimReduction('Marble07', 'Open', -2)
-    DR.plot_assembly_fields(0)
+    DR = DimReduction('Marble07', 'Shock', 1, ica_method='ica_on_cov', whiten=False)
 
     pass
