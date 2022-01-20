@@ -943,8 +943,8 @@ class DimReduction:
         self.pmat = self.calc_pmat()
 
         # Initialize activations using raw PSAbool
-        self.dupret_activations = {'raw': self.calc_dupret_activations(psa_use='raw'),
-                                   'binned': None, 'binned_z': None}
+        self.dupret_activations = {'raw': None, 'binned': None, 'binned_z': None}
+        self.dupret_activations['raw'] = self.calc_dupret_activations(psa_use='raw')
 
     def _init_ica_params(self, **kwargs):
         """Sets up parameters for running ICA following PCA."""
@@ -956,17 +956,17 @@ class DimReduction:
             if key in kwargs:
                 setattr(self, key, kwargs[key])
 
-    def _init_ICA(self, nICs=20):
-        """Perform ICA"""
-        # Run ICA on the binned PSA
-        self.ica = ICA(self.cov_matz, nICs)
-
-        # Make into a dataframe for easy plotting
-        self.ica.df = self.to_df(self.ica.covz_trans)
-
-        # Get activations for each IC over time
-        self.ica.activations = self.calc_activations('ica')
-        self.ica.nA = nICs
+    # def _init_ICA(self, nICs=20):
+    #     """Perform ICA"""
+    #     # Run ICA on the binned PSA
+    #     self.ica = ICA(self.cov_matz, nICs)
+    #
+    #     # Make into a dataframe for easy plotting
+    #     self.ica.df = self.to_df(self.ica.covz_trans)
+    #
+    #     # Get activations for each IC over time
+    #     self.ica.activations = self.calc_activations('ica')
+    #     self.ica.nA = nICs
 
     def _init_PCA(self, nPCs=50):
         """Perform PCA. Will overwrite ICA results"""
@@ -1272,7 +1272,7 @@ class DimReduction:
 
         return pmat
 
-    def get_dupret_activations(self, psa_use: str in ['raw', 'binnned', 'binnned_z'] = 'binned'):
+    def get_dupret_activations(self, psa_use: str in ['raw', 'binnned', 'binnned_z'] = 'raw'):
         """Quickly grabs Dupret style activations and calculates if not already done"""
         if self.dupret_activations[psa_use] is not None:
             print('Grabbing pre-calculated Dupret activations for ' + psa_use + ' data')
@@ -1321,6 +1321,8 @@ class DimReduction:
             d_activations = []
             for p in self.pmat:
                 d_activations.append(self.calc_dupret_activation(p, psa))
+
+            self.dupret_activations[psa_use] = np.asarray(d_activations)
 
             return np.asarray(d_activations)
 
