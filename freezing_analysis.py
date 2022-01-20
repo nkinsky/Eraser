@@ -903,9 +903,6 @@ class DimReduction:
         # Run PCA on binned PSA
         self.pca = PCA(self.cov_matz, nPCs)
 
-        # Make into a dataframe for easy plotting
-        self.pca.df = self.to_df(self.pca.covz_trans)
-
         # Calculated threshold for significant PCs
         q = self.PSAbinz.shape[1] / self.PSAbinz.shape[0]
         rho2 = 1
@@ -918,6 +915,8 @@ class DimReduction:
 
         # Create PCA-reduced activity matrix
         self.psign = self.pca.transformer.components_[0:self.nA].T  # Grab top nA vector weights for neurons
+        self.pca.df = self.to_df(self.psign)  # Send PCA weights to dataframe for easy access and plotting
+        self.pca.activations = self.calc_activations(dr_type='pca')
         self.zproj = np.matmul(self.psign.T, self.PSAbin)  # Project neurons onto top nA PCAs
         self.cov_zproj = np.cov(self.zproj)  # Get covariance matrix of PCA-projected activity
         self.transformer = skFastICA(random_state=self.random_state, whiten=self.whiten, max_iter=self.max_iter)  # Set up ICA
@@ -1115,16 +1114,17 @@ class DimReduction:
 
         return assemb_pf
 
-    def plot_rasters(self, dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica', buffer: int = 6,
+    def plot_rasters(self, dr_type: str in ['pcaica', 'pca', 'dupret'] = 'dupret', buffer: int = 6,
                      act_type: 'str' in ['kinsky', 'dupret'] = 'dupret',
                      psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw', **kwargs):
         """Plot rasters of assembly activation in relation to freezing"""
 
         # Get appropriate activations
-        if act_type == 'kinsky':
-            activations = self.get_activations(dr_type)
-        elif act_type == 'dupret':  # NRK note - fix this up to calculate during _init functions!
-            activations = self.calc_dupret_activations(psa_use=psa_use)
+        activations = self.get_activations(dr_type)
+        # if act_type == 'kinsky':
+        #     activations = self.get_activations(dr_type)
+        # elif act_type == 'dupret':  # NRK note - fix this up to calculate during _init functions!
+        #     activations = self.calc_dupret_activations(psa_use=psa_use)
 
         ncomps = activations.shape[0]  # Get # assemblies
         ncols = 5
@@ -1304,24 +1304,30 @@ class DimReduction:
         """Calculate assembly activations in line with Trouche et al (2016). Zeros out diagonal of projection
         matrix so that only CO-ACTIVATIONS of neurons contribute to assembly activation"""
 
-        # Select neural activity array to use - should add in gaussian too to compare to Dupret work...
-        if psa_use == 'raw':
-            psa = self.PF.PSAbool_align
-        elif psa_use == 'binned':
-            psa = self.PSAbin
-        elif psa_use == 'binned_z':
-            psa = self.PSAbinz
+        if self.dupret_activations[psa_use] is not None:
+            print("Loading pre-calculated Dupret activations calculated from " + psa_use + " calcium activity")
+            return self.dupret_activations[psa_use]
+        else:
+            print("Calculating Dupret activations from " + psa_use + " calcium activity")
+            # Select neural activity array to use - should add in gaussian too to compare to Dupret work...
+            if psa_use == 'raw':
+                psa = self.PF.PSAbool_align
+            elif psa_use == 'binned':
+                psa = self.PSAbin
+            elif psa_use == 'binned_z':
+                psa = self.PSAbinz
 
-        # Calculate activity for each assembly
-        d_activations = []
-        for p in self.pmat:
-            d_activations.append(self.calc_dupret_activation(p, psa))
+            # Calculate activity for each assembly
+            d_activations = []
+            for p in self.pmat:
+                d_activations.append(self.calc_dupret_activation(p, psa))
 
-        return np.asarray(d_activations)
+            return np.asarray(d_activations)
 
-    def calc_activations(self, dr_type: str in ['pcaica', 'pca', 'ica']):
+    def calc_activations(self, dr_type: str in ['pcaica', 'pca']):
         """Pull out activation of each component (IC or PC) over the course of the recording session. Simple
-        multiplication of ica with PSAbool."""
+        multiplication of ica with PSAbool. Not consistent with Dupret literature but shows positive AND negative
+        activations which are useful to see for QC purposes"""
 
         # Get appropriate dataframe
         if dr_type == 'pcaica':
@@ -1337,10 +1343,13 @@ class DimReduction:
 
         return act_array
 
-    def get_activations(self, dr_type: str in ['pcaica', 'pca', 'ica']):
+    def get_activations(self, dr_type: str in ['pcaica', 'pca', 'dupret']):
+        """Quickly grabs pre-calculated activations."""
 
         if dr_type == 'pcaica':
             activations = self.activations
+        elif dr_type == 'dupret':
+            activations = self.get_dupret_activations()
         else:
             activations = getattr(self, dr_type).activations
 
@@ -1373,12 +1382,12 @@ class PCA:
         self.covz_trans = self.transformer.fit_transform(cov_matz)
 
 
-class ICA:
-    def __init__(self, cov_matz: np.ndarray, nICs: int = 20):
-        """Perform ICA on z-scored covariance matrix"""
-        # Run ICA on the binned PSA
-        self.transformer = skFastICA(n_components=nICs, random_state=0)
-        self.covz_trans = self.transformer.fit_transform(cov_matz)
+# class ICA:
+    # def __init__(self, cov_matz: np.ndarray, nICs: int = 20):
+    #     """Perform ICA on z-scored covariance matrix"""
+    #     # Run ICA on the binned PSA
+    #     self.transformer = skFastICA(n_components=nICs, random_state=0)
+    #     self.covz_trans = self.transformer.fit_transform(cov_matz)
 
 
 def assemble_tuning_stability(arena='Shock', events='freeze_onset', alpha=0.01):
