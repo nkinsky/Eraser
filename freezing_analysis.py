@@ -917,9 +917,10 @@ class DimReduction:
         # Create PCA-reduced activity matrix
         self.psign = self.pca.transformer.components_[0:self.nA].T  # Grab top nA vector weights for neurons
         self.pca.df = self.to_df(self.psign)  # Send PCA weights to dataframe for easy access and plotting
-        self.pca.v = self.scale_weights(self.psign)   # Clean up activation weights, make analagous to Dupret method
+        self.pca.v = self.scale_weights(self.psign)   # Clean up activation weights, make analogous to Dupret method
         self.pca.pmat = self.calc_pmat(self.pca.v)
-        self.pca.activations = self.calc_activations(dr_type='pca', pca_weights_use='df')
+        self.pca.activations = {'full': self.calc_activations(dr_type='pca', pca_weights_use='v'),
+                                'dupret': {'raw': None, 'binned': None, 'binned_z': None}}
         self.zproj = np.matmul(self.psign.T, self.PSAbin)  # Project neurons onto top nA PCAs
         self.cov_zproj = np.cov(self.zproj)  # Get covariance matrix of PCA-projected activity
         self.transformer = skFastICA(random_state=self.random_state, whiten=self.whiten, max_iter=self.max_iter)  # Set up ICA
@@ -940,14 +941,14 @@ class DimReduction:
 
         # Dump into dataframe and get assembly activations over time
         self.df = self.to_df(self.v)
-        self.activations = self.calc_activations('pcaica')
+        self.activations = {'full': self.calc_activations('pcaica'),
+                            'dupret': {'raw': None, 'binned': None, 'binned_z': None}}
 
         # Calculate Dupret style activations
         self.pmat = self.calc_pmat(self.v)
 
         # Initialize activations using raw PSAbool
-        self.dupret_activations = {'raw': None, 'binned': None, 'binned_z': None}
-        self.dupret_activations['raw'] = self.calc_dupret_activations(psa_use='raw')
+        self.activations['dupret']['raw'] = self.calc_dupret_activations(psa_use='raw')
 
     def _init_ica_params(self, **kwargs):
         """Sets up parameters for running ICA following PCA."""
@@ -1120,27 +1121,31 @@ class DimReduction:
 
         return assemb_pf
 
-    def plot_rasters(self, dr_type: str in ['pcaica', 'pca', 'dupret'] = 'dupret', buffer: int = 6,
-                     psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw', **kwargs):
+    def plot_rasters(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
+                     act_method: str in ['full', 'dupret'] = 'dupret',
+                     buffer: int = 6,
+                     psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw',
+                     events: str in ['freeze_starts', 'freeze_ends'] = 'freeze_starts', **kwargs):
         """Plot rasters of assembly activation in relation to freezing"""
 
         # Get appropriate activations
-        activations = self.get_activations(dr_type, psa_use=psa_use)
-        # if act_type == 'kinsky':
-        #     activations = self.get_activations(dr_type)
-        # elif act_type == 'dupret':  # NRK note - fix this up to calculate during _init functions!
-        #     activations = self.calc_dupret_activations(psa_use=psa_use)
+        activations = self.get_activations(dr_type, act_method=act_method, psa_use=psa_use)
 
+        # Set up plots
         ncomps = activations.shape[0]  # Get # assemblies
         ncols = 5
         nrows = np.ceil(ncomps / ncols).astype(int)
         fig, ax = plt.subplots(nrows, ncols)
         fig.set_size_inches([3 * nrows, 15])
 
+        ensemble_type = 'PCA' if dr_type == 'pca' else 'ICA'
+
+        events_use = getattr(self, events)  # Select events to use
+
         ntrials = self.freeze_starts.shape[0]
         for ida, (a, act) in enumerate(zip(ax.reshape(-1), activations)):
             # Assemble raster for assembly and calculate mean activation
-            assemb_raster = get_PE_raster(act, event_starts=self.freeze_starts, buffer_sec=(buffer, buffer),
+            assemb_raster = get_PE_raster(act, event_starts=events_use, buffer_sec=(buffer, buffer),
                                           sr_image=self.PF.sr_image)
             act_mean = act.mean()
             # Hack to switch up signs - necessary?
@@ -1153,19 +1158,20 @@ class DimReduction:
 
             plot_raster(assemb_raster, cell_id=ida, bs_rate=act_mean, sr_image=self.PF.sr_image, ax=a,
                         y2zero=ntrials / 5, **kwargs)
-            a.set_title(f'ICA {ida}{suffix}')
+            a.set_title(f'{ensemble_type} {ida}{suffix}')
 
-        type_prepend = f' {psa_use.capitalize()}' if dr_type == 'dupret' else ''  # Add activation type for dupret
-        fig.suptitle(f'{self.mouse} {self.arena} : Day {self.day} {dr_type.capitalize()}{type_prepend} Activations')
+        type_prepend = f' {psa_use.capitalize()}' if act_method == 'dupret' else ''  # Add activation type for dupret
+        fig.suptitle(f'{self.mouse} {self.arena} : Day {self.day} {dr_type.upper()}{type_prepend} Activations')
 
         return ax
 
-    def plot_PSA_w_activation(self, comp_plot: int, dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica',
+    def plot_PSA_w_activation(self, comp_plot: int, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
+                              psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw',
                               plot_freezing=True):
         """Plots all calcium activity with activation of a particular assembly overlaid"""
 
         # Get appropriate activations
-        activations = self.get_activations(dr_type)
+        activations = self.get_activations(dr_type, psa_use=psa_use)
 
         # First grab activity of a given assembly
         activation = activations[comp_plot]
@@ -1209,7 +1215,7 @@ class DimReduction:
         assemblies"""
 
         # Get appropriate activations
-        activations = self.get_activations(dr_type)
+        activations = self.get_activations(dr_type, psa_use='raw')
 
         # Now correlate with speed and multiply by freezing
         freeze_proj, speed_corr = [], []
@@ -1236,11 +1242,11 @@ class DimReduction:
 
         return speed_corr, freeze_proj
 
-    def activation_v_speed(self, dr_type: str in ['pcaica', 'pca', 'ica'] = 'pcaica'):
+    def activation_v_speed(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica'):
         """Scatterplot of all components versus speed"""
 
         # Get appropriate activations
-        activations = self.get_activations(dr_type)
+        activations = self.get_activations(dr_type, psa_use='raw')
 
         figc, axc = plt.subplots(4, 5)
         figc.set_size_inches([18, 12])
@@ -1280,14 +1286,23 @@ class DimReduction:
 
         return pmat
 
-    def get_dupret_activations(self, psa_use: str in ['raw', 'binnned', 'binnned_z'] = 'raw'):
+    def get_dupret_activations(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
+                               psa_use: str in ['raw', 'binnned', 'binnned_z'] = 'raw'):
         """Quickly grabs Dupret style activations and calculates if not already done"""
-        if self.dupret_activations[psa_use] is not None:
+        # if self.dupret_activations[psa_use] is not None:
+        #     print('Grabbing pre-calculated Dupret activations for ' + psa_use + ' data')
+        #     dupret_activations = self.dupret_activations[psa_use]
+        # else:
+        #     print('Calculating Dupret activations using ' + psa_use + ' data')
+        #     dupret_activations = self.calc_dupret_activations(psa_use)
+
+        act_dict = self.activations if dr_type == 'pcaica' else self.pca.activations
+
+        if act_dict['dupret'][psa_use] is not None:
             print('Grabbing pre-calculated Dupret activations for ' + psa_use + ' data')
-            dupret_activations = self.dupret_activations[psa_use]
+            dupret_activations = act_dict['dupret'][psa_use]
         else:
-            print('Calculating Dupret activations using ' + psa_use + ' data')
-            dupret_activations = self.calc_dupret_activations(psa_use)
+            dupret_activations = self.calc_dupret_activations(dr_type, psa_use)
 
         return dupret_activations
 
@@ -1308,8 +1323,9 @@ class DimReduction:
 
         return np.asarray(act)
 
-    def calc_dupret_activations(self, psa_use: str in ['raw', 'binnned', 'binnned_z'] = 'binned',
-                                dr_type: str in ['pcaica', 'pca'] = 'pcaica'):
+    def calc_dupret_activations(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
+                                psa_use: str in ['raw', 'binnned', 'binnned_z'] = 'binned',
+                                ):
         """Calculate assembly activations in line with Trouche et al (2016). Zeros out diagonal of projection
         matrix so that only CO-ACTIVATIONS of neurons contribute to assembly activation"""
 
@@ -1321,30 +1337,36 @@ class DimReduction:
         elif psa_use == 'binned_z':
             psa = self.PSAbinz
 
-        if dr_type == 'pcaica':
-            if self.dupret_activations[psa_use] is not None:
-                print("Loading pre-calculated Dupret activations calculated from " + psa_use + " calcium activity")
-                return self.dupret_activations[psa_use]
-            else:
-                print("Calculating Dupret activations from " + psa_use + " calcium activity")
+        # Get appropriate weights for each neuron and activation dictionary
+        pmat_use = self.pmat if dr_type == 'pcaica' else self.pca.pmat
+        act_dict = self.activations if dr_type == 'pcaica' else self.pca.activations
 
-                # Calculate activity for each assembly
-                d_activations = []
-                for p in self.pmat:
-                    d_activations.append(self.calc_dupret_activation(p, psa))
+        # if dr_type == 'pcaica':
+        # if self.dupret_activations[psa_use] is not None:
+        if act_dict['dupret'][psa_use] is not None:
+            print("Loading pre-calculated Dupret activations calculated from " + psa_use + " calcium activity")
+            # return self.dupret_activations[psa_use]
+            return act_dict['dupret'][psa_use]
+        else:
+            print("Calculating Dupret activations from " + psa_use + " calcium activity")
 
-                self.dupret_activations[psa_use] = np.asarray(d_activations)
-
-                return np.asarray(d_activations)
-
-        elif dr_type == 'pca':
             # Calculate activity for each assembly
             d_activations = []
-            for p in self.pca.pmat:
+            for p in pmat_use:
                 d_activations.append(self.calc_dupret_activation(p, psa))
+
+            # self.dupret_activations[psa_use] = np.asarray(d_activations)
+            act_dict['dupret'][psa_use] = np.asarray(d_activations)  # Update dictionary!
 
             return np.asarray(d_activations)
 
+        # elif dr_type == 'pca':
+        #     # Calculate activity for each assembly
+        #     d_activations = []
+        #     for p in self.pca.pmat:
+        #         d_activations.append(self.calc_dupret_activation(p, psa))
+        #
+        #     return np.asarray(d_activations)
 
     def calc_activations(self, dr_type: str in ['pcaica', 'pca'], pca_weights_use: str in ['v', 'df'] = 'df'):
         """Pull out activation of each component (IC or PC) over the course of the recording session. Simple
@@ -1367,16 +1389,19 @@ class DimReduction:
 
         return act_array
 
-    def get_activations(self, dr_type: str in ['pcaica', 'pca', 'dupret'], **kwargs):
+    def get_activations(self, dr_type: str in ['pcaica', 'pca'],
+                        act_method: str in ['full', 'dupret'] = 'dupret',
+                        **kwargs):
         """Quickly grabs pre-calculated activations.  For dupret activations can specifify "raw", "binned", or "binned_z
         in kwargs"""
 
-        if dr_type == 'pcaica':
-            activations = self.activations
-        elif dr_type == 'dupret':
-            activations = self.get_dupret_activations(**kwargs)
-        else:
-            activations = getattr(self, dr_type).activations
+        # Grab appropriate activations dictionary
+        act_dict = self.activations if dr_type == 'pcaica' else self.pca.activations
+
+        if act_method == 'full':
+            activations = act_dict['full']
+        elif act_method == 'dupret':
+            activations = self.get_dupret_activations(dr_type, **kwargs)
 
         return activations
 
