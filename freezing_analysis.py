@@ -1156,14 +1156,55 @@ class DimReduction:
             else:
                 suffix = ''
 
+            # Figure out which plots to label
+            labely = (ida % ncols) == 0  # only label y on left-most plots
+            labely2 = ida % ncols == (ncols - 1)  # only labely y2 on right-most plots
+            labelx = ida >= ncols * (nrows - 1)
             plot_raster(assemb_raster, cell_id=ida, bs_rate=act_mean, sr_image=self.PF.sr_image, ax=a,
-                        y2zero=ntrials / 5, **kwargs)
+                        y2zero=ntrials / 5, events=events.replace('_', ' '),
+                        labely=labely, labely2=labely2, labelx=labelx, **kwargs)
             a.set_title(f'{ensemble_type} {ida}{suffix}')
 
         type_prepend = f' {psa_use.capitalize()}' if act_method == 'dupret' else ''  # Add activation type for dupret
         fig.suptitle(f'{self.mouse} {self.arena} : Day {self.day} {dr_type.upper()}{type_prepend} Activations')
 
         return ax
+
+    def plot_activations_w_freezing(self, freeze_ensembles: int or list or tuple,
+                                    non_freeze_ensembles: int or list or tuple = None,
+                                    dr_type: str in ['pcaica', 'pca'] = 'pcaica',
+                                    act_method: str in ['full', 'dupret'] = 'dupret',
+                                    psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw'):
+        """Plot activation of freeze (and optionally, non-freeze) ensembles across time with freezing
+        epochs overlaid.
+
+        :param freeze_ensembles:
+        :param non_freeze_ensembles:
+        :param dr_type:
+        :param act_method:
+        :param psa_use:
+        :return:
+        """
+
+        activations = self.get_activations(dr_type=dr_type, act_method=act_method, psa_use=psa_use)
+
+        figf, axover = plt.subplots(figsize=(10, 4))
+        t = np.arange(activations.shape[1]) / self.PF.sr_image
+        hfall = axover.plot(t, activations[freeze_ensembles].T)  # plot freezing ensembles
+        hf, = axover.plot(t, activations[freeze_ensembles].mean(axis=0), 'k-')  # Plot avg freezing ensemble in black
+
+        for freeze_start, freeze_end in zip(self.freeze_starts, self.freeze_ends):
+            hfepoch = axover.axvspan(freeze_start, freeze_end)
+
+        if non_freeze_ensembles is not None:
+            hnfall = axover.plot(t, activations[non_freeze_ensembles].T, '--')  # plot freezing ensembles
+            hnf, = axover.plot(t, activations[non_freeze_ensembles].mean(axis=0),
+                               'r--')  # Plo avg non-freezing ensemble in black
+            axover.legend((hf, hnf, hfepoch), ('Freeze avg', 'Non-freeze avg', 'Freeze_epoch'))
+        else:
+            axover.legend((hf, hfepoch), ('Freeze avg', 'Freeze_epoch'))
+
+        return axover
 
     def plot_PSA_w_activation(self, comp_plot: int, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
                               psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw',
@@ -1830,8 +1871,9 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25,
     if bs_rate is not None:
         ax.axhline(nevents - bs_rate / sr_image * nevents/y2scale - y2zero, color='g', linestyle='--')  # plot baseline rate
     ax.set_title('Cell ' + str(cell_id))
+
+    ax.set_xticks([0, nframes / 2, nframes])
     if labelx:  # Label bottom row
-        ax.set_xticks([0, nframes / 2, nframes])
         ax.set_xticklabels([str(-buffer), '0', str(buffer)])
         ax.set_xlabel('Time from ' + events + '(s)')
 
@@ -1840,16 +1882,16 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25,
         # ax.plot(sig_bins, curve_plot[sig_bins] - 5, 'r*')
         ax.plot(sig_bins, np.ones_like(sig_bins), 'r.')
 
+    ax.set_yticks([0.5, nevents - 0.5])
     if labely:  # Label left side
-            ax.set_yticks([0.5, nevents - 0.5])
-            ax.set_yticklabels(['0', str(nevents)])
-            ax.set_ylabel(events + ' #')
+        ax.set_yticklabels(['0', str(nevents)])
+        ax.set_ylabel(events + ' #')
 
     secax = None
     if labely2:  # Add second axis and label
         secax = ax.secondary_yaxis('right', functions=(lambda y1: y2scale * (nevents - y1 - y2zero) / nevents,
                                                        lambda y: nevents * (1 - y / y2scale) - y2zero))
-        secax.set_yticks([0, y2scale])
+        secax.set_yticks([0, (nevents - y2zero) / nevents * y2scale])
         secax.tick_params(labelcolor='r')
         secax.set_ylabel(r'$p_{event}$', color='r')
 
