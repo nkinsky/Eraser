@@ -984,7 +984,7 @@ class DimReduction:
         self.pca.v = self.scale_weights(self.pca.df)
 
         # Get activations of each PC
-        self.pca.activations = self.calc_activations('pca')
+        # self.pca.activations = self.calc_activations('pca')
         self.pca.nA = nPCs
 
     @staticmethod
@@ -1125,18 +1125,24 @@ class DimReduction:
                      act_method: str in ['full', 'dupret'] = 'dupret',
                      buffer: int = 6,
                      psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw',
-                     events: str in ['freeze_starts', 'freeze_ends'] = 'freeze_starts', **kwargs):
+                     events: str in ['freeze_starts', 'freeze_ends'] = 'freeze_starts',
+                     ax=None, **kwargs):
         """Plot rasters of assembly activation in relation to freezing"""
 
         # Get appropriate activations
         activations = self.get_activations(dr_type, act_method=act_method, psa_use=psa_use)
 
         # Set up plots
-        ncomps = activations.shape[0]  # Get # assemblies
-        ncols = 5
-        nrows = np.ceil(ncomps / ncols).astype(int)
-        fig, ax = plt.subplots(nrows, ncols)
-        fig.set_size_inches([3 * nrows, 15])
+        if ax is None:
+            ncomps = activations.shape[0]  # Get # assemblies
+            ncols = 5
+            nrows = np.ceil(ncomps / ncols).astype(int)
+            fig, ax = plt.subplots(nrows, ncols)
+            fig.set_size_inches([3 * nrows, 15])
+        else:
+            nrows = ax.shape[0]
+            ncols = 1 if ax.ndim == 1 else ax.shape[1]
+            fig = ax.reshape(-1)[0].get_figure()
 
         ensemble_type = 'PCA' if dr_type == 'pca' else 'ICA'
 
