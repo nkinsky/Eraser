@@ -101,44 +101,6 @@ class MotionTuning:
 
         return perm_rasters
 
-    def get_tuning_sig(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000):
-        """This function will calculate significance values by comparing event-centered tuning curves to
-        chance (calculated from circular permutation of neural activity).
-        :param events:
-        :param buffer_sec:
-        :return:
-        """
-
-        # Load in previous tuning
-        sig_use = self.sig[events]
-
-        calc_tuning = True
-        # Check to see if appropriate tuning already run and stored and just use that, otherwise calculate from scratch.
-        if 'nperm' in sig_use:
-            if sig_use['nperm'] == nperm:
-                calc_tuning = False
-                pval = sig_use['pval']
-
-        if calc_tuning:
-            print('calculating significant tuning for nperm=' + str(nperm))
-            # check if both regular and permuted raster are run already!
-            pe_rasters, perm_rasters = self.check_rasters_run(events=events,
-                                                              buffer_sec=buffer_sec,  nperm=nperm)
-
-            # Now calculate tuning curves and get significance!
-            pe_tuning = gen_motion_tuning_curve(pe_rasters)
-            perm_tuning = np.asarray([gen_motion_tuning_curve(perm_raster) for perm_raster in perm_rasters])
-            pval = (pe_tuning < perm_tuning).sum(axis=0) / nperm
-
-            # Store in class
-            self.sig[events]['pval'] = pval
-            self.sig[events]['nperm'] = nperm
-
-            # Save to disk to save time in future
-            self.save_sig_tuning()
-
-        return pval
-
     def get_sig_neurons(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000,
                         alpha=0.01, nbins=3, active_prop=0.25):
         """Find freezing neurons as those which have sig < alpha for nbins (consecutive) or more AND are active on
@@ -200,6 +162,44 @@ class MotionTuning:
                 pe_rasters, perm_rasters = self.check_rasters_run(events=events, buffer_sec=buffer_sec, nperm=nperm)
 
         return pe_rasters, perm_rasters
+
+    def get_tuning_sig(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000):
+        """This function will calculate significance values by comparing event-centered tuning curves to
+        chance (calculated from circular permutation of neural activity).
+        :param events:
+        :param buffer_sec:
+        :return:
+        """
+
+        # Load in previous tuning
+        sig_use = self.sig[events]
+
+        calc_tuning = True
+        # Check to see if appropriate tuning already run and stored and just use that, otherwise calculate from scratch.
+        if 'nperm' in sig_use:
+            if sig_use['nperm'] == nperm:
+                calc_tuning = False
+                pval = sig_use['pval']
+
+        if calc_tuning:
+            print('calculating significant tuning for nperm=' + str(nperm))
+            # check if both regular and permuted raster are run already!
+            pe_rasters, perm_rasters = self.check_rasters_run(events=events,
+                                                              buffer_sec=buffer_sec,  nperm=nperm)
+
+            # Now calculate tuning curves and get significance!
+            pe_tuning = gen_motion_tuning_curve(pe_rasters)
+            perm_tuning = np.asarray([gen_motion_tuning_curve(perm_raster) for perm_raster in perm_rasters])
+            pval = (pe_tuning < perm_tuning).sum(axis=0) / nperm
+
+            # Store in class
+            self.sig[events]['pval'] = pval
+            self.sig[events]['nperm'] = nperm
+
+            # Save to disk to save time in future
+            self.save_sig_tuning()
+
+        return pval
 
     def save_sig_tuning(self):
         """Saves any significant tuned neuron data"""
@@ -950,6 +950,17 @@ class DimReduction:
         # Initialize activations using raw PSAbool
         self.activations['dupret']['raw'] = self.calc_dupret_activations(psa_use='raw')
 
+        # Initialize significance stats
+        self.sig = {'pcaica': None, 'pca': None}
+        self._init_ica_params('pca')
+        self._init_ica_params('pcaica')
+
+    def _init_sig_dict(self, dr_type: str in ['pcaica', 'pca']):
+        self.sig[dr_type] = {'full': {'freeze_starts': {'nperm': None, 'pval': None},
+                                      'freeze_ends': {'nperm': None, 'pval': None}},
+                             'dupret': {'freeze_starts': {'nperm': None, 'pval': None},
+                                        'freeze_ends': {'nperm': None, 'pval': None}}}
+
     def _init_ica_params(self, **kwargs):
         """Sets up parameters for running ICA following PCA."""
         self.random_state = 0
@@ -992,11 +1003,11 @@ class DimReduction:
         """Scale vmat weights to one and set maximum weight to positive"""
 
         # First, scale weights so that all assemblies have length = 1
-        vscale = weights / np.linalg.norm(weights, axis=0)
+        vscale = weights / np.linalg.norm(weights[np.bitwise_not(np.isnan(weights))], axis=0)
 
         # Next, ensure the highest weight is positive. This shouldn't matter since you later take the outer product
         # of vscale when computing activation patterns, keep here to be consistent with the literature.
-        flip_sign = np.greater(np.abs(vscale).max(axis=0), vscale.max(axis=0))
+        flip_sign = np.greater(np.nanmax(np.abs(vscale), axis=0), np.nanmax(vscale, axis=0))
         vscale_pos = vscale.copy()
         vscale_pos.T[flip_sign] = vscale.T[flip_sign] * -1
 
@@ -1089,8 +1100,9 @@ class DimReduction:
 
         return occ_map_nan
 
-    def make_assembly_field(self, assembly: int, dr_type: str in ['pcaica', 'pca', 'ica'], isrunning: bool = False):
-
+    def make_assembly_field(self, assembly: int, dr_type: str in ['pcaica', 'pca'],
+                            act_method: str in ['dupret', 'full'] = 'dupret', isrunning: bool = False):
+        """Plot spatial activation of a particular assembly"""
         # Grab occ map to get correct size and shape for 2-d assembly field
         occ_map_nan = self.PF.runoccmap.copy()
         occ_map_nan[occ_map_nan == 0] = np.nan
@@ -1101,7 +1113,7 @@ class DimReduction:
         nx, ny = assemb_pf.shape
 
         # Get appropriate activations!
-        activations = self.get_activations(dr_type)
+        activations = self.get_activations(dr_type=dr_type, act_method=act_method)
 
         # Loop through each bin and add up assembly values in that bin
         for xb in range(nx):
@@ -1120,6 +1132,48 @@ class DimReduction:
         assemb_pf[np.bitwise_or(self.PF.occmap == 0, np.isnan(self.PF.occmap))] = np.nan
 
         return assemb_pf
+
+    def get_tuning_sig(self, dr_type: str in ['pcaica', 'pca'], act_method: str in ['dupret', 'full'] = 'dupret',
+                       events='freeze_starts', buffer_sec=(6, 6), nperm=1000):
+        """This function will calculate significance values by comparing event-centered tuning curves to
+        chance (calculated from circular permutation of neural activity).
+        :param dr_type:
+        :param act_method:
+        :param events:
+        :param buffer_sec:
+        :return:
+        """
+        pass
+        # Load in previous tuning
+        sig_use = self.sig[dr_type][act_method][events]
+
+        calc_tuning = True
+        # # Check to see if appropriate tuning already run and stored and just use that, otherwise calculate from scratch.
+        if 'nperm' in sig_use:
+            if sig_use['nperm'] == nperm:
+                calc_tuning = False
+                pval = sig_use['pval']
+
+        if calc_tuning:
+            print('calculating ensemble significant tuning for nperm=' + str(nperm))
+            # NRK todo: start here
+            # check if both regular and permuted raster are run already!
+        #     pe_rasters, perm_rasters = self.check_rasters_run(events=events,
+        #                                                       buffer_sec=buffer_sec,  nperm=nperm)
+        #
+        #     # Now calculate tuning curves and get significance!
+        #     pe_tuning = gen_motion_tuning_curve(pe_rasters)
+        #     perm_tuning = np.asarray([gen_motion_tuning_curve(perm_raster) for perm_raster in perm_rasters])
+        #     pval = (pe_tuning < perm_tuning).sum(axis=0) / nperm
+        #
+        #     # Store in class
+        #     self.sig[events]['pval'] = pval
+        #     self.sig[events]['nperm'] = nperm
+        #
+        #     # Save to disk to save time in future
+        #     self.save_sig_tuning()
+        #
+        # return pval
 
     def plot_rasters(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
                      act_method: str in ['full', 'dupret'] = 'dupret',
@@ -1372,7 +1426,7 @@ class DimReduction:
 
     def calc_dupret_activations(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
                                 psa_use: str in ['raw', 'binnned', 'binnned_z'] = 'binned',
-                                ):
+                                custom_pmat: None or np.ndarray = None):
         """Calculate assembly activations in line with Trouche et al (2016). Zeros out diagonal of projection
         matrix so that only CO-ACTIVATIONS of neurons contribute to assembly activation"""
 
@@ -1385,15 +1439,19 @@ class DimReduction:
             psa = self.PSAbinz
 
         # Get appropriate weights for each neuron and activation dictionary
-        pmat_use = self.pmat if dr_type == 'pcaica' else self.pca.pmat
-        act_dict = self.activations if dr_type == 'pcaica' else self.pca.activations
+        if custom_pmat is None:
+            pmat_use = self.pmat if dr_type == 'pcaica' else self.pca.pmat
+            act_dict = self.activations if dr_type == 'pcaica' else self.pca.activations
+            pre_calc = act_dict['dupret'][psa_use]
+        else:
+            pmat_use = custom_pmat
+            pre_calc = None
 
-        # if dr_type == 'pcaica':
-        # if self.dupret_activations[psa_use] is not None:
-        if act_dict['dupret'][psa_use] is not None:
+        # Load in existing activations or calculate new ones
+        if pre_calc is not None:
             print("Loading pre-calculated Dupret activations calculated from " + psa_use + " calcium activity")
             # return self.dupret_activations[psa_use]
-            return act_dict['dupret'][psa_use]
+            return pre_calc
         else:
             print("Calculating Dupret activations from " + psa_use + " calcium activity")
 
