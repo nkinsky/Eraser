@@ -1003,7 +1003,7 @@ class DimReduction:
         """Scale vmat weights to one and set maximum weight to positive"""
 
         # First, scale weights so that all assemblies have length = 1
-        vscale = weights / np.linalg.norm(weights[np.bitwise_not(np.isnan(weights))], axis=0)
+        vscale = weights / np.linalg.norm(weights[np.bitwise_not(np.isnan(weights))].reshape(weights.shape), axis=0)
 
         # Next, ensure the highest weight is positive. This shouldn't matter since you later take the outer product
         # of vscale when computing activation patterns, keep here to be consistent with the literature.
