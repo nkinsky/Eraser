@@ -952,8 +952,8 @@ class DimReduction:
 
         # Initialize significance stats
         self.sig = {'pcaica': None, 'pca': None}
-        self._init_ica_params('pca')
-        self._init_ica_params('pcaica')
+        self._init_sig_dict('pca')
+        self._init_sig_dict('pcaica')
 
     def _init_sig_dict(self, dr_type: str in ['pcaica', 'pca']):
         self.sig[dr_type] = {'full': {'freeze_starts': {'nperm': None, 'pval': None},
