@@ -1240,7 +1240,8 @@ class DimReduction:
                                     non_freeze_ensembles: int or list or tuple = None,
                                     dr_type: str in ['pcaica', 'pca'] = 'pcaica',
                                     act_method: str in ['full', 'dupret'] = 'dupret',
-                                    psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw'):
+                                    psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw',
+                                    plot_speed: bool = False):
         """Plot activation of freeze (and optionally, non-freeze) ensembles across time with freezing
         epochs overlaid.
 
@@ -1542,6 +1543,19 @@ class DimReduction:
 class DimReductionReg(DimReduction):
     def __init__(self, mouse: str, base_arena: str, base_day: int, reg_arena: str, reg_day: str, bin_size: float = 0.5,
                  nPCs: int = 50, ica_method: str in ['ica_on_cov', 'ica_on_zproj'] = 'ica_on_zproj', **kwargs):
+        """
+
+        :param mouse:
+        :param base_arena: Arena/Day to start with
+        :param base_day:
+        :param reg_arena: Arena/Day to register to base day
+        :param reg_day:
+        :param bin_size:
+        :param nPCs:
+        :param ica_method:
+        :param kwargs:
+        """
+
         # Create a DimReduction object for each day
         self.DRbase = DimReduction(mouse, base_arena, base_day, bin_size, nPCs, ica_method, **kwargs)
         self.DRreg = DimReduction(mouse, reg_arena, reg_day, bin_size, nPCs, ica_method, **kwargs)
@@ -1559,7 +1573,12 @@ class DimReductionReg(DimReduction):
         self.v = self.DRreg.scale_weights(reg_weights_full)
         self.df = self.DRreg.to_df(self.v)
         self.pmat = self.DRreg.calc_pmat(self.v)
+        self.pmat[np.isnan(self.pmat)] = 0  # Set nans to 0, otherwise activations will all come out as NaN later on
+
+        # Pull over freezing times and neural activity from registered day
         self.PF = self.DRreg.PF
+        self.freeze_starts = self.DRreg.freeze_starts
+        self.freeze_ends = self.DRreg.freeze_ends
 
         # Calculate activations
         self.activations = {'full': self.calc_activations('pcaica'),
