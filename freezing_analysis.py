@@ -849,13 +849,13 @@ class DimReduction:
                  ica_method: str in ['ica_on_cov', 'ica_on_zproj'] = 'ica_on_zproj', **kwargs):
         """Initialize ICA on data. Can also run PCA later if you want.
 
-        :param mouse: str
-        :param arena: str
-        :param day: int
-        :param bin_size: float, seconds, 0.5 = default
-        :param nPCs: int, 50 = default
-        :param **kwargs: inputs to  sklearn.decomposition.FastICA, e.g. 'tol', 'random_state', etc.
-        """
+            :param mouse: str
+            :param arena: str
+            :param day: int
+            :param bin_size: float, seconds, 0.5 = default
+            :param nPCs: int, 50 = default
+            :param **kwargs: inputs to  sklearn.decomposition.FastICA, e.g. 'tol', 'random_state', etc.
+            """
 
         self.mouse = mouse
         self.arena = arena
@@ -1252,6 +1252,10 @@ class DimReduction:
         :return:
         """
 
+        # Format inputs properly
+        freeze_ensembles = [freeze_ensembles] if isinstance(freeze_ensembles, int) else freeze_ensembles
+        non_freeze_ensembles = [non_freeze_ensembles] if isinstance(non_freeze_ensembles, int) else non_freeze_ensembles
+
         activations = self.get_activations(dr_type=dr_type, act_method=act_method, psa_use=psa_use)
 
         figf, axover = plt.subplots(figsize=(10, 4))
@@ -1535,7 +1539,7 @@ class DimReduction:
         return df
 
 
-class DimReductionReg:
+class DimReductionReg(DimReduction):
     def __init__(self, mouse: str, base_arena: str, base_day: int, reg_arena: str, reg_day: str, bin_size: float = 0.5,
                  nPCs: int = 50, ica_method: str in ['ica_on_cov', 'ica_on_zproj'] = 'ica_on_zproj', **kwargs):
         # Create a DimReduction object for each day
@@ -1544,10 +1548,10 @@ class DimReductionReg:
 
         # Now register across days
         neuron_map = pfs.get_neuronmap(mouse, base_arena, base_day, reg_arena, reg_day, batch_map_use=True)
-        nneuronsb = self.DRbase.df.shape[0]
+        nneuronsr = self.DRreg.df.shape[0]
         nics = self.DRbase.df.shape[1] - 1
         valid_map_bool = neuron_map > 0
-        reg_weights_full = np.ones((nneuronsb, nics)) * np.nan
+        reg_weights_full = np.ones((nneuronsr, nics)) * np.nan
         for weights_reg, weights_base in zip(reg_weights_full.T, self.DRbase.df.values[:, 1:].T.copy()):
             weights_reg[neuron_map[valid_map_bool]] = weights_base[valid_map_bool]
 
@@ -1555,6 +1559,12 @@ class DimReductionReg:
         self.v = self.DRreg.scale_weights(reg_weights_full)
         self.df = self.DRreg.to_df(self.v)
         self.pmat = self.DRreg.calc_pmat(self.v)
+        self.PF = self.DRreg.PF
+
+        # Calculate activations
+        self.activations = {'full': self.calc_activations('pcaica'),
+                            'dupret': {'raw': None, 'binned': None, 'binned_z': None}}
+
         # Last, dump activations into DRreg so that you can easily plot the same thing across days!
 
 
