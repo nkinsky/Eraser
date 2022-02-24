@@ -1002,8 +1002,14 @@ class DimReduction:
     def scale_weights(weights):
         """Scale vmat weights to one and set maximum weight to positive"""
 
+        # Grab basic info about ICs and neurons
+        nICs = weights.shape[1]
+        valid_bool = np.bitwise_not(np.isnan(weights))
+        nneurons_valid = np.sum(valid_bool[:, 0])
+
         # First, scale weights so that all assemblies have length = 1
-        vscale = weights / np.linalg.norm(weights[np.bitwise_not(np.isnan(weights))].reshape(weights.shape), axis=0)
+        weights_valid = weights[valid_bool].reshape(nneurons_valid, nICs)  # Grab only non-NaN values (rows) of weights mat
+        vscale = weights / np.linalg.norm(weights_valid, axis=0)  # Scale full weight mat (including NaNs) by length
 
         # Next, ensure the highest weight is positive. This shouldn't matter since you later take the outer product
         # of vscale when computing activation patterns, keep here to be consistent with the literature.
@@ -1527,6 +1533,29 @@ class DimReduction:
             df = getattr(self, dr_type).df
 
         return df
+
+
+class DimReductionReg:
+    def __init__(self, mouse: str, base_arena: str, base_day: int, reg_arena: str, reg_day: str, bin_size: float = 0.5,
+                 nPCs: int = 50, ica_method: str in ['ica_on_cov', 'ica_on_zproj'] = 'ica_on_zproj', **kwargs):
+        # Create a DimReduction object for each day
+        self.DRbase = DimReduction(mouse, base_arena, base_day, bin_size, nPCs, ica_method, **kwargs)
+        self.DRreg = DimReduction(mouse, reg_arena, reg_day, bin_size, nPCs, ica_method, **kwargs)
+
+        # Now register across days
+        neuron_map = pfs.get_neuronmap(mouse, base_arena, base_day, reg_arena, reg_day, batch_map_use=True)
+        nneuronsb = self.DRbase.df.shape[0]
+        nics = self.DRbase.df.shape[1] - 1
+        valid_map_bool = neuron_map > 0
+        reg_weights_full = np.ones((nneuronsb, nics)) * np.nan
+        for weights_reg, weights_base in zip(reg_weights_full.T, self.DRbase.df.values[:, 1:].T.copy()):
+            weights_reg[neuron_map[valid_map_bool]] = weights_base[valid_map_bool]
+
+        # Now scale registered weights
+        self.v = self.DRreg.scale_weights(reg_weights_full)
+        self.df = self.DRreg.to_df(self.v)
+        self.pmat = self.DRreg.calc_pmat(self.v)
+        # Last, dump activations into DRreg so that you can easily plot the same thing across days!
 
 
 class PCA:
