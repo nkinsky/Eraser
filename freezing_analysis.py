@@ -1556,6 +1556,12 @@ class DimReductionReg(DimReduction):
         :param kwargs:
         """
 
+        self.mouse = mouse
+        self.day = reg_day
+        self.arena = reg_arena
+        self.base_day = base_day
+        self.base_arena = base_arena
+
         # Create a DimReduction object for each day
         self.DRbase = DimReduction(mouse, base_arena, base_day, bin_size, nPCs, ica_method, **kwargs)
         self.DRreg = DimReduction(mouse, reg_arena, reg_day, bin_size, nPCs, ica_method, **kwargs)
@@ -1584,7 +1590,15 @@ class DimReductionReg(DimReduction):
         self.activations = {'full': self.calc_activations('pcaica'),
                             'dupret': {'raw': None, 'binned': None, 'binned_z': None}}
 
-        # Last, dump activations into DRreg so that you can easily plot the same thing across days!
+    def plot_reg_rasters(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
+                         act_method: str in ['full', 'dupret'] = 'dupret',
+                         psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw',
+                         **kwargs):
+        ax = self.plot_rasters(**kwargs)
+        fig = ax.reshape(-1)[0].get_figure()
+        type_prepend = f' {psa_use.capitalize()}' if act_method == 'dupret' else ''  # Add activation type for dupret
+        fig.suptitle(f'{self.mouse} {self.arena} : Day {self.day} {dr_type.upper()}{type_prepend} Activations\n '
+                     f'From Base Session: {self.base_arena} Day {self.base_day}')
 
 
 class PCA:
