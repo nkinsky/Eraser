@@ -1580,6 +1580,7 @@ class DimReductionReg(DimReduction):
         self.df = self.DRreg.to_df(self.v)
         self.pmat = self.DRreg.calc_pmat(self.v)
         self.pmat[np.isnan(self.pmat)] = 0  # Set nans to 0, otherwise activations will all come out as NaN later on
+        self.nics = self.DRreg.df.shape[1] - 1
 
         # Pull over freezing times and neural activity from registered day
         self.PF = self.DRreg.PF
@@ -1592,13 +1593,54 @@ class DimReductionReg(DimReduction):
 
     def plot_reg_rasters(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
                          act_method: str in ['full', 'dupret'] = 'dupret',
+                         buffer_sec: int = 6,
                          psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw',
                          **kwargs):
-        ax = self.plot_rasters(**kwargs)
+        ax = self.plot_rasters(dr_type, act_method, buffer_sec, psa_use, **kwargs)
         fig = ax.reshape(-1)[0].get_figure()
         type_prepend = f' {psa_use.capitalize()}' if act_method == 'dupret' else ''  # Add activation type for dupret
         fig.suptitle(f'{self.mouse} {self.arena} : Day {self.day} {dr_type.upper()}{type_prepend} Activations\n '
                      f'From Base Session: {self.base_arena} Day {self.base_day}')
+
+        # Next step = plot side-by-side with base day rasters!
+
+    def plot_rasters_across_days(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
+                                 act_method: str in ['full', 'dupret'] = 'dupret',
+                                 psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw',
+                                 buffer_sec: int = 6,
+                                 plot_speed_corr: bool = True, plot_freeze_ends: bool = True,
+                                 y2scale=0.1,
+                                 **kwargs):
+        """Plot all your freeze-related ensemble data across two sessions. Does not plot well in IDE,
+        notebook is ideal to allow for easy vertical scrolling."""
+
+        def label_columns_w_day(axtop):
+            """Add 'Base Session' and 'Reg Session' to each row of plots"""
+            for title_use, a in zip(('Base Session', 'Reg Session'), axtop):
+                a.set_title(title_use + '\n' + a.get_title())
+
+        # Set up plots
+        ncols = 2 * (1 + plot_speed_corr + plot_freeze_ends)
+        fig, ax = plt.subplots(self.nics, ncols, figsize=(ncols*2, self.nics*2))
+
+        # Plot rasters
+        self.DRbase.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, 0],
+                                 y2scale=y2scale, **kwargs)
+        self.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, 1],
+                          y2scale=y2scale, **kwargs)
+        label_columns_w_day(ax[0][0:2])
+
+        if plot_speed_corr:
+            pass
+
+        if plot_speed_corr:
+            pass
+
+        # Label top
+        type_prepend = f' {psa_use.capitalize()}' if act_method == 'dupret' else ''  # Add activation type for dupret
+        fig.suptitle(f'{self.mouse} {self.arena} : Day {self.day} {dr_type.upper()}{type_prepend} Activations\n '
+                     f'From Base Session: {self.base_arena} Day {self.base_day}')
+
 
 
 class PCA:
