@@ -50,6 +50,7 @@ def get_comp_name():
     except KeyError:  # Above does NOT work for Unix-based systems
         from os import uname
         comp_name = uname()[1]
+        sys_type = uname()[0]
 
     if comp_name == 'NATLAPTOP':
         pathname = r'C:\Users\Nat\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'
@@ -57,7 +58,7 @@ def get_comp_name():
         session_dir = r'C:\Eraser\SessionDirectories'
     elif comp_name == 'RKC-HAS-WD-0005':  # not really used anymore
         pathname = r'C:\Users\kinsky\Dropbox\Imaging Project\Manuscripts\Eraser\Figures'
-    elif 'Nathaniel' in comp_name:
+    elif 'Nathaniel' in comp_name or sys_type == 'Darwin':
         pathname = '/Users/nkinsky/Dropbox/Imaging Project/Manuscripts/Eraser/Figures'
         working_dir = '/Users/nkinsky/Documents/BU/Working/Eraser'
         session_dir = '/Users/nkinsky/Documents/BU/Working/Eraser/SessionDirectories'
