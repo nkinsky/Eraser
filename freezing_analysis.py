@@ -1623,24 +1623,42 @@ class DimReductionReg(DimReduction):
         ncols = 2 * (1 + plot_speed_corr + plot_freeze_ends)
         fig, ax = plt.subplots(self.nics, ncols, figsize=(ncols*2, self.nics*2))
 
-        # Plot rasters
-        self.DRbase.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, 0],
+        # Order things chronologically
+        days = np.array([-2, -1, 0, 4, 1, 2, 7])
+        if np.where(self.day == days)[0][0] > np.where(self.base_day == days)[0][0]:
+            base_col, reg_col = 0, 1
+        else:
+            base_col, reg_col = 1, 0
+
+        # Plot freeze-start rasters
+        self.DRbase.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, base_col],
                                  y2scale=y2scale, **kwargs)
-        self.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, 1],
+        self.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, reg_col],
                           y2scale=y2scale, **kwargs)
-        label_columns_w_day(ax[0][0:2])
+        label_columns_w_day(ax[0][[base_col, reg_col]])
 
+        # Plot speed v activity x-correlations
         if plot_speed_corr:
-            pass
+            for col_use, DR in zip((base_col + 2, reg_col + 2), (self.DRbase, self.DRreg)):
+                activations = DR.get_activations(dr_type=dr_type, act_method=act_method)
+                speed = DR.PF.speed_sm
+                for a, act in zip(ax[:, col_use], activations):
+                    plot_speed_activity_xcorr(act, speed, buffer_sec, self.PF.sr_image, a, '', labelx=False)
+                    sns.despine(ax=a)
+            label_columns_w_day(ax[0][[2 + base_col, 2 + reg_col]])
 
-        if plot_speed_corr:
-            pass
+        # Plot freeze end rasters
+        if plot_freeze_ends:
+            self.DRbase.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_ends',
+                                     ax=ax[:, base_col + 4], y2scale=y2scale, **kwargs)
+            self.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_ends',
+                              ax=ax[:, reg_col + 4], y2scale=y2scale, **kwargs)
+            label_columns_w_day(ax[0][[4 + base_col, 4 + reg_col]])
 
         # Label top
         type_prepend = f' {psa_use.capitalize()}' if act_method == 'dupret' else ''  # Add activation type for dupret
         fig.suptitle(f'{self.mouse} {self.arena} : Day {self.day} {dr_type.upper()}{type_prepend} Activations\n '
                      f'From Base Session: {self.base_arena} Day {self.base_day}')
-
 
 
 class PCA:
@@ -2076,6 +2094,24 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25,
     sns.despine(ax=ax)
 
     return ax, secax
+
+
+def plot_speed_activity_xcorr(activity, speed, time_buffer_sec, sr, axcorr, label, labelx=True):
+    """Plot cross-correlation between neural activity and speed. Designed for ensemble activity, probably
+    will look wonky for single cells."""
+
+    maxlags = np.round(time_buffer_sec * sr).astype('int')
+    axcorr.xcorr(activity, speed, maxlags=maxlags)
+    axcorr.set_xticks([-maxlags, 0, maxlags])
+    axcorr.axvline(0, color='k')
+    axcorr.set_xticklabels([str(-time_buffer_sec), "0", str(time_buffer_sec)])
+    axcorr.set_title(label)
+    if labelx:
+        axcorr.set_xlabel('Lag (s)')
+    axcorr.set_ylabel('Cross-Corr.')
+
+    axcorr.autoscale(enable=True, axis='x', tight=True)  # Make it plot to very ends
+    sns.despine(ax=axcorr)
 
 
 def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax=None, inactive_cells='black',
