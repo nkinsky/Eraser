@@ -101,68 +101,6 @@ class MotionTuning:
 
         return perm_rasters
 
-    def get_sig_neurons(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000,
-                        alpha=0.01, nbins=3, active_prop=0.25):
-        """Find freezing neurons as those which have sig < alpha for nbins (consecutive) or more AND are active on
-        at least active_prop of events."""
-
-        # Load in significance values at each spatial bin and re-run things if not already there
-        pval = self.get_tuning_sig(events=events, buffer_sec=buffer_sec, nperm=nperm)
-
-        # Determine if there is significant tuning of < alpha for nbins (consecutive)
-        sig_bool = np.asarray([(np.diff(contiguous_regions(p < alpha), axis=1) > nbins).any() for p in pval],
-                              dtype=bool)
-
-        # Load in rasters
-        pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
-        nevents = pe_rasters.shape[1]
-
-        # Determine if neurons pass the activity threshold
-        nevents_active = pe_rasters.any(axis=2).sum(axis=1)
-        active_bool = (nevents_active > active_prop * nevents)
-
-        sig_neurons = np.where(np.bitwise_and(sig_bool, active_bool))[0]
-
-        return sig_neurons
-
-    def check_rasters_run(self, events='freeze_onset', buffer_sec=(2, 2),  nperm=1000):
-        """ Verifies if you have already created rasters and permuted rasters and checks to make sure they match.
-
-        :param cells:
-        :param events:
-        :param buffer_sec:
-        :param nperm:
-        :return:
-        """
-        # check if both regular and permuted raster are run already!
-        pe_rasters = self.pe_rasters[events]
-        perm_rasters = self.perm_rasters[events]
-        nbins_use = np.sum([int(buffer_sec[0] * self.sr_image), int(buffer_sec[1] * self.sr_image)])
-        if isinstance(pe_rasters, np.ndarray) and isinstance(perm_rasters, np.ndarray):
-            ncells, nevents, nbins = pe_rasters.shape
-            nperm2, ncells2, nevents2, nbins2 = perm_rasters.shape
-
-            # Make sure you are using the same data format!
-            assert ncells == ncells2, '# Cells in data and permuted rasters do not match'
-            assert nevents == nevents2, '# events in data and permuted rasters do not match'
-
-            # if different buffer_sec used, re-run full rasters
-            if nbins != nbins_use:
-                pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
-
-            # if different buffer_sec or nperm used, re-run permuted rasters
-            if nbins2 != nbins_use or nperm2 != nperm:
-                perm_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm)
-
-        elif not isinstance(pe_rasters, np.ndarray):
-            pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
-            if not isinstance(perm_rasters, np.ndarray):
-                perm_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm)
-            else:
-                pe_rasters, perm_rasters = self.check_rasters_run(events=events, buffer_sec=buffer_sec, nperm=nperm)
-
-        return pe_rasters, perm_rasters
-
     def get_tuning_sig(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000):
         """This function will calculate significance values by comparing event-centered tuning curves to
         chance (calculated from circular permutation of neural activity).
@@ -201,6 +139,30 @@ class MotionTuning:
 
         return pval
 
+    def get_sig_neurons(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000,
+                        alpha=0.01, nbins=3, active_prop=0.25):
+        """Find freezing neurons as those which have sig < alpha for nbins (consecutive) or more AND are active on
+        at least active_prop of events."""
+
+        # Load in significance values at each spatial bin and re-run things if not already there
+        pval = self.get_tuning_sig(events=events, buffer_sec=buffer_sec, nperm=nperm)
+
+        # Determine if there is significant tuning of < alpha for nbins (consecutive)
+        sig_bool = np.asarray([(np.diff(contiguous_regions(p < alpha), axis=1) > nbins).any() for p in pval],
+                              dtype=bool)
+
+        # Load in rasters
+        pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
+        nevents = pe_rasters.shape[1]
+
+        # Determine if neurons pass the activity threshold
+        nevents_active = pe_rasters.any(axis=2).sum(axis=1)
+        active_bool = (nevents_active > active_prop * nevents)
+
+        sig_neurons = np.where(np.bitwise_and(sig_bool, active_bool))[0]
+
+        return sig_neurons
+
     def save_sig_tuning(self):
         """Saves any significant tuned neuron data"""
         with open(self.dir_use / "sig_motion_tuning.pkl", 'wb') as f:
@@ -210,6 +172,44 @@ class MotionTuning:
         """Loads any previously calculated tunings"""
         with open(self.dir_use / "sig_motion_tuning.pkl", 'rb') as f:
             self.sig = load(f)
+
+    def check_rasters_run(self, events='freeze_onset', buffer_sec=(2, 2),  nperm=1000):
+        """ Verifies if you have already created rasters and permuted rasters and checks to make sure they match.
+
+        :param cells:
+        :param events:
+        :param buffer_sec:
+        :param nperm:
+        :return:
+        """
+        # check if both regular and permuted raster are run already!
+        pe_rasters = self.pe_rasters[events]
+        perm_rasters = self.perm_rasters[events]
+        nbins_use = np.sum([int(buffer_sec[0] * self.sr_image), int(buffer_sec[1] * self.sr_image)])
+        if isinstance(pe_rasters, np.ndarray) and isinstance(perm_rasters, np.ndarray):
+            ncells, nevents, nbins = pe_rasters.shape
+            nperm2, ncells2, nevents2, nbins2 = perm_rasters.shape
+
+            # Make sure you are using the same data format!
+            assert ncells == ncells2, '# Cells in data and permuted rasters do not match'
+            assert nevents == nevents2, '# events in data and permuted rasters do not match'
+
+            # if different buffer_sec used, re-run full rasters
+            if nbins != nbins_use:
+                pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
+
+            # if different buffer_sec or nperm used, re-run permuted rasters
+            if nbins2 != nbins_use or nperm2 != nperm:
+                perm_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm)
+
+        elif not isinstance(pe_rasters, np.ndarray):
+            pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
+            if not isinstance(perm_rasters, np.ndarray):
+                perm_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm)
+            else:
+                pe_rasters, perm_rasters = self.check_rasters_run(events=events, buffer_sec=buffer_sec, nperm=nperm)
+
+        return pe_rasters, perm_rasters
 
     def select_cells(self, cells, buffer_sec=(2, 2), **kwargs):
         """Select different types of cells for plotting
@@ -887,6 +887,14 @@ class DimReduction:
         self._init_ica_params(**kwargs)
         self._init_PCA_ICA(nPCs=nPCs, ica_method=ica_method)
 
+        # Initialize ensemble testing
+        self.pe_rasters = {'pcaica': {'freeze_onset': None, 'move_onset': None},
+                           'pca': {'freeze_onset': None, 'move_onset': None}}
+        self.perm_rasters = {'pcaica': {'freeze_onset': None, 'move_onset': None},
+                             'pca': {'freeze_onset': None, 'move_onset': None}}
+        self.sig = {'pcaica': {'freeze_onset': None, 'move_onset': None},
+                    'pca': {'freeze_onset': None, 'move_onset': None}}
+
     def _init_PCA_ICA(self, nPCs: int, ica_method: str in ['ica_on_cov', 'ica_on_zproj']):
         """Initialize asssemblies based on PCA/ICA method from Lopes dos Santos (2013) and later
         van de Ven (2016) and Trouche (2016)
@@ -1436,7 +1444,7 @@ class DimReduction:
         return np.asarray(act)
 
     def calc_dupret_activations(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
-                                psa_use: str in ['raw', 'binnned', 'binnned_z'] = 'binned',
+                                psa_use: str in ['raw', 'binnned', 'binnned_z'] = 'raw',
                                 custom_pmat: None or np.ndarray = None):
         """Calculate assembly activations in line with Trouche et al (2016). Zeros out diagonal of projection
         matrix so that only CO-ACTIVATIONS of neurons contribute to assembly activation"""
@@ -1508,8 +1516,8 @@ class DimReduction:
     def get_activations(self, dr_type: str in ['pcaica', 'pca'],
                         act_method: str in ['full', 'dupret'] = 'dupret',
                         **kwargs):
-        """Quickly grabs pre-calculated activations.  For dupret activations can specifify "raw", "binned", or "binned_z
-        in kwargs"""
+        """Quickly grabs pre-calculated activations.  For dupret activations can specifify "raw" (default),
+        "binned", or "binned_z in kwargs"""
 
         # Grab appropriate activations dictionary
         act_dict = self.activations if dr_type == 'pcaica' else self.pca.activations
@@ -1538,6 +1546,169 @@ class DimReduction:
             df = getattr(self, dr_type).df
 
         return df
+
+    def gen_pe_rasters(self, events='freeze_onset', buffer_sec=(6, 6),
+                       dr_type: str in ['pcaica', 'pca'] = 'pcaica'):
+        """Generate the rasters for all ensembles and dump them into a dictionary"""
+
+        # Get appropriate event times to use
+        assert events in ['freeze_onset', 'move_onset']
+        event_starts = self.select_events(events)
+
+        activations = self.get_activations(dr_type=dr_type, act_method='dupret')
+
+        pe_rasters = [get_PE_raster(act, event_starts, buffer_sec=buffer_sec,
+                                    sr_image=self.PF.sr_image) for act in activations]
+
+        pe_rasters = np.asarray(pe_rasters)
+        self.pe_rasters[dr_type][events] = pe_rasters
+
+        return pe_rasters
+
+    def gen_perm_rasters(self, events='freeze_onset', buffer_sec=(6, 6), nperm=1000,
+                         dr_type: str in ['pcaica', 'pca'] = 'pcaica'):
+        """Generate shuffled rasters and dump them into a dictionary"""
+
+        # Get appropriate ensembles and event times to use
+        assert events in ['freeze_onset', 'move_onset']
+        event_starts = self.select_events(events)
+
+        activations = self.get_activations(dr_type=dr_type, act_method='dupret')
+
+        # Loop through each cell and get its chance level raster
+        print('generating permuted rasters - may take up to 1 minute')
+        perm_rasters = np.asarray([shuffle_raster(act, event_starts, buffer_sec=buffer_sec,
+                                                  sr_image=self.PF.sr_image, nperm=nperm)
+                                   for act in activations.swapaxes(0, 1)])
+        self.perm_rasters[dr_type][events] = perm_rasters
+
+        return perm_rasters
+
+    def get_tuning_sig(self, events='freeze_onset', buffer_sec=(6, 6), nperm=1000,
+                       dr_type: str in ['pcaica', 'pca'] = 'pcaica'):
+        """This function will calculate significance values by comparing event-centered tuning curves to
+        chance (calculated from circular permutation of neural activity) for all ensembles
+        :param events:
+        :param buffer_sec:
+        :return:
+        """
+
+        # Load in previous tuning
+        sig_use = self.sig[dr_type][events]
+
+        calc_tuning = True
+        # Check to see if appropriate tuning already run and stored and just use that, otherwise calculate from scratch.
+        if 'nperm' in sig_use:
+            if sig_use['nperm'] == nperm:
+                calc_tuning = False
+                pval = sig_use['pval']
+
+        if calc_tuning:
+            print('calculating significant tuning for nperm=' + str(nperm))
+            # check if both regular and permuted raster are run already!
+            pe_rasters, perm_rasters = self.check_rasters_run(events=events,
+                                                              buffer_sec=buffer_sec,  nperm=nperm)
+
+            # Now calculate tuning curves and get significance!
+            pe_tuning = gen_motion_tuning_curve(pe_rasters)
+            perm_tuning = np.asarray([gen_motion_tuning_curve(perm_raster) for perm_raster in perm_rasters])
+            pval = (pe_tuning < perm_tuning).sum(axis=0) / nperm
+
+            # Store in class
+            self.sig[dr_type][events]['pval'] = pval
+            self.sig[dr_type][events]['nperm'] = nperm
+
+            # Save to disk to save time in future
+            self.save_sig_tuning()
+
+        return pval
+
+    def get_sig_ensembles(self, events='freeze_onset', buffer_sec=(6, 6), nperm=1000,
+                        dr_type: str in ['pcaica', 'pca'] = 'pcaica', alpha=0.01, nbins=3, active_prop=0.25):
+        """Find freezing neurons as those which have sig < alpha for nbins (consecutive) or more AND are active on
+        at least active_prop of events."""
+
+        # Load in significance values at each spatial bin and re-run things if not already there
+        pval = self.get_tuning_sig(events=events, buffer_sec=buffer_sec, nperm=nperm, dr_type=dr_type)
+
+        # Determine if there is significant tuning of < alpha for nbins (consecutive)
+        sig_bool = np.asarray([(np.diff(contiguous_regions(p < alpha), axis=1) > nbins).any() for p in pval],
+                              dtype=bool)
+
+        # Load in rasters
+        pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
+        nevents = pe_rasters.shape[1]
+
+        # Determine if neurons pass the activity threshold
+        nevents_active = pe_rasters.any(axis=2).sum(axis=1)
+        active_bool = (nevents_active > active_prop * nevents)
+
+        sig_neurons = np.where(np.bitwise_and(sig_bool, active_bool))[0]
+
+        return sig_neurons
+
+    def check_rasters_run(self, events='freeze_onset', buffer_sec=(6, 6),  nperm=1000,
+                          dr_type: str in ['pcaica', 'pca'] = 'pcaica'):
+        """ Verifies if you have already created rasters and permuted rasters and checks to make sure they match.
+
+        :param cells:
+        :param events:
+        :param buffer_sec:
+        :param nperm:
+        :return:
+        """
+        # check if both regular and permuted raster are run already!
+        pe_rasters = self.pe_rasters[dr_type][events]
+        perm_rasters = self.perm_rasters[dr_type][events]
+        nbins_use = np.sum([int(buffer_sec[0] * self.PF.sr_image), int(buffer_sec[1] * self.PF.sr_image)])
+        if isinstance(pe_rasters, np.ndarray) and isinstance(perm_rasters, np.ndarray):
+            ncells, nevents, nbins = pe_rasters.shape
+            nperm2, ncells2, nevents2, nbins2 = perm_rasters.shape
+
+            # Make sure you are using the same data format!
+            assert ncells == ncells2, '# Cells in data and permuted rasters do not match'
+            assert nevents == nevents2, '# events in data and permuted rasters do not match'
+
+            # if different buffer_sec used, re-run full rasters
+            if nbins != nbins_use:
+                pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec, dr_type=dr_type)
+
+            # if different buffer_sec or nperm used, re-run permuted rasters
+            if nbins2 != nbins_use or nperm2 != nperm:
+                perm_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm,
+                                                     dr_type=dr_type)
+
+        elif not isinstance(pe_rasters, np.ndarray):
+            pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec, dr_type=dr_type)
+            if not isinstance(perm_rasters, np.ndarray):
+                perm_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm,
+                                                     dr_type=dr_type)
+            else:
+                pe_rasters, perm_rasters = self.check_rasters_run(events=events, buffer_sec=buffer_sec, nperm=nperm,
+                                                                  dr_type=dr_type)
+
+        return pe_rasters, perm_rasters
+
+    def select_events(self, events):
+        """Quickly get the appropriate cells and event times to use"""
+
+        # Get appropriate events
+        if events in ['freeze_onset', 'freeze_starts']:
+            event_starts = self.freeze_starts
+        elif events == ['move_onset', 'freeze_ends']:
+            event_starts = self.freeze_ends
+
+        return event_starts
+
+    def save_sig_tuning(self):
+        """Saves any significant tuned ensemble tuning significance data"""
+        with open(self.dir_use / "sig_ensemble_motion_tuning.pkl", 'wb') as f:
+            dump(self.sig, f)
+
+    def load_sig_tuning(self):
+        """Loads any previously calculated ensemble tuning significance data"""
+        with open(self.dir_use / "sig_ensemble_motion_tuning.pkl", 'rb') as f:
+            self.sig = load(f)
 
 
 class DimReductionReg(DimReduction):
