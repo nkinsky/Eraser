@@ -857,9 +857,14 @@ class DimReduction:
             :param **kwargs: inputs to  sklearn.decomposition.FastICA, e.g. 'tol', 'random_state', etc.
             """
 
+        # Save session info
         self.mouse = mouse
         self.arena = arena
         self.day = day
+
+        # ID working directory
+        dir_use = pf.get_dir(mouse, arena, day)
+        self.dir_use = Path(dir_use)
 
         # Load in relevant data
         self.PF = pf.load_pf(mouse, arena, day)
@@ -888,12 +893,12 @@ class DimReduction:
         self._init_PCA_ICA(nPCs=nPCs, ica_method=ica_method)
 
         # Initialize ensemble testing
-        self.pe_rasters = {'pcaica': {'freeze_onset': None, 'move_onset': None},
-                           'pca': {'freeze_onset': None, 'move_onset': None}}
-        self.perm_rasters = {'pcaica': {'freeze_onset': None, 'move_onset': None},
-                             'pca': {'freeze_onset': None, 'move_onset': None}}
-        self.sig = {'pcaica': {'freeze_onset': None, 'move_onset': None},
-                    'pca': {'freeze_onset': None, 'move_onset': None}}
+        self.pe_rasters = {'pcaica': {'freeze_onset': {}, 'move_onset': {}},
+                           'pca': {'freeze_onset': {}, 'move_onset': {}}}
+        self.perm_rasters = {'pcaica': {'freeze_onset': {}, 'move_onset': {}},
+                             'pca': {'freeze_onset': {}, 'move_onset': {}}}
+        self.sig = {'pcaica': {'freeze_onset': {}, 'move_onset': {}},
+                    'pca': {'freeze_onset': {}, 'move_onset': {}}}
 
     def _init_PCA_ICA(self, nPCs: int, ica_method: str in ['ica_on_cov', 'ica_on_zproj']):
         """Initialize asssemblies based on PCA/ICA method from Lopes dos Santos (2013) and later
@@ -1194,6 +1199,7 @@ class DimReduction:
                      buffer: int = 6,
                      psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw',
                      events: str in ['freeze_starts', 'freeze_ends'] = 'freeze_starts',
+                     alpha: float = 0.01,
                      ax=None, **kwargs):
         """Plot rasters of assembly activation in relation to freezing"""
 
@@ -1211,6 +1217,14 @@ class DimReduction:
             nrows = ax.shape[0]
             ncols = 1 if ax.ndim == 1 else ax.shape[1]
             fig = ax.reshape(-1)[0].get_figure()
+
+        # Check if significance tuning calculated for plotting
+        assert events in ['freeze_starts', 'freeze_ends']
+        event_names = 'freeze_onset' if events == 'freeze_starts' else 'move_onset'
+        if 'pval' in self.sig[dr_type][event_names]:
+            sig_bins = [np.where(p < alpha)[0] for p in self.sig[dr_type][event_names]['pval']]
+        else:
+            sig_bins = [None for _ in activations]
 
         ensemble_type = 'PCA' if dr_type == 'pca' else 'ICA'
 
@@ -1235,7 +1249,7 @@ class DimReduction:
             labely2 = ida % ncols == (ncols - 1)  # only labely y2 on right-most plots
             labelx = ida >= ncols * (nrows - 1)
             plot_raster(assemb_raster, cell_id=ida, bs_rate=act_mean, sr_image=self.PF.sr_image, ax=a,
-                        y2zero=ntrials / 5, events=events.replace('_', ' '),
+                        y2zero=ntrials / 5, events=events.replace('_', ' '), sig_bins=sig_bins[ida],
                         labely=labely, labely2=labely2, labelx=labelx, **kwargs)
             a.set_title(f'{ensemble_type} {ida}{suffix}')
 
@@ -1579,7 +1593,7 @@ class DimReduction:
         print('generating permuted rasters - may take up to 1 minute')
         perm_rasters = np.asarray([shuffle_raster(act, event_starts, buffer_sec=buffer_sec,
                                                   sr_image=self.PF.sr_image, nperm=nperm)
-                                   for act in activations.swapaxes(0, 1)])
+                                   for act in activations]).swapaxes(0, 1)
         self.perm_rasters[dr_type][events] = perm_rasters
 
         return perm_rasters
