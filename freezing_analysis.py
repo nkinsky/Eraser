@@ -1764,8 +1764,8 @@ class DimReductionReg(DimReduction):
         self.df = self.DRreg.to_df(self.v)
         self.pmat = self.DRreg.calc_pmat(self.v)
         self.pmat[np.isnan(self.pmat)] = 0  # Set nans to 0, otherwise activations will all come out as NaN later on
-        self.nics = self.DRreg.df.shape[1] - 1
-
+        # self.nics = self.DRreg.df.shape[1] - 1
+        self.nics = self.df.shape[1] - 1
         # Pull over freezing times and neural activity from registered day
         self.PF = self.DRreg.PF
         self.freeze_starts = self.DRreg.freeze_starts
@@ -1850,7 +1850,7 @@ class DimReductionReg(DimReduction):
 
         # Plot freeze end rasters
         if plot_freeze_ends:
-            for ids, session in enumerate([self, self.DRbase]):
+            for ids, session in enumerate([self.DRbase, self]):
                 # sig_bins = self.get_sig_plot_tuning(session.sig[dr_type]['move_onset'], sig_plot, self.nics, alpha)
                 session.get_tuning_sig('move_onset', (buffer_sec, buffer_sec), nperm=1000, dr_type='pcaica')
                 col_plot = base_reg_col[ids]
