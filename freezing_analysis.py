@@ -11,6 +11,7 @@ import pandas as pd
 from sklearn.datasets import load_digits
 from sklearn.decomposition import FastICA as skFastICA
 from sklearn.decomposition import PCA as skPCA
+import copy
 
 import er_plot_functions as erp
 import Placefields as pf
@@ -897,8 +898,13 @@ class DimReduction:
                            'pca': {'freeze_onset': {}, 'move_onset': {}}}
         self.perm_rasters = {'pcaica': {'freeze_onset': {}, 'move_onset': {}},
                              'pca': {'freeze_onset': {}, 'move_onset': {}}}
-        self.sig = {'pcaica': {'freeze_onset': {}, 'move_onset': {}},
-                    'pca': {'freeze_onset': {}, 'move_onset': {}}}
+
+        try:  # Load in previously calculated tunings
+            self.load_sig_tuning()
+        except FileNotFoundError:  # if not saved, initialize
+            print('No tunings found for this session - run .get_tuning_sig() and .save_sig_tuning()')
+            self.sig = {'pcaica': {'freeze_onset': {}, 'move_onset': {}},
+                        'pca': {'freeze_onset': {}, 'move_onset': {}}}
 
     def _init_PCA_ICA(self, nPCs: int, ica_method: str in ['ica_on_cov', 'ica_on_zproj']):
         """Initialize asssemblies based on PCA/ICA method from Lopes dos Santos (2013) and later
@@ -1152,59 +1158,38 @@ class DimReduction:
 
         return assemb_pf
 
-    def get_tuning_sig(self, dr_type: str in ['pcaica', 'pca'], act_method: str in ['dupret', 'full'] = 'dupret',
-                       events='freeze_starts', buffer_sec=(6, 6), nperm=1000):
-        """This function will calculate significance values by comparing event-centered tuning curves to
-        chance (calculated from circular permutation of neural activity).
-        :param dr_type:
-        :param act_method:
-        :param events:
-        :param buffer_sec:
-        :return:
-        """
-        pass
-        # Load in previous tuning
-        sig_use = self.sig[dr_type][act_method][events]
+    @staticmethod
+    def get_sig_plot_tuning(sig: dict, sig_plot: str in ['peaks', 'troughs', 'both'],
+                            nassambly: int, alpha: float):
+        """Find significant peaks and troughs in freeze onset/offset assembly tuning curves"""
+        if 'pval' in sig:
+            sig_peaks = [np.where(p < alpha)[0] for p in sig['pval']]
+            sig_troughs = [np.where((1 - p) < alpha)[0] for p in sig['pval']]
+            if sig_plot == 'peaks':
+                sig_bins = sig_peaks
+            elif sig_plot == 'troughs':
+                sig_bins = sig_troughs
+            elif sig_plot == 'both':
+                sig_bins = copy.deepcopy(sig_peaks)
+                [peaks.extend(troughs) for peaks, troughs in zip(sig_bins, sig_troughs)]
 
-        calc_tuning = True
-        # # Check to see if appropriate tuning already run and stored and just use that, otherwise calculate from scratch.
-        if 'nperm' in sig_use:
-            if sig_use['nperm'] == nperm:
-                calc_tuning = False
-                pval = sig_use['pval']
+        else:
+            sig_bins = [None for _ in range(nassambly)]
 
-        if calc_tuning:
-            print('calculating ensemble significant tuning for nperm=' + str(nperm))
-            # NRK todo: start here
-            # check if both regular and permuted raster are run already!
-        #     pe_rasters, perm_rasters = self.check_rasters_run(events=events,
-        #                                                       buffer_sec=buffer_sec,  nperm=nperm)
-        #
-        #     # Now calculate tuning curves and get significance!
-        #     pe_tuning = gen_motion_tuning_curve(pe_rasters)
-        #     perm_tuning = np.asarray([gen_motion_tuning_curve(perm_raster) for perm_raster in perm_rasters])
-        #     pval = (pe_tuning < perm_tuning).sum(axis=0) / nperm
-        #
-        #     # Store in class
-        #     self.sig[events]['pval'] = pval
-        #     self.sig[events]['nperm'] = nperm
-        #
-        #     # Save to disk to save time in future
-        #     self.save_sig_tuning()
-        #
-        # return pval
+        return sig_bins
 
     def plot_rasters(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
                      act_method: str in ['full', 'dupret'] = 'dupret',
                      buffer: int = 6,
                      psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw',
                      events: str in ['freeze_starts', 'freeze_ends'] = 'freeze_starts',
-                     alpha: float = 0.01,
+                     alpha: float = 0.01, sig_plot: str in ['peaks', 'troughs', 'both'] = 'peaks',
                      ax=None, **kwargs):
         """Plot rasters of assembly activation in relation to freezing"""
 
         # Get appropriate activations
         activations = self.get_activations(dr_type, act_method=act_method, psa_use=psa_use)
+        nassembly = activations.shape[0]
 
         # Set up plots
         if ax is None:
@@ -1220,11 +1205,22 @@ class DimReduction:
 
         # Check if significance tuning calculated for plotting
         assert events in ['freeze_starts', 'freeze_ends']
+        assert sig_plot in ['peaks', 'troughs', 'both']
         event_names = 'freeze_onset' if events == 'freeze_starts' else 'move_onset'
-        if 'pval' in self.sig[dr_type][event_names]:
-            sig_bins = [np.where(p < alpha)[0] for p in self.sig[dr_type][event_names]['pval']]
-        else:
-            sig_bins = [None for _ in activations]
+        sig_bins = self.get_sig_plot_tuning(self.sig[dr_type][event_names], sig_plot, nassembly, alpha)
+        # if 'pval' in self.sig[dr_type][event_names]:
+        #     sig_peaks = [np.where(p < alpha)[0] for p in self.sig[dr_type][event_names]['pval']]
+        #     sig_troughs = [np.where((1 -p) < alpha)[0] for p in self.sig[dr_type][event_names]['pval']]
+        #     if sig_plot == 'peaks':
+        #         sig_bins = sig_peaks
+        #     elif sig_plot == 'troughs':
+        #         sig_bins = sig_troughs
+        #     elif sig_plot == 'both':
+        #         sig_bins = copy.deepcopy(sig_peaks)
+        #         [peaks.extend(troughs) for peaks, troughs in zip(sig_bins, sig_troughs)]
+        #
+        # else:
+        #     sig_bins = [None for _ in activations]
 
         ensemble_type = 'PCA' if dr_type == 'pca' else 'ICA'
 
@@ -1250,7 +1246,7 @@ class DimReduction:
             labelx = ida >= ncols * (nrows - 1)
             plot_raster(assemb_raster, cell_id=ida, bs_rate=act_mean, sr_image=self.PF.sr_image, ax=a,
                         y2zero=ntrials / 5, events=events.replace('_', ' '), sig_bins=sig_bins[ida],
-                        labely=labely, labely2=labely2, labelx=labelx, **kwargs)
+                        sig_style='w*', labely=labely, labely2=labely2, labelx=labelx, **kwargs)
             a.set_title(f'{ensemble_type} {ida}{suffix}')
 
         type_prepend = f' {psa_use.capitalize()}' if act_method == 'dupret' else ''  # Add activation type for dupret
@@ -1607,6 +1603,8 @@ class DimReduction:
         :return:
         """
 
+        if isinstance(buffer_sec, int):
+            buffer_sec = (buffer_sec, buffer_sec)
         # Load in previous tuning
         sig_use = self.sig[dr_type][events]
 
@@ -1633,7 +1631,8 @@ class DimReduction:
             self.sig[dr_type][events]['nperm'] = nperm
 
             # Save to disk to save time in future
-            self.save_sig_tuning()
+            if hasattr(self, 'dir_use'):
+                self.save_sig_tuning()
 
         return pval
 
@@ -1709,7 +1708,7 @@ class DimReduction:
         # Get appropriate events
         if events in ['freeze_onset', 'freeze_starts']:
             event_starts = self.freeze_starts
-        elif events == ['move_onset', 'freeze_ends']:
+        elif events in ['move_onset', 'freeze_ends']:
             event_starts = self.freeze_ends
 
         return event_starts
@@ -1776,6 +1775,14 @@ class DimReductionReg(DimReduction):
         self.activations = {'full': self.calc_activations('pcaica'),
                             'dupret': {'raw': None, 'binned': None, 'binned_z': None}}
 
+        # Initialize ensemble testing
+        self.pe_rasters = {'pcaica': {'freeze_onset': {}, 'move_onset': {}},
+                           'pca': {'freeze_onset': {}, 'move_onset': {}}}
+        self.perm_rasters = {'pcaica': {'freeze_onset': {}, 'move_onset': {}},
+                             'pca': {'freeze_onset': {}, 'move_onset': {}}}
+        self.sig = {'pcaica': {'freeze_onset': {}, 'move_onset': {}},
+                    'pca': {'freeze_onset': {}, 'move_onset': {}}}
+
     def plot_reg_rasters(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
                          act_method: str in ['full', 'dupret'] = 'dupret',
                          buffer_sec: int = 6,
@@ -1787,14 +1794,14 @@ class DimReductionReg(DimReduction):
         fig.suptitle(f'{self.mouse} {self.arena} : Day {self.day} {dr_type.upper()}{type_prepend} Activations\n '
                      f'From Base Session: {self.base_arena} Day {self.base_day}')
 
-        # Next step = plot side-by-side with base day rasters!
+        return fig
 
     def plot_rasters_across_days(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
                                  act_method: str in ['full', 'dupret'] = 'dupret',
                                  psa_use: str in ['raw', 'binned', 'binned_z'] = 'raw',
-                                 buffer_sec: int = 6,
+                                 buffer_sec: int = 6, sig_plot: str in ['peaks', 'troughs', 'both'] = 'peaks',
                                  plot_speed_corr: bool = True, plot_freeze_ends: bool = True,
-                                 y2scale=0.1,
+                                 y2scale=0.1, alpha: float = 0.01,
                                  **kwargs):
         """Plot all your freeze-related ensemble data across two sessions. Does not plot well in IDE,
         notebook is ideal to allow for easy vertical scrolling."""
@@ -1814,12 +1821,21 @@ class DimReductionReg(DimReduction):
             base_col, reg_col = 0, 1
         else:
             base_col, reg_col = 1, 0
+        base_reg_col = [base_col, reg_col]
+
+        # Check if significance tuning calculated for plotting
+        assert sig_plot in ['peaks', 'troughs', 'both']
 
         # Plot freeze-start rasters
-        self.DRbase.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, base_col],
-                                 y2scale=y2scale, **kwargs)
-        self.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, reg_col],
-                          y2scale=y2scale, **kwargs)
+        for ids, session in enumerate([self.DRbase, self]):
+            session.get_tuning_sig('freeze_onset', buffer_sec, nperm=1000, dr_type='pcaica')
+            col_plot = base_reg_col[ids]
+            session.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, col_plot],
+                                 y2scale=y2scale, alpha=alpha ,**kwargs)
+            # self.DRbase.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, base_col],
+            #                          y2scale=y2scale, **kwargs)
+            # self.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, reg_col],
+            #               y2scale=y2scale, **kwargs)
         label_columns_w_day(ax[0][[base_col, reg_col]])
 
         # Plot speed v activity x-correlations
@@ -1834,16 +1850,24 @@ class DimReductionReg(DimReduction):
 
         # Plot freeze end rasters
         if plot_freeze_ends:
-            self.DRbase.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_ends',
-                                     ax=ax[:, base_col + 4], y2scale=y2scale, **kwargs)
-            self.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_ends',
-                              ax=ax[:, reg_col + 4], y2scale=y2scale, **kwargs)
+            for ids, session in enumerate([self, self.DRbase]):
+                # sig_bins = self.get_sig_plot_tuning(session.sig[dr_type]['move_onset'], sig_plot, self.nics, alpha)
+                session.get_tuning_sig('move_onset', (buffer_sec, buffer_sec), nperm=1000, dr_type='pcaica')
+                col_plot = base_reg_col[ids]
+                session.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_ends',
+                                     ax=ax[:, col_plot + 4], y2scale=y2scale, alpha=alpha, **kwargs)
+                # self.DRbase.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_ends',
+                #                          ax=ax[:, base_col + 4], y2scale=y2scale, **kwargs)
+                # self.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_ends',
+                #                   ax=ax[:, reg_col + 4], y2scale=y2scale, **kwargs)
             label_columns_w_day(ax[0][[4 + base_col, 4 + reg_col]])
 
         # Label top
         type_prepend = f' {psa_use.capitalize()}' if act_method == 'dupret' else ''  # Add activation type for dupret
         fig.suptitle(f'{self.mouse} {self.arena} : Day {self.day} {dr_type.upper()}{type_prepend} Activations\n '
                      f'From Base Session: {self.base_arena} Day {self.base_day}')
+
+        return fig
 
 
 class PCA:
@@ -2217,7 +2241,7 @@ def get_palettes(group: str in ['Group', 'Exp Group']):
     return pal_use, pal_use_bar
 
 
-def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25, events='trial',
+def plot_raster(raster, cell_id=None, sig_bins=None, sig_style='r.', bs_rate=None, y2scale=0.25, events='trial',
                 labelx=True, labely=True, labely2=True, sr_image=20, ax=None, y2zero=0, cmap='rocket'):
     #NRK todo: change bs_rate plot to incorporate sample rate. currently too high!!!
     """Plot peri-event raster with tuning curve overlaid.
@@ -2225,6 +2249,7 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25,
     :param raster: nevents x nframes array
     :param cell_id: int, cell # to label with
     :param sig_bins: bool, frames with significant tuning to label with *s
+    :param sig_style: style to plot significance bins with, default = 'r.'
     :param bs_rate: float, baseline rate outside of events
     :param y2scale: float, 0.2 = default, scale for plotting second y-axis (event rate)
     :param events: str, for x and y labels
@@ -2261,7 +2286,7 @@ def plot_raster(raster, cell_id=None, sig_bins=None, bs_rate=None, y2scale=0.25,
     if np.any(sig_bins):  # add a star/dot over all bins with significant tuning
         curve_plot = nevents - curve * nevents/y2scale - y2zero
         # ax.plot(sig_bins, curve_plot[sig_bins] - 5, 'r*')
-        ax.plot(sig_bins, np.ones_like(sig_bins), 'r.')
+        ax.plot(sig_bins, np.ones_like(sig_bins), sig_style)
 
     ax.set_yticks([0.5, nevents - 0.5])
     if labely:  # Label left side
@@ -2521,6 +2546,7 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')
-    DR = DimReduction('Marble07', 'Shock', 1, ica_method='ica_on_cov', whiten=False)
+    DRreg2 = DimReductionReg('Marble27', 'Shock', 2, 'Shock', 1, random_state=1)
+    fig2 = DRreg2.plot_rasters_across_days()
 
     pass
