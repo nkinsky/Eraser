@@ -98,3 +98,6 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# Mac autosave files
+.DS_Store
