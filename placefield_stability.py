@@ -155,7 +155,10 @@ def get_pairwise_map_from_batch(mouse, arena1, day1, arena2, day2):
     # now map neurons!
     map1 = np.asarray(map[:, base_idx], dtype=int) - 1  # convert from matlab to python indexing
     valid_bool = np.bitwise_not(np.isnan(map[:, base_idx]))  # id non-neg values
-    neurons1 = np.arange(0, np.nanmax(map1[valid_bool] + 1))
+    dir_use = get_dir(mouse, arena1, day1)
+    im_data = sio.loadmat(path.join(dir_use, 'FinalOutput.mat'))
+    nneurons1 = im_data['PSAbool'].shape[0]
+    neurons1 = np.arange(0, nneurons1)
     map2 = map[:, reg_idx] - 1  # convert from matlab to python indexing
     map2[map2 == -1] = np.nan  # Set un-mapped values to nan to match pairwise map conventions
     map1_2 = np.ones_like(neurons1, dtype=float)*np.nan
