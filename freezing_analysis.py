@@ -1752,9 +1752,10 @@ class DimReductionReg(DimReduction):
 
         # Now register across days
         neuron_map = pfs.get_neuronmap(mouse, base_arena, base_day, reg_arena, reg_day, batch_map_use=True)
+        self.neuron_map = neuron_map
         nneuronsr = self.DRreg.df.shape[0]
         nics = self.DRbase.df.shape[1] - 1
-        valid_map_bool = neuron_map > 0
+        valid_map_bool = neuron_map >= 0
         reg_weights_full = np.ones((nneuronsr, nics)) * np.nan
         for weights_reg, weights_base in zip(reg_weights_full.T, self.DRbase.df.values[:, 1:].T.copy()):
             weights_reg[neuron_map[valid_map_bool]] = weights_base[valid_map_bool]
@@ -1782,6 +1783,34 @@ class DimReductionReg(DimReduction):
                              'pca': {'freeze_onset': {}, 'move_onset': {}}}
         self.sig = {'pcaica': {'freeze_onset': {}, 'move_onset': {}},
                     'pca': {'freeze_onset': {}, 'move_onset': {}}}
+
+    def plot_cov_across_days(self, neurons: str in ['freeze_onset', 'move_onset', 'all'] = 'freeze_onset', **kwargs):
+        """Plot covariance matrix for neurons in question across days - needs QC.
+        Should also test by running with an or boolean as input to neurons!!!"""
+
+        # plot covariance matrix across days
+        MDbase = MotionTuning(self.mouse, self.base_arena, self.base_day)
+        if neurons in ['freeze_onset', 'move_onset']:
+            sig_neurons = MDbase.get_sig_neurons(events=neurons, buffer_sec=(6, 6))
+        else:
+            sig_neurons = np.arange(self.DRbase.PF.nneurons)
+        sig_neurons_reg = self.neuron_map[sig_neurons]
+        sigbool = sig_neurons_reg > -1
+        sig_neurons_reg = sig_neurons_reg[sigbool]
+        sig_neurons_base = sig_neurons[sigbool]
+
+        covz_base = self.DRbase.cov_matz[sig_neurons_base][:, sig_neurons_base]
+        covz_reg = self.DRreg.cov_matz[sig_neurons_reg][:, sig_neurons_reg]
+
+        covz_comb = np.tril(covz_base, -1) + np.triu(covz_reg, 1)
+
+        figc, axc = plt.subplots()
+        sns.heatmap(covz_comb, ax=axc, **kwargs)
+        axc.set_xlabel(self.base_arena + ' Day ' + str(self.base_day) + ' (Base)')
+        axc.set_ylabel(self.arena + ' Day ' + str(self.day) + ' (Reg)')
+        axc.set_title(self.mouse + ' Cov Mat: ' + neurons + ' Cells')
+
+        return axc, covz_comb
 
     def plot_reg_rasters(self, dr_type: str in ['pcaica', 'pca'] = 'pcaica',
                          act_method: str in ['full', 'dupret'] = 'dupret',
