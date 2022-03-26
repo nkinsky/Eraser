@@ -1784,31 +1784,53 @@ class DimReductionReg(DimReduction):
         self.sig = {'pcaica': {'freeze_onset': {}, 'move_onset': {}},
                     'pca': {'freeze_onset': {}, 'move_onset': {}}}
 
-    def plot_cov_across_days(self, neurons: str in ['freeze_onset', 'move_onset', 'all'] = 'freeze_onset', **kwargs):
+    def plot_cov_across_days(self, neurons: str in ['freeze_onset', 'move_onset', 'all'] or np.ndarray = 'freeze_onset',
+                             label: str = "", keep_silent: bool = False, ax=None, **kwargs):
         """Plot covariance matrix for neurons in question across days - needs QC.
-        Should also test by running with an or boolean as input to neurons!!!"""
+        NRK - add in silent (off) cells as an option"""
 
         # plot covariance matrix across days
         MDbase = MotionTuning(self.mouse, self.base_arena, self.base_day)
-        if neurons in ['freeze_onset', 'move_onset']:
+
+        assert (isinstance(neurons, str) and neurons in ['freeze_onset', 'move_onset', 'all']) or isinstance(neurons, np.ndarray)
+        if isinstance(neurons, str) and neurons in ['freeze_onset', 'move_onset']:
             sig_neurons = MDbase.get_sig_neurons(events=neurons, buffer_sec=(6, 6))
-        else:
+            neuron_label = neurons.capitalize().replace('_', ' ')
+        elif isinstance(neurons, str) and neurons == 'all':
             sig_neurons = np.arange(self.DRbase.PF.nneurons)
+            neuron_label = neurons.capitalize()
+        else:
+            sig_neurons = neurons
+            neuron_label = label if label != "" else "Custom"
+
         sig_neurons_reg = self.neuron_map[sig_neurons]
         sigbool = sig_neurons_reg > -1
         sig_neurons_reg = sig_neurons_reg[sigbool]
         sig_neurons_base = sig_neurons[sigbool]
 
-        covz_base = self.DRbase.cov_matz[sig_neurons_base][:, sig_neurons_base]
-        covz_reg = self.DRreg.cov_matz[sig_neurons_reg][:, sig_neurons_reg]
+        if not keep_silent:
+            covz_base = self.DRbase.cov_matz[sig_neurons_base][:, sig_neurons_base]
+            covz_reg = self.DRreg.cov_matz[sig_neurons_reg][:, sig_neurons_reg]
+        elif keep_silent:
+            covz_base = self.DRbase.cov_matz[sig_neurons][:, sig_neurons]
+            covz_reg = np.zeros_like(covz_base)
+            covz_reg[np.outer(sigbool, sigbool)] = self.DRreg.cov_matz[sig_neurons_reg][:, sig_neurons_reg].reshape(-1)
 
         covz_comb = np.tril(covz_base, -1) + np.triu(covz_reg, 1)
 
-        figc, axc = plt.subplots()
-        sns.heatmap(covz_comb, ax=axc, **kwargs)
+        assert ax is None or isinstance(ax, plt.Axes)
+        if ax is None:
+            figc, axc = plt.subplots()
+        else:
+            axc = ax
+        sns.heatmap(covz_comb, ax=axc, cbar_kws=dict(use_gridspec=False, location="left"), **kwargs)
         axc.set_xlabel(self.base_arena + ' Day ' + str(self.base_day) + ' (Base)')
-        axc.set_ylabel(self.arena + ' Day ' + str(self.day) + ' (Reg)')
-        axc.set_title(self.mouse + ' Cov Mat: ' + neurons + ' Cells')
+        axc.set_xticks([])
+        axc.set_yticks([])
+        secaxy = axc.secondary_yaxis('right')
+        secaxy.set_yticks([])
+        secaxy.set_ylabel(self.arena + ' Day ' + str(self.day) + ' (Reg)')
+        axc.set_title(self.mouse + ' Cov Mat: ' + neuron_label + ' Cells')
 
         return axc, covz_comb
 
@@ -1860,7 +1882,7 @@ class DimReductionReg(DimReduction):
             session.get_tuning_sig('freeze_onset', buffer_sec, nperm=1000, dr_type='pcaica')
             col_plot = base_reg_col[ids]
             session.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, col_plot],
-                                 y2scale=y2scale, alpha=alpha ,**kwargs)
+                                 y2scale=y2scale, alpha=alpha,  **kwargs)
             # self.DRbase.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, base_col],
             #                          y2scale=y2scale, **kwargs)
             # self.plot_rasters(dr_type, act_method, buffer_sec, psa_use, events='freeze_starts', ax=ax[:, reg_col],
@@ -2575,7 +2597,7 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')
-    DRreg2 = DimReductionReg('Marble27', 'Shock', 2, 'Shock', 1, random_state=1)
-    fig2 = DRreg2.plot_rasters_across_days()
+    DRreg = DimReductionReg('Marble07', 'Shock', 1, 'Shock', 2)
+    DRreg.plot_cov_across_days(keep_silent=True)
 
     pass
