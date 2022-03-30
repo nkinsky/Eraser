@@ -2594,6 +2594,55 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
         return fig, figb
 
 
+def scatter_cov_across_days(cov_mat: np.ndarray, cells: np.ndarray or None = None,
+                            include_silent: bool = False, ax=None, xlabel='Base Day',
+                            ylabel='Reg Day', sig_thresh: float or None = None) -> plt.Axes:
+    """Plot covariance matrix across days.  Takes in specially formatter matrix where lower triangle = base day
+    covariance and upper triangle = reg day covariance.  0s across the entire row of the upper triangle = silent cells"""
+
+    if ax is None:
+        _, ax = plt.subplots()
+
+    if cells is not None:
+        cov_mat = cov_mat[cells][:, cells]
+
+    # Calculate stdev for later use
+    if sig_thresh is not None:
+        l_inds = np.tril_indices_from(cov_mat, -1)
+        cov_std = cov_mat[l_inds].std()
+
+    assert isinstance(include_silent, bool)
+    if not include_silent:
+        silent_bool = np.triu(cov_mat).sum(axis=1) == 0
+        active_bool = np.bitwise_not(silent_bool)
+        active_outer = np.outer(active_bool, active_bool)
+        nactive = active_bool.sum()
+        mat_use = cov_mat[active_outer].reshape((nactive, nactive))
+    else:
+        mat_use = cov_mat
+
+
+
+    # Finally plot it
+    l_inds = np.tril_indices_from(mat_use, -1)
+    if sig_thresh is not None:  # Keep only significant pairs of cells from day 1
+        sig_cov_bool = mat_use[l_inds] > 2 * cov_std
+        l_inds = tuple(inds[sig_cov_bool] for inds in l_inds)
+    ax.plot(mat_use[l_inds], mat_use.T[l_inds], '.')
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+    ax.plot([-0.1, 1], [-0.1, 1], 'r--')
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+    ax.set_xlabel(xlabel + ' Cov.')
+    ax.set_ylabel(ylabel + ' Cov.')
+    if sig_thresh is not None:
+        ax.set_title(f'> {sig_thresh} std pairs only')
+    sns.despine(ax=ax)
+
+    return ax
+
+
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')
