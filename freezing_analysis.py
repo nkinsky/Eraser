@@ -2631,9 +2631,13 @@ def scatter_cov_across_days(cov_mat: np.ndarray, cells: np.ndarray or None = Non
     ax.plot(mat_use[l_inds], mat_use.T[l_inds], '.')
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
+    lim_min = np.min((xlim[0], ylim[0]))
+    lim_max = np.max((xlim[1], ylim[1]))
+
     ax.plot([-0.1, 1], [-0.1, 1], 'r--')
-    ax.set_xlim(xlim)
-    ax.set_ylim(ylim)
+    ax.set_xlim((lim_min, lim_max))
+    ax.set_ylim((lim_min, lim_max))
+
     ax.set_xlabel(xlabel + ' Cov.')
     ax.set_ylabel(ylabel + ' Cov.')
     if sig_thresh is not None:
