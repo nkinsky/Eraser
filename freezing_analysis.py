@@ -2596,20 +2596,63 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 
 def scatter_cov_across_days(cov_mat: np.ndarray, cells: np.ndarray or None = None,
                             include_silent: bool = False, ax=None, xlabel='Base Day',
-                            ylabel='Reg Day', sig_thresh: float or None = None) -> plt.Axes:
+                            ylabel='Reg Day', sig_thresh: float or None = None, plot: bool = True,
+                            label_by_state=False, **kwargs) -> plt.Axes:
     """Plot covariance matrix across days.  Takes in specially formatter matrix where lower triangle = base day
-    covariance and upper triangle = reg day covariance.  0s across the entire row of the upper triangle = silent cells"""
+    covariance and upper triangle = reg day covariance.  0s across the entire row of the upper triangle = silent cells
 
-    if ax is None:
-        _, ax = plt.subplots()
+    **kwargs go to matplotlib.plot"""
 
+    base_cov, reg_cov = get_cov_pairs_from_mat(cov_mat, cells, include_silent)
+
+    # Label by state if designated.
+    if sig_thresh is not None:  # Keep only significant pairs of cells from day 1
+        sig_cov_bool = base_cov > sig_thresh
+    else:
+        sig_cov_bool = np.ones_like(base_cov, dtype=bool)
+
+    # Finally plot it
+    if plot:
+        if ax is None:
+            _, ax = plt.subplots()
+
+        if not label_by_state:
+            ax.plot(base_cov, reg_cov, '.', **kwargs)
+        else:
+            hu, = ax.plot(base_cov[np.bitwise_not(sig_cov_bool)], reg_cov[np.bitwise_not(sig_cov_bool)], 'r.')
+            base_conn, reg_conn = base_cov[sig_cov_bool], reg_cov[sig_cov_bool]
+            strengthened = np.greater(reg_conn, base_conn)
+            weakened = np.greater(base_conn, reg_conn)
+            hs, = ax.plot(base_conn[strengthened], reg_conn[strengthened], 'g.')
+            hw, = ax.plot(base_conn[weakened], reg_conn[weakened], 'b.')
+            ax.legend((hu, hs, hw), ('Unpaired', 'Strengthen', 'Weaken'))
+        xlim = ax.get_xlim()
+        ylim = ax.get_ylim()
+        lim_min = np.min((xlim[0], ylim[0]))
+        lim_max = np.max((xlim[1], ylim[1]))
+
+        ax.plot([-0.1, 1], [-0.1, 1], 'r--')
+        ax.set_xlim((lim_min, lim_max))
+        ax.set_ylim((lim_min, lim_max))
+
+        ax.set_xlabel(xlabel + ' Cov.')
+        ax.set_ylabel(ylabel + ' Cov.')
+        if sig_thresh is not None:
+            ax.set_title(f'> {sig_thresh} std pairs only')
+        sns.despine(ax=ax)
+
+        return ax, np.vstack((base_cov, reg_cov))
+
+    else:
+        return np.vstack((base_cov, reg_cov))
+
+
+def get_cov_pairs_from_mat(cov_mat: np.ndarray, cells: np.ndarray or None,
+                           include_silent: bool = False):
+    """Grab pairs of cells to plot versus one-another across sessions from a pairwise covariance matrix
+    (base day below diagonal, reg day above diagonal)"""
     if cells is not None:
         cov_mat = cov_mat[cells][:, cells]
-
-    # Calculate stdev for later use
-    if sig_thresh is not None:
-        l_inds = np.tril_indices_from(cov_mat, -1)
-        cov_std = cov_mat[l_inds].std()
 
     assert isinstance(include_silent, bool)
     if not include_silent:
@@ -2621,30 +2664,12 @@ def scatter_cov_across_days(cov_mat: np.ndarray, cells: np.ndarray or None = Non
     else:
         mat_use = cov_mat
 
-
-
-    # Finally plot it
+    # Curate and grab base vs reg covariance pairs
     l_inds = np.tril_indices_from(mat_use, -1)
-    if sig_thresh is not None:  # Keep only significant pairs of cells from day 1
-        sig_cov_bool = mat_use[l_inds] > 2 * cov_std
-        l_inds = tuple(inds[sig_cov_bool] for inds in l_inds)
-    ax.plot(mat_use[l_inds], mat_use.T[l_inds], '.')
-    xlim = ax.get_xlim()
-    ylim = ax.get_ylim()
-    lim_min = np.min((xlim[0], ylim[0]))
-    lim_max = np.max((xlim[1], ylim[1]))
+    base_cov = mat_use[l_inds]
+    reg_cov = mat_use.T[l_inds]
 
-    ax.plot([-0.1, 1], [-0.1, 1], 'r--')
-    ax.set_xlim((lim_min, lim_max))
-    ax.set_ylim((lim_min, lim_max))
-
-    ax.set_xlabel(xlabel + ' Cov.')
-    ax.set_ylabel(ylabel + ' Cov.')
-    if sig_thresh is not None:
-        ax.set_title(f'> {sig_thresh} std pairs only')
-    sns.despine(ax=ax)
-
-    return ax
+    return base_cov, reg_cov
 
 
 if __name__ == '__main__':
