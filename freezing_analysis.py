@@ -844,6 +844,120 @@ class TuningGeneralization:
         pass
 
 
+class CovMat:
+    """Calculate covariance matrix for a given session"""
+    def __init__(self, mouse: str, arena: str, day: int, bin_size: float = 0.5):
+        # Save session info
+        self.mouse = mouse
+        self.arena = arena
+        self.day = day
+
+        # ID working directory
+        dir_use = pf.get_dir(mouse, arena, day)
+        self.dir_use = Path(dir_use)
+
+        # Load in relevant data
+        try:
+            self.PF = pf.load_pf(mouse, arena, day)
+            _, self.freeze_bool = get_freeze_bool(mouse, arena, day)
+            self.freeze_ind = np.where(self.freeze_bool)[0]
+            md = MotionTuning(mouse, arena, day)
+            self.freeze_starts = md.select_events('freeze_onset')
+            self.freeze_ends = md.select_events('move_onset')
+
+            # Fix previously calculated occmap
+            self.PF.occmap = pf.remake_occmap(self.PF.xBin, self.PF.yBin, self.PF.runoccmap)
+            self.PSAbool = self.PF.PSAbool_align
+            self.SR = self.PF.sr_image
+
+        except FileNotFoundError:
+            print(f'No position data found for {mouse} {arena} day {day}, loading neural data only')
+            self.PF = None
+            self.freeze_bool, self.freeze_ind = None, None
+            self.freeze_starts, self.freeze_ends = None, None
+            neuraldata = sio.loadmat(path.join(self.dir_use, 'FinalOutput.mat'))
+            self.PSAbool = neuraldata['PSAbool']
+            self.SR = neuraldata['SampleRate'].squeeze()
+
+        # First bin events
+        PSAsmooth, PSAbin = [], []
+        self.bin_size = bin_size
+        for psa in self.PSAbool:
+            PSAbin.append(bin_array(psa, int(bin_size * self.SR)))  # Create non-overlapping bin array
+        self.PSAbin = np.asarray(PSAbin)
+        self.PSAbinz = stats.zscore(PSAbin, axis=1)  # Seems to give same results
+
+        # Now calculate covariance matrix for all your cells using binned array
+        self.cov_mat = np.cov(self.PSAbin)
+        self.cov_matz = np.cov(self.PSAbinz)
+
+
+class CovMatReg:
+    """Track covariance matrix across days, playing base day in lower diagonal, reg day in upper diagonal and zeroing
+    out the diagonal"""
+    def __init__(self, mouse: str, base_arena: str, base_day: str, reg_arena: str, reg_day: str,
+               bin_size: float = 0.5):
+
+        self.mouse = mouse
+        self.base_arena = base_arena
+        self.base_day = base_day
+        self.reg_arena = reg_arena
+        self.reg_day = reg_day
+
+        self.CovMatbase = CovMat(mouse, base_arena, base_day, bin_size)
+        self.CovMatreg = CovMat(mouse, reg_arena, reg_day, bin_size)
+
+        # Now register across days
+        neuron_map = pfs.get_neuronmap(mouse, base_arena, base_day, reg_arena, reg_day, batch_map_use=True)
+        self.neuron_map = neuron_map
+        self.nneurons_base = neuron_map.shape[0]
+
+        self.mat_type = None
+        self.base_neurons = None
+        self.covmatreg = None
+
+        ## NRK todo: 2022/04/25 fill in code from DimReductionReg.plot_cov_across_days to match up and create cov mat across days.
+
+    def cov_across_days(self, neurons: str in ['freeze_onset', 'move_onset', 'all'] or np.ndarray = 'freeze_onset',
+                        keep_silent: bool = False, buffer_sec=(6, 6)):
+        """Track covariance matrix across days - puts base day in lower diagonal, reg day in upper diagonal, and
+        zeros out diagonal"""
+
+        assert (isinstance(neurons, str) and neurons in ['freeze_onset', 'move_onset', 'all']) or isinstance(neurons,
+                                                                                                             np.ndarray)
+        if isinstance(neurons, str) and neurons in ['freeze_onset', 'move_onset']:
+            MDbase = MotionTuning(self.mouse, self.base_arena, self.base_day)
+            sig_neurons = MDbase.get_sig_neurons(events=neurons, buffer_sec=buffer_sec)
+            self.mat_type = neurons
+        elif isinstance(neurons, str) and neurons == 'all':
+            sig_neurons = np.arange(self.nneurons_base)
+            self.mat_type = neurons
+        else:
+            sig_neurons = neurons
+            self.mat_type = 'custom'
+            self.base_neurons = neurons
+
+        sig_neurons_reg = self.neuron_map[sig_neurons]
+        sigbool = sig_neurons_reg > -1
+        sig_neurons_reg = sig_neurons_reg[sigbool]
+        sig_neurons_base = sig_neurons[sigbool]
+
+        print(sig_neurons_reg)
+        if not keep_silent:
+            covz_base = self.CovMatbase.cov_matz[sig_neurons_base][:, sig_neurons_base]
+            covz_reg = self.CovMatreg.cov_matz[sig_neurons_reg][:, sig_neurons_reg]
+        elif keep_silent:
+            covz_base = self.CovMatbase.cov_matz[sig_neurons][:, sig_neurons]
+            covz_reg = np.zeros_like(covz_base)
+            covz_reg[np.outer(sigbool, sigbool)] = self.CovMatreg.cov_matz[sig_neurons_reg][:, sig_neurons_reg].reshape(-1)
+
+        covz_comb = np.tril(covz_base, -1) + np.triu(covz_reg, 1)
+
+        self.covmatreg = covz_comb
+
+        return covz_comb
+
+
 class DimReduction:
     """"Perform dimensionality reduction on cell activity to pull out coactive ensembles of cells"""
     def __init__(self, mouse: str, arena: str, day: int, bin_size: float = 0.5, nPCs: int = 50,
