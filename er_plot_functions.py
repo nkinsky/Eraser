@@ -29,6 +29,47 @@ from pathlib import Path
 plt.rcParams['pdf.fonttype'] = 42
 import helpers as hlp
 
+
+def match_max_lims(ax, axis: str in ['x', 'y', 'both']):
+    """Make all axes in the input match their limits"""
+    xlims, ylims = [], []
+    for a in ax.reshape(-1):
+        xlims.append(a.get_xlim())
+        ylims.append(a.get_ylim())
+    xlims = np.asarray(xlims)
+    ylims = np.asarray(ylims)
+    xlim_use = [np.min(xlims.reshape(-1)), np.max(xlims.reshape(-1))]
+    ylim_use = [np.min(ylims.reshape(-1)), np.max(ylims.reshape(-1))]
+
+    if axis in ['x', 'both']:
+        for a in ax.reshape(-1):
+            a.set_xlim(xlim_use)
+
+    if axis in ['y', 'both']:
+        for a in ax.reshape(-1):
+            a.set_ylim(ylim_use)
+
+
+def get_quadmesh(ax):
+    """Grab QuadMesh children of a particular axes only"""
+    quad_ind = np.where([isinstance(child, matplotlib.collections.QuadMesh)
+                         for child in ax.get_children()])[0][0]
+
+    return ax.get_children()[quad_ind]
+
+
+def set_clim(ax, ida):
+    """Sets clim to for all plots in ax to that in ax[ida]"""
+    quad_use = get_quadmesh(ax[ida])
+    clim_use = quad_use.get_clim()
+    for a in ax.reshape(-1):
+        try:
+            quad_set = get_quadmesh(a)
+            quad_set.set_clim(clim_use)
+        except IndexError:
+            pass
+
+
 def display_frame(ax, vidfile):
 
     """
