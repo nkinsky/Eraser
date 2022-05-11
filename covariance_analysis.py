@@ -182,7 +182,7 @@ def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], are
                     CMR = fa.CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size)
                     covz_comb = CMR.cov_across_days(neurons, keep_silent=keep_silent, buffer_sec=buffer_sec)
                     enablePrint()
-                    cov_dict[name][mouse][f'{d1}_{d2}'].append(covz_comb)
+                    cov_dict[name][mouse][f'{d1}_{d2}'] = covz_comb
                 except FileNotFoundError:
                     print(f'{mouse} {arena1} day {d1} to {arena2} {d2} session(s) missing')
 
@@ -226,7 +226,7 @@ def cov_dict_to_df(dict_use, baseline_dict_use, include_silent: bool = True):
      and put into DataFrame
      :param dict_use: dictionary containing covariance mats of cells you want to look at, e.g. freeze cells
      :param baseline_dict_use: dictionary containing covariance mats of cells you want to normalize by, typically all cells
-     :para include_silent: bool """
+     :param include_silent: bool """
 
     day_code, group_code, sigzmean, sigzall = [], [], [], []  # pre-allocate for plotting!
     for group_name in dict_use.keys():
@@ -271,5 +271,4 @@ def enablePrint():
 
 
 if __name__ == '__main__':
-    CMR = CovMatReg('Marble07', 'Shock', 1, 'Shock', 2)
-    CMR.sig_cov_across_days(2)
+    group_cov_across_days(0.5, 'Shock', 'Shock')
