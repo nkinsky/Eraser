@@ -178,10 +178,10 @@ def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], are
             for ida, (d1, d2) in tqdm(enumerate(zip(day1, day2)), desc=mouse):
                 cov_dict[name][mouse][f'{d1}_{d2}'] = []
                 try:
-                    blockPrint()
-                    CMR = fa.CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size)
+                    # blockPrint()
+                    CMR = CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size)
                     covz_comb = CMR.cov_across_days(neurons, keep_silent=keep_silent, buffer_sec=buffer_sec)
-                    enablePrint()
+                    # enablePrint()
                     cov_dict[name][mouse][f'{d1}_{d2}'] = covz_comb
                 except FileNotFoundError:
                     print(f'{mouse} {arena1} day {d1} to {arena2} {d2} session(s) missing')
