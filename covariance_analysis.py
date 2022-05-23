@@ -162,7 +162,8 @@ class CovMatReg:
 
 def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], arena2: str in ['Open', 'Shock'],
                           neurons: str in ['freeze_onset', 'move_onset', 'all'] or np.ndarray = 'freeze_onset',
-                          keep_silent: bool = False, buffer_sec: int or list or tuple = (6, 6)):
+                          keep_silent: bool = False, buffer_sec: int or list or tuple = (6, 6),
+                          base_days: list = [-2, -1, 4, 1, 2, 4], reg_days: list = [-1, 4, 1, 2, 7, 2]):
     """Assemble all across-day covariance matrices into a dictionary for easy manipulating later on"""
 
     group_plot = [err.learners, err.nonlearners, err.ani_mice_good]
@@ -172,15 +173,42 @@ def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], are
     for group, name in zip(group_plot, group_names):
         cov_dict[name] = dict.fromkeys(group)
         for mouse in group:
-            day1 = [-2, -1, 4, 1, 2, 4]
-            day2 = [-1, 4, 1, 2, 7, 2]
+            # day1 = [-2, -1, 4, 1, 2, 4]
+            # day2 = [-1, 4, 1, 2, 7, 2]
             cov_dict[name][mouse] = {}
-            for ida, (d1, d2) in tqdm(enumerate(zip(day1, day2)), desc=mouse):
+            for ida, (d1, d2) in tqdm(enumerate(zip(base_days, reg_days)), desc=mouse):
                 cov_dict[name][mouse][f'{d1}_{d2}'] = []
                 try:
                     # blockPrint()
                     CMR = CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size)
                     covz_comb = CMR.cov_across_days(neurons, keep_silent=keep_silent, buffer_sec=buffer_sec)
+                    # enablePrint()
+                    cov_dict[name][mouse][f'{d1}_{d2}'] = covz_comb
+                except FileNotFoundError:
+                    print(f'{mouse} {arena1} day {d1} to {arena2} {d2} session(s) missing')
+
+    return cov_dict
+
+
+def group_sig_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], arena2: str in ['Open', 'Shock'],
+                              base_days: list = [4, 4, 4, 4], reg_days: list = [-2, -1, 1, 2],
+                              thresh: float = 2, keep_silent: bool = False):
+    """Assemble all across-day covariance matrices for cell-pairs that have covariance above thresh on base day"""
+
+    group_plot = [err.learners, err.nonlearners, err.ani_mice_good]
+    group_names = ['Learners', 'Non-learners', 'ANI']
+
+    cov_dict = dict.fromkeys(group_names)
+    for group, name in zip(group_plot, group_names):
+        cov_dict[name] = dict.fromkeys(group)
+        for mouse in group:
+            cov_dict[name][mouse] = {}
+            for ida, (d1, d2) in tqdm(enumerate(zip(base_days, reg_days)), desc=mouse):
+                cov_dict[name][mouse][f'{d1}_{d2}'] = []
+                try:
+                    # blockPrint()
+                    CMR = CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size)
+                    covz_comb = CMR.sig_cov_across_days(thresh, keep_silent=keep_silent)
                     # enablePrint()
                     cov_dict[name][mouse][f'{d1}_{d2}'] = covz_comb
                 except FileNotFoundError:
@@ -221,12 +249,15 @@ def get_cov_pairs_across_days(dict_use, include_silent):
     return pairs_dict
 
 
-def cov_dict_to_df(dict_use, baseline_dict_use, include_silent: bool = True):
+def cov_dict_to_df(dict_use, baseline_dict_use, register: bool = False, include_silent: bool = True,
+                   group_ctrls=True):
     """Calculate z-scored covariance of all cells in dict compared to pre-shock days for all mice
-     and put into DataFrame
+     and put into DataFrame. Also designates animals into Ctrl or ANI groups.
      :param dict_use: dictionary containing covariance mats of cells you want to look at, e.g. freeze cells
      :param baseline_dict_use: dictionary containing covariance mats of cells you want to normalize by, typically all cells
-     :param include_silent: bool """
+     :param register: bool, False (default) = just use base day covariance, True = use reg day (for tracking across days).
+     :param include_silent: bool
+     :param group_ctrls: bool, group Learners and Non-Learners into a control group"""
 
     day_code, group_code, sigzmean, sigzall = [], [], [], []  # pre-allocate for plotting!
     for group_name in dict_use.keys():
@@ -238,19 +269,24 @@ def cov_dict_to_df(dict_use, baseline_dict_use, include_silent: bool = True):
             cov_baseline = []
             for d1_d2 in ['-2_-1', '-1_4']:
                 base_mat_use = baseline_dict_use[group_name][mouse_name][d1_d2]
-                base_cov, _ = fa.get_cov_pairs_from_mat(base_mat_use, None, include_silent=include_silent)
+                base_cov, _ = get_cov_pairs_from_mat(base_mat_use, None, include_silent=include_silent)
                 cov_baseline.extend(base_cov)
             mean_baseline = np.mean(cov_baseline)
             std_baseline = np.std(cov_baseline)
 
             # Grab covariance for cells for each session and normalize by baseline session
-            for d1_d2 in ['-2_-1', '-1_4', '4_1', '1_2', '2_7']:
+            mouse_dict = dict_use[group_name][mouse_name]
+            for d1_d2 in mouse_dict.keys():
                 try:
-                    mat_use = dict_use[group_name][mouse_name][d1_d2]
-                    base_cov, _ = fa.get_cov_pairs_from_mat(mat_use, None, include_silent=include_silent)
-                    sigzall.append((base_cov - mean_baseline) / std_baseline)
+                    mat_use = mouse_dict[d1_d2]
+                    base_cov, reg_cov = get_cov_pairs_from_mat(mat_use, None, include_silent=include_silent)
+                    cov_use = reg_cov if register else base_cov  # grab appropropriate covariances to use.
+                    sigzall.append((cov_use - mean_baseline) / std_baseline)
                     sigzmean.append(np.mean(sigzall[-1]))
-                    group_code.append('ANI') if group_name == 'ANI' else group_code.append('Ctrl')
+                    if group_ctrls:
+                        group_code.append('ANI') if group_name == 'ANI' else group_code.append('Ctrl')
+                    else:
+                        group_code.append(group_name)
                     day_code.append(d1_d2)
                 except KeyError:
                     pass
@@ -259,14 +295,67 @@ def cov_dict_to_df(dict_use, baseline_dict_use, include_silent: bool = True):
     return sigz_df
 
 
-# Helper functions to block printing output
-# Disable
+def get_cov_pairs_from_array(cov_array: np.ndarray, include_silent: bool = False):
+    """Grab pairs of cells to plot versus one-another across sessions from a pairwise covariance array
+        (base day first row, reg day second row)"""
+
+    assert isinstance(include_silent, bool)
+    assert cov_array.shape[0] == 2
+
+    if not include_silent:
+        silent_bool = cov_array[1] == 0
+        active_bool = np.bitwise_not(silent_bool)
+        array_use = cov_array[:, active_bool]
+    else:
+        array_use = cov_array
+
+    base_cov = array_use[0]
+    reg_cov = array_use[1]
+
+    return base_cov, reg_cov
+
+
+def get_cov_pairs_from_mat(cov_mat: np.ndarray, cells: np.ndarray or None,
+                           include_silent: bool = False):
+    """Grab pairs of cells to plot versus one-another across sessions from a pairwise covariance matrix
+    (base day below diagonal, reg day above diagonal)"""
+    if cov_mat.shape[0] == cov_mat.shape[1]:  # Run on matrix if input is square array
+        if cells is not None:
+            cov_mat = cov_mat[cells][:, cells]
+
+        assert isinstance(include_silent, bool)
+        if not include_silent:
+            silent_bool = np.triu(cov_mat).sum(axis=1) == 0
+            active_bool = np.bitwise_not(silent_bool)
+            active_outer = np.outer(active_bool, active_bool)
+            nactive = active_bool.sum()
+            mat_use = cov_mat[active_outer].reshape((nactive, nactive))
+        else:
+            mat_use = cov_mat
+
+        # Curate and grab base vs reg covariance pairs
+        l_inds = np.tril_indices_from(mat_use, -1)
+        base_cov = mat_use[l_inds]
+        reg_cov = mat_use.T[l_inds]
+
+    elif cov_mat.shape[0] == 2 and cov_mat.shape[0] < cov_mat.shape[1]:  # Run on array if not a square matrix
+        if cells is not None:
+            print('2xn covariance array provided is not compatible with any input to "cells" parameter. Exiting.')
+            return None, None
+        base_cov, reg_cov = get_cov_pairs_from_array(cov_mat, include_silent=include_silent)
+
+    return base_cov, reg_cov
+
+
 def blockPrint():
+    # Helper functions to block printing output
+    # Disable
     sys.stdout = open(os.devnull, 'w')
 
 
-# Restore
 def enablePrint():
+    # Helper functions to block printing output
+    # Enable
     sys.stdout = sys.__stdout__
 
 
