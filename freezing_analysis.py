@@ -1555,29 +1555,6 @@ def scatter_cov_across_days(cov_mat: np.ndarray, cells: np.ndarray or None = Non
         return np.vstack((base_cov, reg_cov))
 
 
-def get_cov_pairs_from_mat(cov_mat: np.ndarray, cells: np.ndarray or None,
-                           include_silent: bool = False):
-    """Grab pairs of cells to plot versus one-another across sessions from a pairwise covariance matrix
-    (base day below diagonal, reg day above diagonal)"""
-    if cells is not None:
-        cov_mat = cov_mat[cells][:, cells]
-
-    assert isinstance(include_silent, bool)
-    if not include_silent:
-        silent_bool = np.triu(cov_mat).sum(axis=1) == 0
-        active_bool = np.bitwise_not(silent_bool)
-        active_outer = np.outer(active_bool, active_bool)
-        nactive = active_bool.sum()
-        mat_use = cov_mat[active_outer].reshape((nactive, nactive))
-    else:
-        mat_use = cov_mat
-
-    # Curate and grab base vs reg covariance pairs
-    l_inds = np.tril_indices_from(mat_use, -1)
-    base_cov = mat_use[l_inds]
-    reg_cov = mat_use.T[l_inds]
-
-    return base_cov, reg_cov
 
 
 if __name__ == '__main__':
