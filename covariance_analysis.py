@@ -280,7 +280,7 @@ def cov_dict_to_df(dict_use, baseline_dict_use, register: bool = False, include_
                 try:
                     mat_use = mouse_dict[d1_d2]
                     base_cov, reg_cov = get_cov_pairs_from_mat(mat_use, None, include_silent=include_silent)
-                    cov_use = reg_cov if register else base_cov  # grab appropropriate covariances to use.
+                    cov_use = reg_cov if register else base_cov  # grab appropriate covariances to use.
                     sigzall.append((cov_use - mean_baseline) / std_baseline)
                     sigzmean.append(np.mean(sigzall[-1]))
                     if group_ctrls:
