@@ -6,6 +6,7 @@ Created on Thu Apr 05 11:06:20 2018
 """
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib as mpl
 import seaborn as sns
 import csv
 import pandas as pd
@@ -52,7 +53,7 @@ def match_max_lims(ax, axis: str in ['x', 'y', 'both']):
 
 def get_quadmesh(ax):
     """Grab QuadMesh children of a particular axes only"""
-    quad_ind = np.where([isinstance(child, matplotlib.collections.QuadMesh)
+    quad_ind = np.where([isinstance(child, mpl.collections.QuadMesh)
                          for child in ax.get_children()])[0][0]
 
     return ax.get_children()[quad_ind]
@@ -338,7 +339,7 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
     pos = get_pos(dir_use)
     pos, nbad = fix_pos(pos)
     if nbad[0] > 0 and nbad[3] > 1:
-        print(dir_use + ': nbadpts = ' + str(nbad[0]) + ' max_in_a_row = ' + str(nbad[3]))
+        print(str(dir_use) + ': nbadpts = ' + str(nbad[0]) + ' max_in_a_row = ' + str(nbad[3]))
     # print(str(nbad[0]))  # for debugging
     # print('nbadpts = ' + str(nbad[0]))
     video_t = get_timestamps(dir_use)
@@ -523,11 +524,10 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
             # print(mouse + " " + str(day) + " " + arena)
             try:
 
-                pix2cm = get_conv_factors(arena)
-                dir_use = get_dir(mouse, arena, day)
-                freezing, _ = detect_freezing(dir_use, velocity_threshold=velocity_threshold,
-                                           min_freeze_duration=min_freeze_duration,
-                                           arena=arena, pix2cm=pix2cm)
+                path_use = get_dir(mouse, arena, day)
+                freezing, _ = detect_freezing(path_use, velocity_threshold=velocity_threshold,
+                                              min_freeze_duration=min_freeze_duration,
+                                              arena=arena)
                 fratios[ida, idd] = freezing.sum()/freezing.__len__()
             except (IOError, IndexError, TypeError):  # FileNotFoundError is IOError in earlier versions
                 # print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
@@ -538,7 +538,7 @@ def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock
 
 
 def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'], velocity_threshold=1.0,
-                      min_freeze_duration=10, title=''):
+                      min_freeze_duration=10, title='', ax=None, xoffset=0.05, **kwargs):
 
     """
     Plots freezing ratios for all mice
@@ -556,7 +556,10 @@ def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
         fratio_all[:, :, idm] = get_all_freezing(mouse, day_des=days, arenas=arenas,
                                         velocity_threshold=velocity_threshold, min_freeze_duration=min_freeze_duration)
 
-    fig, ax = plt.subplots()
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
     # fratio_all = np.random.rand(2,7,5) # for debugging purposes
 
     # NK note - can make much of below into a general function to plot errorbars over a scatterplot in the future
@@ -567,9 +570,9 @@ def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
     days_str = [str(e) for e in days]
     for ida, arena in enumerate(arenas):
         if arena == 'Open':
-            offset = -0.05
+            offset = -xoffset
         elif arena == 'Shock':
-            offset = 0.05
+            offset = xoffset
 
         ax.errorbar(days_plot + offset, fmean[ida, :], yerr=fstd[ida, :], color=plot_colors[ida])
 
@@ -577,7 +580,7 @@ def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
             fratio_plot = fratio_all[ida, :, idm]  # Grab only the appropriate mouse and day
             good_bool = ~np.isnan(fratio_plot)  # Grab only non-NaN values
             h = ax.scatter(days_plot[good_bool] + offset, fratio_plot[good_bool],
-                           c=plot_colors[ida], alpha=0.2)
+                           c=plot_colors[ida], alpha=0.2, **kwargs)
 
             # Hack to get figure handles for each separately - need to figure out how to put in iterable variable
             if arena == 'Open':
@@ -977,7 +980,6 @@ def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel
 
 
 if __name__ == '__main__':
-    dir_use = get_dir('Marble07', 'Open', -2)
-    detect_freezing(dir_use, arena='Open')
+    plot_all_freezing(['Marble14'])
 
     pass
