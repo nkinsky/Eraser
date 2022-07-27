@@ -1,6 +1,6 @@
 from os import environ
 
-# Marble14 should also be included once 10Hz SR is accounted for and Shock day 2 is run
+# Note that Marble14 has corrupted open field videos on all but day -2 and -1 Open field.
 control_mice = ['Marble06', 'Marble07', 'Marble11', 'Marble12', 'Marble14', 'Marble24',
                 'Marble26', 'Marble27', 'Marble29']
 
@@ -10,7 +10,7 @@ control_mice_good = ['Marble06', 'Marble07', 'Marble11', 'Marble12', 'Marble14',
 ani_mice = ['Marble17', 'Marble18', 'Marble19', 'Marble20', 'Marble21', 'Marble25']
 
 # Note that Marble25 has good imaging but exhibits tons of freezing on open arena prior to shock and then high
-# freezing in both arenas after shock. So maybe we need to exclude from any behavioral analyses?
+# freezing in both arenas after shock. So maybe we need to exclude from any behavioral analyses? No, keep him.
 ani_mice_good = ['Marble17', 'Marble18', 'Marble19', 'Marble20', 'Marble25']  # 'Marble18 ?'
 
 all_mice = control_mice.copy()
@@ -70,6 +70,7 @@ def get_comp_name():
 
 # Designate plotting folder
 comp_name, working_dir, pathname, session_dir = get_comp_name()
+
 
 def grab_ax_lims(ax):
     """
