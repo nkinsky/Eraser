@@ -256,7 +256,7 @@ def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
 
     # Get silent neurons
     silent_ind = np.where(np.isnan(neuron_map))[0]
-    good_map_bool = np.isnan(neuron_map) == 0
+    good_map_bool = np.bitwise_or(np.isnan(neuron_map), neuron_map < 0) == 0
 
     # Get new neurons
     try:
@@ -1457,7 +1457,7 @@ def get_drift_bw_sessions(mouse, arena1, day1, arena2, day2, drift_type='overlap
     :param day1:
     :param arena2:
     :param day2:
-    :param drift_type: 'overlap' or 'event_rate' (event rate discrimination index = (ER1 - ER2)/(ER1 + ER2) for each cell,
+    :param drift_type: 'overlap' or 'event_rate' (event rate discrimination.py index = (ER1 - ER2)/(ER1 + ER2) for each cell,
     where ER = event rate)
     :param batch_map: boolean
     :param speed_thresh: cm/s (1 = default). Only used for 'event_rate' drift_type, not for 'overlap'
