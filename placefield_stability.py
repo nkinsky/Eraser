@@ -241,6 +241,7 @@ def plot_ROI_centered(ROI, buffer=20, ax=None):
 
     return ax
 
+
 def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     """
     Classifies cells as good, silent, and new based on the input mapping from session 1 to session 2 in neuron_map.
