@@ -8,6 +8,7 @@ import matplotlib.mlab as mlab
 import er_plot_functions as er
 import scipy as sp
 
+
 def get_DI_scores(mouse, arena1, day1, arena2, day2):
     """
     Gets discrimination index correlations between sessions. Note that
@@ -46,9 +47,8 @@ def get_DI_scores(mouse, arena1, day1, arena2, day2):
         DIscores = np.zeros(ngood)
         DIscores = (ER1[good_sesh1_ind] - ER2[good_map]) / (ER1[good_sesh1_ind] + ER2[good_map])
 
-        # If comparing shock to open, make sure
         return DIscores
-    
+
     except FileNotFoundError:  # If pf files are missing, return NaN
         return np.nan
 
