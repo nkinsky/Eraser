@@ -283,6 +283,21 @@ class Fig:
         ax.spines["bottom"].set_position("zero")
 
 
+class FigMirror:
+    """Simple class to run the same function on two different figure. Useful for plotting into one and
+    writing stats into the other."""
+    def __init__(self, Fig1:Fig, Fig2:Fig):
+        self.Fig1 = Fig1
+        self.Fig2 = Fig2
+
+    def subplot(self, subplot_spec, sharex=None, sharey=None, **kwargs):
+        """Make identical subplots in each figure"""
+        ax1 = self.Fig1.subplot(subplot_spec, sharex=None, sharey=None, **kwargs)
+        ax2 = self.Fig1.subplot(subplot_spec, sharex=None, sharey=None, **kwargs)
+
+        return ax1, ax2
+
+
 def pretty_plot(ax, round_ylim=False):
     """Generic function to make plot pretty, bare bones for now, will need updating
     :param round_ylim set to True plots on ticks/labels at 0 and max, rounded to the nearest decimal. default = False
