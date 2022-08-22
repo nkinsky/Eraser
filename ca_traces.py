@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from os import path
 import scipy.io as sio
+from PIL import Image
+from skimage import feature
 
 # project specific packages
 from session_directory import load_session_list, master_directory, make_session_list
@@ -17,10 +19,9 @@ from session_directory import find_eraser_directory as get_dir
 import helpers
 
 
-def load_traces(mouse: str, arena: str in ['Shock', 'Open'], day: int in [-2, -1, 0, 4, 1, 2, 7], psa: bool = False,
-                list_dir: str = master_directory):
-    """Load in traces and corresponding putative spiking activity if specified"""
-
+def load_imaging_data(mouse: str, arena: str in ['Shock', 'Open'], day: int in [-2, -1, 0, 4, 1, 2, 7],
+                      list_dir: str = master_directory):
+    """Load in imaging data from FinalOutput.mat"""
     # Locate file directory
     make_session_list(list_dir)
     dir_use = get_dir(mouse, arena, day)
@@ -28,6 +29,72 @@ def load_traces(mouse: str, arena: str in ['Shock', 'Open'], day: int in [-2, -1
     # Import imaging data
     im_data_file = path.join(dir_use, 'FinalOutput.mat')
     im_data = sio.loadmat(im_data_file)
+
+    return im_data
+
+
+def load_ROIs(mouse, arena, day, list_dir:str = master_directory):
+    """Load in ncells x nxpixels x nypixels list"""
+    im_data = load_imaging_data(mouse, arena, day, list_dir=list_dir)
+    return np.stack(im_data['NeuronImage'].squeeze().flatten())
+
+
+def load_proj(mouse, arena, day, type: str in ['min', 'max'], list_dir:str = master_directory):
+    """Load min/max projection for a session"""
+    make_session_list(list_dir)
+    dir_use = get_dir(mouse, arena, day)
+    if type == 'min':
+        im = np.array(Image.open(path.join(dir_use, 'ICMovie_min_proj.tif')))
+    elif type == 'max':
+        im = np.array(Image.open(path.join(dir_use, 'ICMovie_max_proj.tif')))
+
+    return im
+
+
+def plot_ROIs(rois, proj: str or None = None, color: str = 'r', ax=None):
+    """Plot all rois in desired color"""
+
+   # Create white background if not provided
+    if proj is None:
+        bkgrd = np.zeros_like(rois[1])  # Make background white
+    else:
+        bkgrd = proj
+
+    # Create axes if not specified
+    if ax is None:
+        _, ax = plt.subplots()
+
+    # Plot bkgrd
+    ax.imshow(bkgrd, cmap='gray')
+
+    # Detect edges and plot neurons
+    for roi in rois:
+        xedges, yedges = detect_roi_edges(roi)
+        ax.plot(xedges, yedges, color=color)
+
+    # Remove everything
+    ax.axis('off')
+    
+    return ax
+
+
+def detect_roi_edges(roi_binary):
+    """Detect roi edges and organize them nicely in CW/CCW fashion"""
+    edges = feature.canny(roi_binary)  # detect edges
+    inds = np.where(edges) # Get edge locations in pixels
+    isort = np.argsort(np.arctan2(inds[1] - inds[1].mean(), inds[0] - inds[0].mean()))  # Sort by angle from center
+
+    xedges = np.append(inds[1][isort], inds[1][isort[0]])
+    yedges = np.append(inds[0][isort], inds[0][isort[0]])
+
+    return xedges, yedges
+
+
+def load_traces(mouse: str, arena: str in ['Shock', 'Open'], day: int in [-2, -1, 0, 4, 1, 2, 7], psa: bool = False,
+                list_dir: str = master_directory):
+    """Load in traces and corresponding putative spiking activity if specified"""
+
+    im_data = load_imaging_data(mouse, arena, day, list_dir=list_dir)
     traces = im_data['NeuronTraces'][0, 0].squeeze()[0]
 
     if not psa:
@@ -93,7 +160,6 @@ def plot_traces(traces: np.ndarray or list, psabool: np.ndarray or list = None, 
     sns.despine(ax=ax)
 
     pass
-
 
 if __name__ == "__main__":
     traces, psabool = load_traces('Marble07', 'Shock', -1, psa=True)
