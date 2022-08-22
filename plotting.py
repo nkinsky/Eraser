@@ -292,8 +292,13 @@ class FigMirror:
 
     def subplot(self, subplot_spec, sharex=None, sharey=None, **kwargs):
         """Make identical subplots in each figure"""
-        ax1 = self.Fig1.subplot(subplot_spec, sharex=None, sharey=None, **kwargs)
-        ax2 = self.Fig1.subplot(subplot_spec, sharex=None, sharey=None, **kwargs)
+        if not isinstance(subplot_spec, list):  # Duplicate subplot spec if only one value is specified
+            subspec_l = [subplot_spec, subplot_spec]
+        else:
+            assert len(subplot_spec) == 2
+            subspec_l = subplot_spec
+        ax1 = self.Fig1.subplot(subspec_l[0], sharex=sharex, sharey=sharey, **kwargs)
+        ax2 = self.Fig2.subplot(subspec_l[1], sharex=sharex, sharey=sharey, **kwargs)
 
         return ax1, ax2
 
