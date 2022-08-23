@@ -16,6 +16,7 @@ from skimage import feature
 # project specific packages
 from session_directory import load_session_list, master_directory, make_session_list
 from session_directory import find_eraser_directory as get_dir
+import placefield_stability as pfs
 import helpers
 
 
@@ -39,7 +40,7 @@ def load_ROIs(mouse, arena, day, list_dir:str = master_directory):
     return np.stack(im_data['NeuronImage'].squeeze().flatten())
 
 
-def load_proj(mouse, arena, day, type: str in ['min', 'max'], list_dir:str = master_directory):
+def load_proj(mouse, arena, day, type: str in ['min', 'max'], list_dir: str = master_directory):
     """Load min/max projection for a session"""
     make_session_list(list_dir)
     dir_use = get_dir(mouse, arena, day)
@@ -51,21 +52,21 @@ def load_proj(mouse, arena, day, type: str in ['min', 'max'], list_dir:str = mas
     return im
 
 
-def plot_ROIs(rois, proj: str or None = None, color: str = 'r', ax=None):
-    """Plot all rois in desired color"""
+def plot_ROIs(rois, bkgrd: np.ndarray or bool = True, color: str = 'r', ax=None):
+    """Plot all rois in desired color. bkgrd can be a max/min projection, or True = plot over white background
+    the size of the imaging FOV. False = just plot with no background."""
 
    # Create white background if not provided
-    if proj is None:
+    if not isinstance(bkgrd, np.ndarray) and bkgrd:
         bkgrd = np.zeros_like(rois[1])  # Make background white
-    else:
-        bkgrd = proj
 
     # Create axes if not specified
     if ax is None:
         _, ax = plt.subplots()
 
-    # Plot bkgrd
-    ax.imshow(bkgrd, cmap='gray')
+    # Plot bkgrd if specified
+    if isinstance(bkgrd, np.ndarray):
+        ax.imshow(bkgrd, cmap='gray')
 
     # Detect edges and plot neurons
     for roi in rois:
@@ -74,7 +75,35 @@ def plot_ROIs(rois, proj: str or None = None, color: str = 'r', ax=None):
 
     # Remove everything
     ax.axis('off')
-    
+
+    return ax
+
+
+def plot_ROIs_bw_sessions(mouse, arena1, day1, arena2, day2, proj: str = 'min', ax=None):
+    """Plot ROIs from two sessions in different colors with co-active cells in green.
+
+    Currently only works for same-day sessions - does not register ROIs between sessions due to
+    affine transformation data being loading from MATLAB into python improperly"""
+
+    # Load ROIs and projection from first session
+    rois1 = load_ROIs(mouse, arena1, day1)
+    if proj in ['min', 'max']:
+        bkgrd = load_proj(mouse, arena1, day1, proj)
+
+    # Load rois from second session
+    rois2 = load_ROIs(mouse, arena2, day2)
+
+    # Load map between two sessions
+    neuron_map = pfs.get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=True)
+
+    if ax is None:
+        _, ax = plt.subplots()
+
+    # Now plot ROIs
+    plot_ROIs(rois1, bkgrd=bkgrd, color='g', ax=ax)  # First session
+    plot_ROIs(rois2, bkgrd=False, color='y', ax=ax)  # Second session
+    plot_ROIs(rois1[neuron_map >= 0], bkgrd=False, color='r', ax=ax)  # Overlapping ROIs
+
     return ax
 
 
