@@ -676,7 +676,7 @@ def write_all_freezing(fratio_all, filepath, days=[-2, -1, 4, 1, 2, 7]):
 
 
 def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7], arenas=['Neutral', 'Shock'], ref_day='Shock -2',
-                  legendstr=['Shock v Shock', 'Shock v Neutral']):
+                  legendstr=['Shock v Shock', 'Shock v Neutral'], jitter=[-0.05, 0.05], colors=['b', 'r'], ax=None ):
     """
 
     :param overlaps: nmice x 5sesh x narenas ndarray with cell overlap ratios
@@ -685,7 +685,9 @@ def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7], arenas=['Neutral', 'Shock'], 
     :return: fig and ax handles
     """
 
-    colors = ['b', 'r']
+    # assert len(arenas) == 2
+    # colors = ['b', 'r']
+    # jitter = np.array([-1, 1])*jitter_amt
 
     try:
         nmice, ndays, narenas = overlaps.shape
@@ -693,12 +695,16 @@ def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7], arenas=['Neutral', 'Shock'], 
         nmice = 1
         ndays, narenas = overlaps.shape
         overlaps = overlaps.reshape((nmice, ndays, narenas))
-    fig, ax = plt.subplots()
+
+    if ax is None:
+        fig, ax = plt.subplots()
+    else:
+        fig = ax.figure
 
     hline = []
-    for ida, arena in enumerate(arenas):
+    for ida, (arena, jitter_use) in enumerate(zip(arenas, jitter)):
         # if nmice != 1: # There should be a better way to do this!
-        ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1), overlaps[:, :, ida], colors[ida] + 'o')
+        ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1) + jitter_use, overlaps[:, :, ida], colors[ida] + 'o')
         linetemp, = ax.plot(np.arange(0, ndays), np.nanmean(overlaps[:, :, ida], axis=0), colors[ida] + '-')
         # elif nmice == 1:
         # linetemp, = ax.plot(np.arange(0, ndays), overlaps[:, ida], colors[ida] + 'o-')
@@ -707,7 +713,7 @@ def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7], arenas=['Neutral', 'Shock'], 
     ax.set_ylabel('Overlap Ratio (' + ref_day + ' = ref)')
     ax.set_xticks(np.arange(ndays))
     ax.set_xticklabels([str(sesh) for sesh in days])
-    ax.legend(hline[0:narenas], legendstr[0:narenas])
+    ax.legend(hline[0:narenas], arenas[0:narenas])
 
     # if narenas == 2:
     #     if nmice != 1:
@@ -719,6 +725,8 @@ def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7], arenas=['Neutral', 'Shock'], 
     #     ax.legend((lineshock, linebw), ('Shock v Shock', 'Shock v Open'))
     # elif narenas == 1:
     #     ax.legend((lineshock,), ('Shock v Shock',))
+
+    sns.despine(ax=ax)
 
     return fig, ax
 
