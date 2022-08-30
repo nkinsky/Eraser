@@ -676,12 +676,14 @@ def write_all_freezing(fratio_all, filepath, days=[-2, -1, 4, 1, 2, 7]):
 
 
 def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7], arenas=['Neutral', 'Shock'], ref_day='Shock -2',
-                  legendstr=['Shock v Shock', 'Shock v Neutral'], jitter=[-0.05, 0.05], colors=['b', 'r'], ax=None ):
+                  legendstr=['Shock v Shock', 'Shock v Neutral'], jitter=[-0.05, 0.05], colors=['b', 'r'], ax=None,
+                  **kwargs):
     """
 
     :param overlaps: nmice x 5sesh x narenas ndarray with cell overlap ratios
     relative to day -2. if multiple arenas dim 0 must be Shock v Shock and dim 1 must
     be Shock v Open
+    :param **kwargs: anything for matplotlib.plot
     :return: fig and ax handles
     """
 
@@ -704,7 +706,8 @@ def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7], arenas=['Neutral', 'Shock'], 
     hline = []
     for ida, (arena, jitter_use) in enumerate(zip(arenas, jitter)):
         # if nmice != 1: # There should be a better way to do this!
-        ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1) + jitter_use, overlaps[:, :, ida], colors[ida] + 'o')
+        ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1) + jitter_use, overlaps[:, :, ida], colors[ida] + 'o',
+                **kwargs)
         linetemp, = ax.plot(np.arange(0, ndays), np.nanmean(overlaps[:, :, ida], axis=0), colors[ida] + '-')
         # elif nmice == 1:
         # linetemp, = ax.plot(np.arange(0, ndays), overlaps[:, ida], colors[ida] + 'o-')
