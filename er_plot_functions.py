@@ -675,9 +675,8 @@ def write_all_freezing(fratio_all, filepath, days=[-2, -1, 4, 1, 2, 7]):
         writer.writerows(fratio_all[1, :, :].T)
 
 
-def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7], arenas=['Neutral', 'Shock'], ref_day='Shock -2',
-                  legendstr=['Shock v Shock', 'Shock v Neutral'], jitter=[-0.05, 0.05], colors=['b', 'r'], ax=None,
-                  **kwargs):
+def plot_overlaps(overlaps, days=(-1, 4, 1, 2, 7), arenas=('Neutral', 'Shock'), ref_day='Shock -2',
+                  jitter=(-0.05, 0.05), colors=('b', 'r'), ax=None, **kwargs):
     """
 
     :param overlaps: nmice x 5sesh x narenas ndarray with cell overlap ratios
@@ -686,10 +685,6 @@ def plot_overlaps(overlaps, days=[-1, 4, 1, 2, 7], arenas=['Neutral', 'Shock'], 
     :param **kwargs: anything for matplotlib.plot
     :return: fig and ax handles
     """
-
-    # assert len(arenas) == 2
-    # colors = ['b', 'r']
-    # jitter = np.array([-1, 1])*jitter_amt
 
     try:
         nmice, ndays, narenas = overlaps.shape
