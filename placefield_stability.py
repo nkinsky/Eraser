@@ -1814,11 +1814,11 @@ class SessionStability:
                 ax_use.plot(xvals, yvals, 'k', alpha=0.3)
 
 
-
-## Object to map and view placefields for same neuron mapped between different sessions
+# Object to map and view placefields for same neuron mapped between different sessions
 class PFCombineObject:
     """map and view placefields for same neuron mapped between different sessions"""
-    def __init__(self, mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl', debug=False):
+    def __init__(self, mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl', debug=False,
+                 batch_map_use=True):
         self.mouse = mouse
         self.arena1 = arena1
         self.day1 = day1
@@ -1830,7 +1830,7 @@ class PFCombineObject:
         self.PF2 = pf.load_pf(mouse, arena2, day2, pf_file=pf_file)
 
         # Get mapping between arenas
-        neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2)
+        neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map_use)
         reg_session = sd.find_eraser_session(mouse, arena2, day2)
         good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
         good_map = neuron_map[good_map_bool].astype(np.int64)
@@ -1857,7 +1857,38 @@ class PFCombineObject:
         # Get correlations between sessions! Note these are not speed-thresholded (quick bug fix).
         self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
                                                        pf_file=pf_file, debug=debug, speed_threshold=False,
-                                                       keep_poor_overlap=True)
+                                                       keep_poor_overlap=True, batch_map_use=batch_map_use)
+
+    def pfplot(self, nneuron, tmap_type="sm", best_rot=False, label=True, ax=None):
+        """Plot raw trajectories with events overlaid and corresponding transient event maps (place fields)
+        for a neuron matched across sessions"""
+
+        # Set up axes
+        if ax is None:
+            _, ax = plt.subplots(2, 2)
+
+        # Plot (and label) trajectory with events overlaid
+        for PF, PSAalign, a in zip([self.PF1, self.PF2], [self.PSAalign1, self.PSAalign2], ax[0, :]):
+            traj_lims = [[PF.xEdges.min(), PF.xEdges.max()], [PF.yEdges.min(), PF.yEdges.max()]]
+            pf.plot_events_over_pos2(PSAalign[nneuron, PF.isrunning], PF.pos_align[0, PF.isrunning],
+                                 PF.pos_align[1, PF.isrunning], traj_lims=traj_lims, ax=a)
+
+        if label:
+            ax[0, 0].set_title(self.arena1 + ' Day ' + str(self.day1))
+            ax[0, 1].set_title(self.arena2 + ' Day ' + str(self.day2))
+
+        # Grab correct tmaps to plot and plot them
+        tmap_use = [self.tmap1_sm_reg[nneuron], self.tmap2_sm_reg[nneuron]] if tmap_type == 'sm' else \
+            [self.tmap1_us_reg[nneuron], self.tmap2_us_reg[nneuron]]
+
+        if best_rot:
+            _, best_rot, _ = get_best_rot(self.mouse, self.arena1, self.day1, self.arena2, self.day2)
+            tmap_use[1] = np.rot90(tmap_use[1], best_rot[1]/90)
+
+        for tmap, a in zip(tmap_use, ax[1, :]):
+            pf.plot_tmap(tmap, a)
+
+        return ax
 
     def pfscroll(self, current_position=0, pval_thresh=1, best_rot=False):
         """Scroll through placefields with trajectory + firing in one plot, smoothed tmaps in another subplot,
