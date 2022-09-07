@@ -754,6 +754,26 @@ class PlaceFieldObject:
                                 link_obj=link_PFO)
 
 
+def plot_events_over_pos2(psa_use, x, y, traj_lims=None, ax=None):
+    """Plot calcium events over trajectory"""
+    if ax is None:
+        _, ax = plt.subplots()
+    ax.plot(x, y, 'k-')
+    ax.plot(x[psa_use == 1], y[psa_use == 1], 'r*')
+    if traj_lims is not None:
+        ax.set_xlim(traj_lims[0])
+        ax.set_ylim(traj_lims[1])
+    ax.axis('off')
+
+
+def plot_tmap(tmap, ax=None):
+    """Plot tmap"""
+    if ax is None:
+        _, ax = plt.subplots()
+    ax.imshow(tmap, cmap='viridis')
+    ax.axis('off')
+
+
 if __name__ == '__main__':
     placefields('Marble07', 'Open', -2)
     pass
