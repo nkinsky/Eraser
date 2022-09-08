@@ -1859,7 +1859,7 @@ class PFCombineObject:
                                                        pf_file=pf_file, debug=debug, speed_threshold=False,
                                                        keep_poor_overlap=True, batch_map_use=batch_map_use)
 
-    def pfplot(self, nneuron, tmap_type="sm", best_rot=False, label=True, ax=None):
+    def pfplot(self, nneuron, tmap_type="sm", best_rot=False, label=True, ax=None, **kwargs):
         """Plot raw trajectories with events overlaid and corresponding transient event maps (place fields)
         for a neuron matched across sessions"""
 
@@ -1871,7 +1871,7 @@ class PFCombineObject:
         for PF, PSAalign, a in zip([self.PF1, self.PF2], [self.PSAalign1, self.PSAalign2], ax[0, :]):
             traj_lims = [[PF.xEdges.min(), PF.xEdges.max()], [PF.yEdges.min(), PF.yEdges.max()]]
             pf.plot_events_over_pos2(PSAalign[nneuron, PF.isrunning], PF.pos_align[0, PF.isrunning],
-                                 PF.pos_align[1, PF.isrunning], traj_lims=traj_lims, ax=a)
+                                 PF.pos_align[1, PF.isrunning], traj_lims=traj_lims, ax=a, **kwargs)
 
         if label:
             ax[0, 0].set_title(self.arena1 + ' Day ' + str(self.day1))

@@ -754,12 +754,12 @@ class PlaceFieldObject:
                                 link_obj=link_PFO)
 
 
-def plot_events_over_pos2(psa_use, x, y, traj_lims=None, ax=None):
-    """Plot calcium events over trajectory"""
+def plot_events_over_pos2(psa_use, x, y, traj_lims=None, ax=None, **kwargs):
+    """Plot calcium events over trajectory, **kwargs for matplotlib.plot"""
     if ax is None:
         _, ax = plt.subplots()
-    ax.plot(x, y, 'k-')
-    ax.plot(x[psa_use == 1], y[psa_use == 1], 'r*')
+    ax.plot(x, y, 'k-', **kwargs)
+    ax.plot(x[psa_use == 1], y[psa_use == 1], 'r.', **kwargs)
     if traj_lims is not None:
         ax.set_xlim(traj_lims[0])
         ax.set_ylim(traj_lims[1])
