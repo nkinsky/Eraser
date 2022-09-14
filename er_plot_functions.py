@@ -871,7 +871,7 @@ def plot_PV1_simple(mouse, nshuf=10, ax=None, PVtype='both'):
     return fig, ax
 
 
-def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar_width=0.25, ax=None):
+def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar_width=0.25, ax=None, **kwargs):
     """
     Plot bar graph with all data points overlaid
     :param data:
@@ -882,6 +882,7 @@ def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar
     :param offset:
     :param bar_width:
     :param ax:
+    :param **kwargs: pass to scatter
     :return:
     """
     # NK todo: reorganize/rewrite to align with Will's code - much clearer/more elegant.
@@ -905,7 +906,7 @@ def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar
         fig = ax.figure
 
     # Plot corrs in scatterplot form
-    ax.scatter(xpts.reshape(-1), data.reshape(-1), color=color, label=data_label)
+    ax.scatter(xpts.reshape(-1), data.reshape(-1), color=color, label=data_label, **kwargs)
 
     # Now plot bars over them all
     ax.bar(np.asarray(unique_groups) + offset, data_means, width=bar_width, color=color, alpha=0.5)
@@ -914,7 +915,7 @@ def scatterbar(data, groups, data_label='', color='k', jitter=0.1, offset=0, bar
 
 
 def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel='', ylabel='', xticklabels=['Open', 'Shock'],
-                   colors=sns.color_palette('Set2'), CIs=None):
+                   colors=sns.color_palette('Set2'), CIs=None, ax=None, **kwargs):
     """
     Plots comparison of correlations in open v shock arena for two different groups
     :param open_corrs, shock_corrs: length 2 or 3 list with group correlations for 2 or 3 different groups. Note that this
@@ -926,6 +927,8 @@ def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel
     :param ax: custom axes to plot into.
     :param CIs: if not None (default), plots mean and top/bottom CI for shuffled data for each group
         input = length 2 list of [bottomCI, mean, topCI], 0th entry = open, 1st entry = Shock
+    :param ax: axes to plot into, will create new axes of size (1,2) if you don't specify
+    :param kwargs: pass to scatterbar
     :return: fig, ax, pval, tstat: pval/test are ngrp x ngrp x 3 np arrays from t-tests where the last dimension is:
     0 = open v open (across groups only), 1 = shock v shock (across groups only), 2 = open v shock (within group only).
     """
@@ -933,8 +936,12 @@ def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel
     # Make sure inputs are compatible
     assert len(open_corrs) == len(shock_corrs) == len(group_names)
 
-    fig, ax = plt.subplots(1, 2)
-    fig.set_size_inches([12, 5])
+    if ax is None:
+        fig, ax = plt.subplots(1, 2)
+        fig.set_size_inches([12, 5])
+    else:
+        assert isinstance(ax[0], plt.Axes) and len(ax) == 2
+        fig = ax[0].figure
 
     # Set up plots
     if len(open_corrs) == 2:
@@ -945,7 +952,7 @@ def pfcorr_compare(open_corrs, shock_corrs, group_names=['grp1', 'grp2'], xlabel
     for idc, (open, shock) in enumerate(zip(open_corrs, shock_corrs)):
         scatterbar(np.concatenate((open, shock)), np.concatenate((np.ones_like(open),
                    np.ones_like(shock)*2)), ax=ax[0], color=colors[idc], offset=offsets[idc], data_label=group_names[idc],
-                   jitter=0.05)
+                   jitter=0.05, **kwargs)
 
     if CIs is not None:
         for group_num in [0, 1]:

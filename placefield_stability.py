@@ -927,7 +927,7 @@ def compare_pf_at_bestrot(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0
 
 
 def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7], batch_map_use=False,
-                 pf_file='placefields_cm1_manlims_1000shuf.pkl', best_rot=False, nshuf=0):
+                 pf_file='placefields_cm1_manlims_1000shuf.pkl', best_rot=False, nshuf=0, **kwargs):
     """
     Get mean placefield correlations between all sessions. Note that arena1 and arena2 must have the same size occupancy
     maps already ran for each arena (tmap_us and tmap_sm arrays in Placefield object defined in Placefields.py)
@@ -936,6 +936,7 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
     :param arena2: str of arena2
     :param days: list of ints of day. Valid options = [-2,-1, 0, 4, 1, 2, 7]
     :param pf_file: filename for PF file to use. default = 'placefields_cm1_manlims_1000shuf.pkl'
+    :param kwargs: pass to get_best_rot function
     :return: corr_mean_us/sm: mean spearman correlation for placefields between sessions.
     ndays x ndays ndarray. rows = arena1, columns = arena2.
     """
@@ -955,18 +956,18 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
                 try:
                     if best_rot:
                         corrs_temp, _, _ = get_best_rot(mouse, arena1=arena1, day1=day1, arena2=arena2, day2=day2,
-                                                        pf_file=pf_file, batch_map_use=batch_map_use)
+                                                        pf_file=pf_file, batch_map_use=batch_map_use, **kwargs)
                         corr_mean_us[id1, id2] = corrs_temp[0]
                         corr_mean_sm[id1, id2] = corrs_temp[1]
                     elif not best_rot:
                         if nshuf == 0:
                             _, _, temp = get_best_rot(mouse, arena1=arena1, day1=day1, arena2=arena2, day2=day2,
-                                                      pf_file=pf_file, batch_map_use=batch_map_use)
+                                                      pf_file=pf_file, batch_map_use=batch_map_use, **kwargs)
                             corr_mean_us[id1, id2] = temp[0, 0]
                             corr_mean_sm[id1, id2] = temp[1, 0]
                         elif nshuf == 1:
                             corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file,
-                                                                 shuf_map=True, batch_map_use=batch_map_use)
+                                                                 shuf_map=True, batch_map_use=batch_map_use, **kwargs)
                             corr_mean_us[id1, id2] = corrs_us.mean(axis=0)
                             corr_mean_sm[id1, id2] = corrs_sm.mean(axis=0)
                             if np.isnan(corrs_us.mean(
@@ -1028,7 +1029,7 @@ def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1,
 
 
 def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1,
-                 pf_file='placefields_cm1_manlims_1000shuf.pkl', batch_map_use=False):
+                 pf_file='placefields_cm1_manlims_1000shuf.pkl', batch_map_use=False, print_to_screen=True):
     """
     Gets the rotation of the arena in day2 that produces the best correlation. Will load previous runs from file
     saved in the appropriate directory by default
@@ -1038,6 +1039,8 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1,
     :param arena2:
     :param day2:
     :param pf_file:
+    :param batch_map_use:
+    :param print_to_screen: print out info about loading previous analyses to screen
     :return: best_corr_mean: best mean correlation (un-smoothed, smoothed)
              best_rot: rotation that produces the best mean correlation (un-smoothed, smoothed)
              corr_mean_all: mean correlations at 0, 90, 180, and 270 rotation (row 1 = un-smoothed, row 2 = smoothed)
@@ -1054,7 +1057,7 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1,
         rots = [0, 90, 180, 270]
         corr_mean_all = np.empty((2, 4))
         for idr, rot in enumerate(rots):
-            print(str(rot))
+            # print(str(rot))
             try:
                 corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file,
                                                      rot_deg=rot, shuf_map=False, batch_map_use=batch_map_use)
@@ -1075,8 +1078,9 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1,
               [mouse, [arena1, arena2], day1, day2, best_corr_mean, best_rot, corr_mean_all]],
              open(save_file, "wb"))
     elif path.exists(save_file):  # Load previous run and let user know
-        print('Loading previous 2d placefield analysis for ' + mouse + ' ' + arena1 + ' day ' + str(day1) +
-              ' to ' + arena2 + ' day ' + str(day2))
+        if print_to_screen:
+            print('Loading previous 2d placefield analysis for ' + mouse + ' ' + arena1 + ' day ' + str(day1) +
+                  ' to ' + arena2 + ' day ' + str(day2))
         temp = load(open(save_file, 'rb'))
 
         # Check to make sure you have the right data
@@ -1170,7 +1174,7 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, shuf_mat=None
     return fig, ax, ascat, axl, aCI
 
 
-def get_time_epochs(nmice, group_desig=1):
+def get_time_epochs(nmice, group_desig=1, include_day_zero=False):
     """
     Returns groupings for plotting different time-epochs in group correlation matrices, e.g. BEFORE shock, AFTER shock,
     BEFORE v AFTER shock
@@ -1182,7 +1186,6 @@ def get_time_epochs(nmice, group_desig=1):
     # Define epochs for scatter plots
     epochs = np.ones((7, 7)) * np.nan
     if group_desig == 1:
-
         epochs[0:2, 0:2] = 1  # 1 = before shock
         epochs[4:7, 4:7] = 2  # 2 = after shock days 1,2,7
         epochs[0:2, 4:7] = 3  # 3 = before-v-after shock
@@ -1198,13 +1201,26 @@ def get_time_epochs(nmice, group_desig=1):
         epochs[3, 4:6] = 5  # 5 = STM-v-LTM (days 1 and 2 only)
         epoch_labels = ['Before', 'After (Day 1-2)', 'Before v After(Days1-2)',
                         'Before v STM', 'STM v After(Days1-2)']
-
+    elif group_desig == 3:
+        epochs[0:2, 0:2] = 1  # 1 = before shock
+        epochs[5:7, 5:7] = 2  # 2 = after shock days 2 to 7
+        epochs[0:2, 5:7] = 3  # 3 = before-v-after shock
+        epochs[0:2, 3] = 4  # 4 = before-v-STM
+        epochs[3, 5:7] = 5  # 5 = STM-v-LTM (4hr to 1,2,7)
+        epoch_labels = ['Before', 'After(Days 2-7)', 'Before v After(Days 2-7)',
+                        'Before v STM', 'STM v After(Days 2-7)']
     # now keep only values above diagonal, shape and repeat matrix to shape (nmice, 7, 7)
     epochs = np.triu(epochs, 1)
     epochs[epochs == 0] = np.nan
     epochs = np.moveaxis(np.repeat(epochs[:, :, np.newaxis], nmice, 2), 2, 0)
 
+    if not include_day_zero:
+        keep_bool = np.ones(7, dtype=bool)
+        keep_bool[2] = False
+        epochs = epochs[:, keep_bool][:, :, keep_bool]
+
     return epochs, epoch_labels
+
 
 def get_seq_time_pairs(nmice, include_dayzero=False):
     """
@@ -1323,7 +1339,7 @@ def load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf):
 
 
 def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='placefields_cm1_manlims_1000shuf.pkl',
-                       batch_map_use=False, nshuf=0):
+                       batch_map_use=False, nshuf=0, **kwargs):
     """
     Assembles a nice matrix of mean 2d correlation values between place field maps on days/arenas specified.
     :param mice:
@@ -1332,6 +1348,7 @@ def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='plac
     :param days:
     :param best_rot:
     :param pf_file:
+    :param **kwargs: pass to get_best_rot through pf_corr_mean
     :return:
     """
 
@@ -1346,14 +1363,14 @@ def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='plac
         corr_us_mean_all[idm, :, :], corr_sm_mean_all[idm, :, :] = pf_corr_mean(mouse, arena1, arena2, days,
                                                                                 best_rot=best_rot, pf_file=pf_file,
                                                                                 batch_map_use=batch_map_use,
-                                                                                nshuf=0)
+                                                                                nshuf=0, **kwargs)
 
     if nshuf > 0:
         for idm, mouse in enumerate(mice):
             try:
                 shuf_us_mean_all[idm, :, :], shuf_sm_mean_all[idm, :, :] = \
                     pf_corr_mean(mouse, arena1, arena2, days, best_rot=False, pf_file=pf_file,
-                                 batch_map_use=batch_map_use, nshuf=nshuf)
+                                 batch_map_use=batch_map_use, nshuf=nshuf, **kwargs)
             except:
                 print('Error in getting shuffled correlations')
 
