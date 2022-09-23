@@ -58,7 +58,7 @@ def plot_ROIs(rois, bkgrd: np.ndarray or bool = True, color: str = 'r', ax=None)
 
    # Create white background if not provided
     if not isinstance(bkgrd, np.ndarray) and bkgrd:
-        bkgrd = np.zeros_like(rois[1])  # Make background white
+        bkgrd = np.ones_like(rois[1])  # Make background white
 
     # Create axes if not specified
     if ax is None:
