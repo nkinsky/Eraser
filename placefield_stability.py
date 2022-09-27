@@ -809,6 +809,7 @@ def eliminate_immobile_neurons(PSAboolrun1, PSAboolrun2, valid_neurons1, valid_n
 
     return good_neurons_base, good_neurons_reg
 
+
 def get_pf_corrs(tmaps1, tmaps2, keep_poor_overlap=False):
     """
     get correlations between matching transient event maps in lists
@@ -994,7 +995,8 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
     return corr_mean_us, corr_mean_sm
 
 
-def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7], nshuf=1000, pct=95):
+def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7], nshuf=1000, pct=95,
+                   include_day_zero=False):
     """
     Retrieve previously calculated CIs at pct specified (95% = default) and median for all days
     :param mouse:
@@ -1003,6 +1005,7 @@ def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1,
     :param days:
     :param nshuf: 1000 = default
     :param pct:
+    :param include_day_zero:
     :return:
     """
 
@@ -1024,6 +1027,11 @@ def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1,
                 except (FileNotFoundError, TypeError):
                     print('Missing shuffled correlation files for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) +
                           ' to ' + arena2 + ' Day ' + str(day2))
+
+    if not include_day_zero:
+        keep_bool = np.ones(7, dtype=bool)
+        keep_bool[2] = False
+        shuf_CI = shuf_CI[:, keep_bool][:, :, keep_bool]
 
     return shuf_CI
 
