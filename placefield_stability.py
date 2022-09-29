@@ -996,7 +996,7 @@ def pf_corr_mean(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2
 
 
 def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1, 2, 7], nshuf=1000, pct=95,
-                   include_day_zero=False):
+                   include_day_zero=False, print_to_screen=True):
     """
     Retrieve previously calculated CIs at pct specified (95% = default) and median for all days
     :param mouse:
@@ -1022,11 +1022,13 @@ def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1,
             # Don't loop through things you don't have reg files for
             if arena1 == arena2 and id1 < id2 or arena1 == 'Open' and arena2 == 'Shock' and id1 <= id2:
                 try:
-                    _, shuf_corrs = load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf)
+                    _, shuf_corrs = load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf,
+                                                        print_to_screen=print_to_screen)
                     shuf_CI[:, id1, id2] = np.quantile(shuf_corrs, [qbot, 0.5, qtop])
                 except (FileNotFoundError, TypeError):
-                    print('Missing shuffled correlation files for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) +
-                          ' to ' + arena2 + ' Day ' + str(day2))
+                    if print_to_screen:
+                        print('Missing shuffled correlation files for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) +
+                              ' to ' + arena2 + ' Day ' + str(day2))
 
     if not include_day_zero:
         keep_bool = np.ones(7, dtype=bool)
@@ -1324,7 +1326,7 @@ def spearmanr_nan(a, b):
     return corr, pval, poor_overlap
 
 
-def load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf):
+def load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf, print_to_screen=True):
     """
     Loads place maps correlations between sessions specified by inputs with neuron map between session shuffled nshuf times.
     :return: shuf_corrs_us_mean and shuf_corrs_sm_mean: un-smoothed and smoothed mean correlations for each shuffle
@@ -1339,7 +1341,8 @@ def load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf):
         shuf_corrs_us_mean = ShufMaptemp.shuf_corrs_us_mean
         shuf_corrs_sm_mean = ShufMaptemp.shuf_corrs_sm_mean
     else:
-        print('Shuffled correlations not yet run')
+        if print_to_screen:
+            print('Shuffled correlations not yet run')
         shuf_corrs_us_mean = np.nan()
         shuf_corrs_sm_mean = np.nan()
 
