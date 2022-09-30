@@ -681,7 +681,7 @@ def PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf, batch_map=True, deb
 
 
 def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl',
-                    rot_deg=0, shuf_map=False, debug=False, batch_map_use=True, speed_threshold=True,
+                    rot_deg=0, shuf_map=False, batch_map_use=True, speed_threshold=True,
                     keep_poor_overlap=False):
     """
     Gets placefield correlations between sessions. Note that
