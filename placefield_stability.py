@@ -1845,7 +1845,7 @@ class SessionStability:
 # Object to map and view placefields for same neuron mapped between different sessions
 class PFCombineObject:
     """map and view placefields for same neuron mapped between different sessions"""
-    def __init__(self, mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl', debug=False,
+    def __init__(self, mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl',
                  batch_map_use=True):
         self.mouse = mouse
         self.arena1 = arena1
@@ -1884,7 +1884,7 @@ class PFCombineObject:
 
         # Get correlations between sessions! Note these are not speed-thresholded (quick bug fix).
         self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
-                                                       pf_file=pf_file, debug=debug, speed_threshold=False,
+                                                       pf_file=pf_file, speed_threshold=False,
                                                        keep_poor_overlap=True, batch_map_use=batch_map_use)
 
     def pfplot(self, nneuron, tmap_type="sm", best_rot=False, label=True, ax=None, **kwargs):
