@@ -496,10 +496,11 @@ def get_all_PV1corrs(mouse, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=
     """
 
     # Pre-allocate
-    corrs_both = np.ones((7, 7)) * np.nan
-    corrs_all = np.ones((7, 7)) * np.nan
-    shuf_both = np.ones((7, 7, nshuf)) * np.nan
-    shuf_all = np.ones((7, 7, nshuf)) * np.nan
+    ndays = len(days)
+    corrs_both = np.ones((ndays, ndays)) * np.nan
+    corrs_all = np.ones((ndays, ndays)) * np.nan
+    shuf_both = np.ones((ndays, ndays, nshuf)) * np.nan
+    shuf_all = np.ones((ndays, ndays, nshuf)) * np.nan
     for id1, day1 in enumerate(days):
         for id2, day2 in enumerate(days):
 
