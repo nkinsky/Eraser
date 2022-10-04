@@ -483,7 +483,7 @@ def registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=False):
     return PV1all, PV2allreg, PV1both, PV2bothreg
 
 
-def get_all_PV1corrs(mouse, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0, batch_map_use=False):
+def get_all_PV1corrs(mouse, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0, batch_map_use=False, **kwargs):
     """
     Gets PV1 corrs for all sessions occurring between arena1 and arena2 for a given mouse.
     :param mouse:
@@ -491,6 +491,7 @@ def get_all_PV1corrs(mouse, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=
     :param arena2:
     :param days: default = [-2, -1, 0, 4, 1, 2, 7]
     :param nshuf: # shuffles (default = 0).
+    :param **kwargs to PV1_shuf_corrs
     :return: corrs_all, corrs_both: 7x7 np-array with PV corrs between all possible session-pairs.
              shuf_all, shuf_both: 7x7xnshuf np-array with shuffled correlations.
     """
@@ -510,14 +511,15 @@ def get_all_PV1corrs(mouse, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=
                     PVall, PVboth = PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map_use)
                     corrs_both[id1, id2] = PVboth
                     corrs_all[id1, id2] = PVall
-                    shuf_all[id1, id2], shuf_both[id1, id2] = PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf)
+                    shuf_all[id1, id2], shuf_both[id1, id2] = PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf,
+                                                                             **kwargs)
                 except (FileNotFoundError, IndexError):
-                    print('File Not Found for ' + mouse + ': ' + arena1 + str(day1) + ' to ' + arena2 + str(day2))
+                    print('File Not Found or IndexError for ' + mouse + ': ' + arena1 + str(day1) + ' to ' + arena2 + str(day2))
 
     return corrs_all, corrs_both, shuf_all, shuf_both
 
 
-def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
+def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf, alert_on_load_previous=True):
     """
     Gets correlations for 1-d PVs between arenas/days with neuron mapping shuffled between sessions.
     :param mouse:
@@ -526,6 +528,7 @@ def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
     :param arena2:
     :param day2:
     :param nshuf: int
+    :param alert_on_load_previous: bool, True (default) = alert if loading previously calculated data from .pkl file
     :return: shuf_all, shuf_both: (nshuf,) nd-arrays with shuffled corrs using ALL neurons or only those recorded in
     BOTH sessions
     """
@@ -554,7 +557,8 @@ def PV1_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf):
               [mouse, arena1, day1, arena2, day2, shuf_all, shuf_both, nshuf]],
              open(save_file, 'wb'))
     elif path.exists(save_file):  # load previously pickled data
-        print('Loading previously saved shuffled files')
+        if alert_on_load_previous:
+            print('Loading previously saved shuffled files')
         names, save_data = load(open(save_file, 'rb'))  # load it
 
         # Check that data matches inputs
@@ -1389,7 +1393,7 @@ def get_group_pf_corrs(mice, arena1, arena2, days, best_rot=False, pf_file='plac
     return corr_us_mean_all, corr_sm_mean_all, shuf_us_mean_all, shuf_sm_mean_all
 
 
-def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0, batch_map_use=True):
+def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nshuf=0, batch_map_use=True, **kwargs):
     """
     Assembles a nice matrix of mean correlation values between 1d PVs on days/arenas specified.
     :param mice:
@@ -1399,6 +1403,7 @@ def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nsh
     :param nshuf:
     :param batch_map_use
     :param pf_file:
+    :param **kwargs: inputs to get_all_PV1corrs and PV1_shuf_corrs
     :return:
     """
 
@@ -1410,7 +1415,7 @@ def get_group_PV1d_corrs(mice, arena1, arena2, days=[-2, -1, 0, 4, 1, 2, 7], nsh
 
     for idm, mouse in enumerate(mice):
         PV1_all_all[idm, :, :], PV1_both_all[idm, :, :], PV1_both_shuf[idm, :, :, :], PV1_all_shuf[idm, :, :, :] = \
-            get_all_PV1corrs(mouse, arena1, arena2, days, nshuf=nshuf, batch_map_use=batch_map_use)
+            get_all_PV1corrs(mouse, arena1, arena2, days, nshuf=nshuf, batch_map_use=batch_map_use, **kwargs)
 
     return PV1_all_all, PV1_both_all, PV1_both_shuf, PV1_all_shuf
 
