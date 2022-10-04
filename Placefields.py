@@ -66,9 +66,9 @@ def get_PV1(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlim
         PF = load_pf(mouse, arena, day, pf_file=pf_file)
         # Speed threshold PSAbool
         PFthresh = PF.PSAbool_align[:, PF.speed_sm > speed_thresh]
-        sr_image = PF.sr_image.squeeze()
+        sr_image = PF.sr_image
     except FileNotFoundError:
-        print('No placefields file found - creating PV1 from neural data only - NO SPEED THRESHOLDING')
+        print('No placefields file found for ' + mouse + ' ' + arena + ' day ' + str(day) + ': creating PV1 from neural data only - NO SPEED THRESHOLDING')
         dir_use = get_dir(mouse, arena, day)
         im_data_file = path.join(dir_use, 'FinalOutput.mat')
         im_data = sio.loadmat(im_data_file)
