@@ -9,9 +9,9 @@ import er_plot_functions as er
 import scipy as sp
 
 
-def get_DI_scores(mouse, arena1, day1, arena2, day2):
+def get_DI_scores(mouse, arena1, day1, arena2, day2, **kwargs):
     """
-    Gets discrimination index correlations between sessions. Note that
+    Gets discrimination index correlations between sessions.
     :param mouse:
     :param arena1:
     :param day1:
@@ -20,7 +20,7 @@ def get_DI_scores(mouse, arena1, day1, arena2, day2):
     """
 
     # Get mapping between sessions
-    neuron_map = pfs.get_neuronmap(mouse, arena1, day1, arena2, day2)
+    neuron_map = pfs.get_neuronmap(mouse, arena1, day1, arena2, day2, **kwargs)
     reg_session = sd.find_eraser_session(mouse, arena2, day2)
     good_map_bool, silent_ind, new_ind = pfs.classify_cells(neuron_map, reg_session)
     good_map = neuron_map[good_map_bool].astype(np.int64)
