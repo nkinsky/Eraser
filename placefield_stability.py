@@ -2035,12 +2035,12 @@ class GroupPF:
         self.nlmice = err.nonlearners
         self.days = [-2, -1, 0, 4, 1, 2, 7]
 
-    def _save(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser'):
+    def _save(self, dir='/Users/nkinsky/Documents/BU/Working/Eraser'):
         dump(self.data, open(path.join(dir, 'group_data_rot=' + str(self.best_rot) + '_batch_map=' +
                                        str(self.batch_map) + '.pkl'), 'wb'))
         return None
 
-    def _load(self, dir=r'C:\Users\Nat\Documents\BU\Imaging\Working\Eraser', best_rot=True, batch_map=True):
+    def _load(self, dir='/Users/nkinsky/Documents/BU/Working/Eraser', best_rot=True, batch_map=True):
         self.data = load(open(path.join(dir, 'group_data_rot=' + str(best_rot) + '_batch_map=' +
                                         str(batch_map) + '.pkl'), 'rb'))
         self.best_rot = best_rot
