@@ -344,7 +344,7 @@ class MotionTuningMultiDay:
         return np.asarray(prop_tuned)
 
     def plot_raster_across_days(self, cell_id, base_arena='Shock', base_day=1, alpha=0.01,
-                                labelx=True, ax=None, batch_map=True, plot_ROI=True, **kwargs):
+                                labelx=True, ax=None, batch_map=True, plot_ROI=True, label_fig=True, **kwargs):
         """Plots a cell's peri-event raster on base_day and tracks backward/forward to all other days in object.
         e.g. if you have a freezing cell emerge on day1 and want to see what it looked like right before/after,
         use base_day=1
@@ -377,6 +377,8 @@ class MotionTuningMultiDay:
                 for idd, _ in enumerate(days):
                     ax.append(fig.add_subplot(gs[0:2, idd]))
                     axroi.append(fig.add_subplot(gs[3, idd]))
+        else:
+            fig = ax.reshape(-1)[0].figure
 
         # First get map between days
         # reg_id = []  # initialize ids of registered cells
@@ -431,7 +433,8 @@ class MotionTuningMultiDay:
                     axroi[idd].set_yticks([])
                     sns.despine(ax=axroi[idd], left=True, bottom=True)
 
-        fig.suptitle(self.mouse + ': Across Days')
+        if label_fig:
+            fig.suptitle(self.mouse + ': Across Days')
 
         return ax
 
