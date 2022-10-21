@@ -9,6 +9,8 @@ import numpy as np
 from cycler import cycler
 from matplotlib.colors import ListedColormap
 
+from helpers import range_to_slice
+
 
 class Colormap:
     def dynamicMap(self):
@@ -173,7 +175,7 @@ class Fig:
     def add_subfigure(self, *args, **kwargs) -> mpl.figure.SubFigure:
         return self.fig.add_subfigure(*args, **kwargs)
 
-    def subplot2grid(self, subplot_spec, grid=(1, 3), **kwargs):
+    def subplot2grid(self, subplot_spec, grid=(1, 3), return_axes=False, **kwargs):
         """Subplots within a subplot
         Parameters
         ----------
@@ -181,14 +183,27 @@ class Fig:
             subplot inside which subplots are created
         grid : tuple, optional
             number of rows and columns for subplots, by default (1, 3)
+        return_axes : bool, optional
+            automatically create axes corresponding to grid input, default = False (returns gridspec
         Returns
         -------
-        gridspec
+        gridspec or axes
         """
         gs = gridspec.GridSpecFromSubplotSpec(
             grid[0], grid[1], subplot_spec=subplot_spec, **kwargs
         )
-        return gs
+        if not return_axes:
+
+            return gs
+        elif return_axes:
+            ax = []
+            for row in range(grid[0]):
+                ax_col = []
+                for col in range(grid[1]):
+                    ax_col.append(self.fig.add_subplot(gs[row, col]))
+                ax.append(ax_col)
+
+            return np.array(ax)
 
     def panel_label(self, ax, label, fontsize=12, x=-0.14, y=1.15):
         ax.text(
@@ -301,6 +316,24 @@ class FigMirror:
         ax2 = self.Fig2.subplot(subspec_l[1], sharex=sharex, sharey=sharey, **kwargs)
 
         return ax1, ax2
+
+    def subplot2grid(self, subplot_spec, grid=(1, 3), return_axes=False, **kwargs):
+        """Make identical gridspecs nested within a grid"""
+        if not isinstance(subplot_spec, list):  # Duplicate subplot spec if only one value is specified
+            if isinstance(subplot_spec, plt.SubplotSpec):
+                rowspan = range_to_slice(subplot_spec.rowspan)
+                colspan = range_to_slice(subplot_spec.colspan)
+                subspec_use = [self.Fig1.gs[rowspan, colspan],
+                               self.Fig2.gs[rowspan, colspan]]
+            else:
+                subspec_use = [subplot_spec, subplot_spec]
+        else:
+            assert len(subplot_spec) == 2
+            subspec_use = subplot_spec
+        gs1 = self.Fig1.subplot2grid(subspec_use[0], grid, return_axes=return_axes, **kwargs)
+        gs2 = self.Fig2.subplot2grid(subspec_use[1], grid, return_axes=return_axes, **kwargs)
+
+        return gs1, gs2
 
 
 def pretty_plot(ax, round_ylim=False):

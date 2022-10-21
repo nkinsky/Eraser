@@ -10,6 +10,14 @@ from session_directory import find_eraser_directory as get_dir
 from scipy.io import loadmat
 from pathlib import Path
 
+
+def range_to_slice(range_var):
+    """Convert range to slice"""
+    assert isinstance(range_var, range)
+
+    return slice(range_var.start, range_var.stop, range_var.step)
+
+
 def set_ticks_to_lim(ax: plt.axes, x: bool = True, y: bool = True):
     """
     Sets ticks and labels to max/min of values on a plot
