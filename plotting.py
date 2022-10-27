@@ -203,7 +203,7 @@ class Fig:
                     ax_col.append(self.fig.add_subplot(gs[row, col]))
                 ax.append(ax_col)
 
-            return np.array(ax)
+            return np.array(ax).squeeze() if np.array(ax).ndim > 1 else np.array(ax)
 
     def panel_label(self, ax, label, fontsize=12, x=-0.14, y=1.15):
         ax.text(
