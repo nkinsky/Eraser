@@ -820,7 +820,7 @@ class TuningStability:
 
         # now get stats and print out
         ycoord = 0.9
-        fontdict = {'size': 6}
+        fontdict = {'size': 3}
         if group_by == 'Group':
             for day in days_plot:
                 df_day = df[df['Day'] == day]
