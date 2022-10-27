@@ -8,6 +8,7 @@ import scipy.io as sio
 from pickle import dump, load
 from pathlib import Path
 import pandas as pd
+import pingouin as pg
 from sklearn.datasets import load_digits
 from sklearn.decomposition import FastICA as skFastICA
 from sklearn.decomposition import PCA as skPCA
@@ -403,6 +404,7 @@ class MotionTuningMultiDay:
                 raster_plot = self.motion_tuning[arena][day].pe_rasters[events][id_plot]  # get raster
                 bs_rate = self.motion_tuning[arena][day].event_rates[id_plot]  # get baseline rate
                 sig_bins = np.where(self.motion_tuning[arena][day].sig[events]['pval'][id_plot] < alpha)[0]
+                sr_image = self.motion_tuning[arena][day].sr_image
 
                 labely = True if idd == 0 or not ylabel_added else False  # label y if on left side
                 labely2 = True if idd == last_good_neuron else False  # label y2 if on right side
@@ -410,7 +412,7 @@ class MotionTuningMultiDay:
                 # plot rasters
                 _, secax = plot_raster(raster_plot, cell_id=id_plot, bs_rate=bs_rate, events=events,
                                        labelx=labelx, labely=labely, labely2=labely2, ax=ax[idd],
-                                       sig_bins=sig_bins)
+                                       sig_bins=sig_bins, sr_image=sr_image)
                 ax[idd].set_title(arena + ' Day ' + str(day) + '\n Cell ' + str(id_plot))
                 if idd == base_id:  # Make title bold if base day
                     ax[idd].set_title(ax[idd].get_title(), fontweight='bold')
@@ -759,7 +761,7 @@ class TuningStability:
 
     def plot_metric_stability_by_group(self, base_day: int, metric_plot: str, delta: bool = True,
                                        days_plot: list or int or None = None,
-                                       group_by: str in ['Group', 'Exp Group'] = 'Group'):
+                                       group_by: str in ['Group', 'Exp Group'] = 'Group', ax=None, **kwargs):
 
 
         # plotting info
@@ -781,13 +783,16 @@ class TuningStability:
         df = df_full[[d in days_plot for d in df_full['Day']]]  # Keep only days indicated in days_plot
 
         # set up figure
-        fig, ax = plt.subplots(1, 2)
-        fig.set_size_inches((12.9, 4.75))
+        if ax is None:
+            fig, ax = plt.subplots(1, 2)
+            fig.set_size_inches((12.9, 4.75))
+        else:
+            fig = ax[0].figure
         met_name = metric_plot if not delta else 'Delta' + metric_plot
 
         # Plot scatter
         sns.stripplot(x='Day', y=met_name, data=df, hue=group_by, dodge=True, order=days_plot,
-                      palette=pal_use, ax=ax[0])
+                      palette=pal_use, ax=ax[0], **kwargs)
 
         # This is the only easy way I could figure out to NOT duplicate labels in the legend
         group_rows = df.loc[:, group_by].copy()  # This generates warnings about chained indexing for some reason
@@ -815,23 +820,32 @@ class TuningStability:
 
         # now get stats and print out
         ycoord = 0.9
-        if group_by == 'Group':  # NRK todo: learn how to use itertools! This works but is super non-elegant!
-            for day in np.asarray(days_plot)[[base_day != d for d in days_plot]]:
-                learners = df[np.bitwise_and(df['Group'] == 'Learners', df['Day'] == day)]
-                nonlearners = df[np.bitwise_and(df['Group'] == 'Nonlearners', df['Day'] == day)]
-                ani = df[np.bitwise_and(df['Group'] == 'ANI', df['Day'] == day)]
-                stat, pval = stats.ttest_ind(learners[met_name], nonlearners[met_name], nan_policy='omit')
-                print(f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-                ax[1].text(0.1, ycoord, f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-                ycoord -= 0.1
-                stat, pval = stats.ttest_ind(learners[met_name], ani[met_name], nan_policy='omit')
-                print(f'2sided t-test Learners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-                ax[1].text(0.1, ycoord,f'2sided t-test Learners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-                ycoord -= 0.1
-                stat, pval = stats.ttest_ind(nonlearners[met_name], ani[met_name], nan_policy='omit')
-                print(f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-                ax[1].text(0.1, ycoord, f'2sided t-test Nonlearners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-                ycoord -= 0.1
+        fontdict = {'size': 6}
+        if group_by == 'Group':
+            for day in days_plot:
+                df_day = df[df['Day'] == day]
+                astats = pg.anova(data=df_day, dv='Deltaevent_rates', between='Group')
+                posthoc_stats = pg.pairwise_tukey(data=df_day, dv='Deltaevent_rates', between='Group')
+                ax[1].text(0.1, ycoord + 0.1, f'Day {day} anova and post-hoc tukey test stats', fontdict=fontdict)
+                ax[1].text(0.1, ycoord, str(astats), fontdict=fontdict)
+                ax[1].text(0.1, ycoord - 0.3, str(posthoc_stats), fontdict=fontdict)
+                ycoord -= 0.5
+            # for day in np.asarray(days_plot)[[base_day != d for d in days_plot]]:
+            #     learners = df[np.bitwise_and(df['Group'] == 'Learners', df['Day'] == day)]
+            #     nonlearners = df[np.bitwise_and(df['Group'] == 'Nonlearners', df['Day'] == day)]
+            #     ani = df[np.bitwise_and(df['Group'] == 'ANI', df['Day'] == day)]
+            #     stat, pval = stats.ttest_ind(learners[met_name], nonlearners[met_name], nan_policy='omit')
+            #     print(f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+            #     ax[1].text(0.1, ycoord, f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+            #     ycoord -= 0.1
+            #     stat, pval = stats.ttest_ind(learners[met_name], ani[met_name], nan_policy='omit')
+            #     print(f'2sided t-test Learners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+            #     ax[1].text(0.1, ycoord,f'2sided t-test Learners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+            #     ycoord -= 0.1
+            #     stat, pval = stats.ttest_ind(nonlearners[met_name], ani[met_name], nan_policy='omit')
+            #     print(f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+            #     ax[1].text(0.1, ycoord, f'2sided t-test Nonlearners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
+            #     ycoord -= 0.1
 
         else:
             print('Stats not yet enabled for "Exp Group" plotting')
@@ -1562,8 +1576,12 @@ def scatter_cov_across_days(cov_mat: np.ndarray, cells: np.ndarray or None = Non
 
 if __name__ == '__main__':
     import matplotlib
-    matplotlib.use('TkAgg')
-    DRreg = DimReductionReg('Marble07', 'Shock', 1, 'Shock', 2)
-    DRreg.plot_cov_across_days(keep_silent=True)
+    matplotlib.use('TkAgg')  # This is a bugfix to make sure plots don't always stay on top of ALL applications
+    ts = TuningStability('Shock', 'freeze_onset', 0.01)  # Load in tuningstability object
+
+    base_day = 1
+    metric_plot = 'event_rates'
+    delta = True
+    fig, ax = ts.plot_metric_stability_by_group(base_day=base_day, metric_plot=metric_plot, delta=delta)
 
     pass
