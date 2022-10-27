@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from session_directory import find_eraser_directory as get_dir
 from scipy.io import loadmat
 from pathlib import Path
+from collections.abc import Iterable
 
 
 def range_to_slice(range_var):
@@ -291,6 +292,22 @@ def contiguous_regions(condition):
     idx.shape = (-1, 2)
     return idx
 
+
+def get_transient_peaks(rawtrace, psabool):
+    """Gets and returns the peak height of each transient"""
+    idt = contiguous_regions(psabool)  # Parse out transient times
+    peak_heights = []
+    for start, end in idt:
+        peak_heights.append(np.max(rawtrace[start:end]))
+
+    return np.array(peak_heights)
+
+def flatten(xs):
+    for x in xs:
+        if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
+            yield from flatten(x)
+        else:
+            yield x
 
 if __name__ == '__main__':
     import Placefields as pf
