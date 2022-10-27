@@ -7,11 +7,15 @@ import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 import er_plot_functions as er
 import scipy as sp
+from os import path
+import scipy.io as sio
+
+from session_directory import find_eraser_directory as get_dir
 
 
 def get_DI_scores(mouse, arena1, day1, arena2, day2, **kwargs):
     """
-    Gets discrimination index correlations between sessions.
+    Gets neural discrimination index between sessions.
     :param mouse:
     :param arena1:
     :param day1:
@@ -51,6 +55,89 @@ def get_DI_scores(mouse, arena1, day1, arena2, day2, **kwargs):
 
     except FileNotFoundError:  # If pf files are missing, return NaN
         return np.nan
+
+
+def get_matched_event_rates(mouse, arena1, day1, arena2, day2, **kwargs):
+    """
+    Gets event rates for each neuron active across both sessions.
+    :param mouse:
+    :param arena1:
+    :param day1:
+    :param arena2:
+    :param day2:
+    """
+
+    # Get mapping between sessions
+    neuron_map = pfs.get_neuronmap(mouse, arena1, day1, arena2, day2, **kwargs)
+    reg_session = sd.find_eraser_session(mouse, arena2, day2)
+    good_map_bool, silent_ind, new_ind = pfs.classify_cells(neuron_map, reg_session)
+    good_map = neuron_map[good_map_bool].astype(np.int64)
+
+    # Identify neurons with proper mapping between sessions
+    try:
+        good_sesh1_ind, _ = np.where(good_map_bool)
+    except ValueError:
+        good_sesh1_ind = np.where(good_map_bool)
+    ngood = len(good_sesh1_ind)
+
+    # load in PF objects for between sessions
+    try:
+        PF1 = pf.load_pf(mouse, arena1, day1, pf_file='placefields_cm1_manlims_1000shuf.pkl')
+        PF2 = pf.load_pf(mouse, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl')
+
+        # load in event and sampling rates
+        fps1 = hlp.get_sampling_rate(PF1)
+        ER1, _ = hlp.get_eventrate(PF1.PSAbool_align, fps1)
+        fps2 = hlp.get_sampling_rate(PF2)
+        ER2, _ = hlp.get_eventrate(PF2.PSAbool_align, fps2)
+
+    except FileNotFoundError:
+        PSAboth, srboth = [], []
+        for arena, day in zip([arena1, arena2], [day1, day2]):
+            dir_use1 = get_dir(mouse, arena, day)
+            im_data_file = path.join(dir_use1, 'FinalOutput.mat')
+            im_data = sio.loadmat(im_data_file)
+            PSAboth.append(im_data['PSAbool'])
+            srboth.append(im_data['SampleRate'].squeeze())
+        ER1, _ = hlp.get_eventrate(PSAboth[0], srboth[0])
+        ER2, _ = hlp.get_eventrate(PSAboth[1], srboth[1])
+
+    return np.array([ER1[good_sesh1_ind], ER2[good_map]])
+
+    # except FileNotFoundError:  # If pf files are missing, return NaN
+    #     return np.nan
+
+
+def get_matched_peak_heights(mouse, arena1, day1, arena2, day2, raw_type='RawTrace', **kwargs):
+    # Get mapping between sessions
+    neuron_map = pfs.get_neuronmap(mouse, arena1, day1, arena2, day2, **kwargs)
+    reg_session = sd.find_eraser_session(mouse, arena2, day2)
+    good_map_bool, silent_ind, new_ind = pfs.classify_cells(neuron_map, reg_session)
+    good_map = neuron_map[good_map_bool].astype(np.int64)
+
+    # Identify neurons with proper mapping between sessions
+    try:
+        good_sesh1_ind, _ = np.where(good_map_bool)
+    except ValueError:
+        good_sesh1_ind = np.where(good_map_bool)
+    ngood = len(good_sesh1_ind)
+
+    peak_means_all = []
+    for arena, day in zip([arena1, arena2], [day1, day2]):
+        dir_use1 = get_dir(mouse, arena, day)
+        im_data_file = path.join(dir_use1, 'FinalOutput.mat')
+        im_data = sio.loadmat(im_data_file)
+        psabool = im_data['PSAbool']
+        rawtrace = im_data['NeuronTraces'][0][raw_type][0]
+
+        peaks = []
+        for raw, psa in zip(rawtrace, psabool):
+            peaks.append(hlp.get_transient_peaks(raw, psa))
+        peak_means = np.array([np.mean(peak) for peak in peaks])
+
+        peak_means_all.append(peak_means)
+
+    return peak_means_all[0][good_sesh1_ind], peak_means_all[1][good_map]
 
 
 def get_on_off_cells(mouse, arena1, day1, arena2, day2):
