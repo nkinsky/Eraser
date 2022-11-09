@@ -358,7 +358,7 @@ class MotionTuningMultiDay:
         :param ax: axes to plot into, default = create new figure with 1 x len(days_plot) subplots
         :param batch_map: use batch map for registering neurons across days as opposed to direct session-to-session reg.
         :param plot_ROI: bool, True (default) = plot ROI shape at bottom row.
-        :param **kwargs: see MotionTuning.gen_pe_rasters
+        :param **kwargs: to seaborn.heatmap (most likely need to set rasterized=True)
         :return:
         """
 
@@ -412,7 +412,7 @@ class MotionTuningMultiDay:
                 # plot rasters
                 _, secax = plot_raster(raster_plot, cell_id=id_plot, bs_rate=bs_rate, events=events,
                                        labelx=labelx, labely=labely, labely2=labely2, ax=ax[idd],
-                                       sig_bins=sig_bins, sr_image=sr_image)
+                                       sig_bins=sig_bins, sr_image=sr_image, **kwargs)
                 ax[idd].set_title(arena + ' Day ' + str(day) + '\n Cell ' + str(id_plot))
                 if idd == base_id:  # Make title bold if base day
                     ax[idd].set_title(ax[idd].get_title(), fontweight='bold')
@@ -730,7 +730,7 @@ class TuningStability:
 
         # Figure out ylabel
         metrics = ["locs", "event_rates", "pvals", "corr_corrs", "corr_pvals"]
-        metric_labels = [r'$\Delta_t$', r'$\Delta{ER} (1/s)$', 'p at peak', r'$\rho$', r'$p_{\rho}$']
+        metric_labels = [r'$\Delta_t$', r'$\Delta{p}_{event}$', 'p at peak', r'$\rho$', r'$p_{\rho}$']
         met_ind = np.where([metric_plot == met for met in metrics])[0][0]
         met_label = metric_labels[met_ind]
 
@@ -818,7 +818,7 @@ class TuningStability:
         # Label title
         ax[0].set_title('Freeze cells on Day ' + str(base_day))
 
-        # now get stats and print out
+        # Now get stats and print out
         ycoord = 0.9
         fontdict = {'size': 3}
         if group_by == 'Group':
@@ -830,22 +830,6 @@ class TuningStability:
                 ax[1].text(0.1, ycoord, str(astats), fontdict=fontdict)
                 ax[1].text(0.1, ycoord - 0.3, str(posthoc_stats), fontdict=fontdict)
                 ycoord -= 0.5
-            # for day in np.asarray(days_plot)[[base_day != d for d in days_plot]]:
-            #     learners = df[np.bitwise_and(df['Group'] == 'Learners', df['Day'] == day)]
-            #     nonlearners = df[np.bitwise_and(df['Group'] == 'Nonlearners', df['Day'] == day)]
-            #     ani = df[np.bitwise_and(df['Group'] == 'ANI', df['Day'] == day)]
-            #     stat, pval = stats.ttest_ind(learners[met_name], nonlearners[met_name], nan_policy='omit')
-            #     print(f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-            #     ax[1].text(0.1, ycoord, f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-            #     ycoord -= 0.1
-            #     stat, pval = stats.ttest_ind(learners[met_name], ani[met_name], nan_policy='omit')
-            #     print(f'2sided t-test Learners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-            #     ax[1].text(0.1, ycoord,f'2sided t-test Learners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-            #     ycoord -= 0.1
-            #     stat, pval = stats.ttest_ind(nonlearners[met_name], ani[met_name], nan_policy='omit')
-            #     print(f'2sided t-test Learners v Nonlearners day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-            #     ax[1].text(0.1, ycoord, f'2sided t-test Nonlearners v ANI day {day}: pval= {pval:0.3g}, tstat={stat:0.3g}')
-            #     ycoord -= 0.1
 
         else:
             print('Stats not yet enabled for "Exp Group" plotting')
@@ -1218,7 +1202,7 @@ def get_palettes(group: str in ['Group', 'Exp Group']):
 
 
 def plot_raster(raster, cell_id=None, sig_bins=None, sig_style='r.', bs_rate=None, y2scale=0.25, events='trial',
-                labelx=True, labely=True, labely2=True, sr_image=20, ax=None, y2zero=0, cmap='rocket'):
+                labelx=True, labely=True, labely2=True, sr_image=20, ax=None, y2zero=0, cmap='rocket', **kwargs):
     #NRK todo: change bs_rate plot to incorporate sample rate. currently too high!!!
     """Plot peri-event raster with tuning curve overlaid.
 
@@ -1235,6 +1219,7 @@ def plot_raster(raster, cell_id=None, sig_bins=None, sig_style='r.', bs_rate=Non
     :param sr_image: int, default = 20 fps
     :param ax: ax to plot into, default = None -> create new fig
     :param y2zero: location of y2 axis zero point in # trials
+    :param **kwargs to heatmap
     :return:
     """
 
@@ -1247,7 +1232,7 @@ def plot_raster(raster, cell_id=None, sig_bins=None, sig_style='r.', bs_rate=Non
     nevents, nframes = raster.shape
     buffer = np.floor(nframes / 2 / sr_image)
 
-    sns.heatmap(raster, ax=ax, cbar=False, cmap=cmap)  # plot raster
+    sns.heatmap(raster, ax=ax, cbar=False, cmap=cmap, **kwargs)  # plot raster
     ax.plot(nevents - curve * nevents/y2scale - y2zero, 'r-')  # plot tuning curve
     ax.axvline(nframes / 2, color='g')  # plot event time
     if bs_rate is not None:
