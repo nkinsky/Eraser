@@ -189,18 +189,20 @@ class Fig:
         -------
         gridspec or axes
         """
-        gs = gridspec.GridSpecFromSubplotSpec(
+        gssub = gridspec.GridSpecFromSubplotSpec(
             grid[0], grid[1], subplot_spec=subplot_spec, **kwargs
         )
         if not return_axes:
 
-            return gs
+            return gssub
         elif return_axes:
             ax = []
             for row in range(grid[0]):
                 ax_col = []
                 for col in range(grid[1]):
-                    ax_col.append(self.fig.add_subplot(gs[row, col]))
+                    axtemp = self.fig.add_subplot(gssub[row, col], frame_on=False)
+                    axtemp.axis('off')
+                    ax_col.append(axtemp)
                 ax.append(ax_col)
 
             return np.array(ax).squeeze() if np.array(ax).ndim > 1 else np.array(ax)
