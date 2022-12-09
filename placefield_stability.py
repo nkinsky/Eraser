@@ -799,6 +799,25 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     return corrs_us, corrs_sm
 
 
+def get_pf_angle(tmap, method="max", flipy=True):
+    """Gets angle of placefield from center."""
+    yc, xc = [dim/2 for dim in tmap.shape]  # Get center coords
+
+    if method == "max":  # Consider only location of maximum firing
+        ymax, xmax = np.where(tmap == np.nanmax(tmap.reshape(-1)))
+    elif method == "average":  # Averages the location of multiple fields
+        print('Not yet implemented')
+        return None
+    pass
+
+    ang_rad = np.arctan2(yc - ymax if flipy else ymax - yc, xmax - xc)  # flipy to match upside down tmap plots
+    ang_deg = ang_rad/np.pi*180
+
+    return ang_deg
+
+# def get_p
+
+
 def eliminate_immobile_neurons(PSAboolrun1, PSAboolrun2, valid_neurons1, valid_neurons2):
     """Eliminate neurons that are only active during immobility - will encounter errors trying to calculate
     correlations using their all-zero transient maps. Note that these neurons can be looked at with functions
@@ -887,8 +906,10 @@ def compare_pf_at_bestrot(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0
     ndays = len(days)
     fig_norot, ax_norot = plt.subplots(ndays - 1, ndays - 1)
     fig_norot.set_size_inches([19.2, 9.28])
+    fig_norot.suptitle(mouse + ' No Rotation')
     fig_bestrot, ax_bestrot = plt.subplots(ndays - 1, ndays - 1)
     fig_bestrot.set_size_inches([19.2, 9.28])
+    fig_bestrot.suptitle(mouse + ' Best Rotation')
     nbins = 30
     # plot each days correlations versus the other days!
 
@@ -926,7 +947,7 @@ def compare_pf_at_bestrot(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0
                     ax[id1, id1 + id2].set_ylim(ylims)
                     ax[id1, id1 + id2].set_title('Day ' + str(day1) + ' vs Day ' + str(day2))
 
-            except (FileNotFoundError, TypeError):
+            except (FileNotFoundError, TypeError, IndexError):
                 print('Error for ' + mouse + ' ' + arena1 + ' Day ' + str(day1) + ' v ' + arena2 + ' Day ' + str(day2))
 
     return [fig_norot, fig_bestrot], [ax_norot, ax_bestrot]
@@ -1036,7 +1057,7 @@ def get_all_CIshuf(mouse, arena1='Shock', arena2='Shock', days=[-2, -1, 0, 4, 1,
                               ' to ' + arena2 + ' Day ' + str(day2))
 
     if not include_day_zero:
-        keep_bool = np.ones(7, dtype=bool)
+        keep_bool = np.ones(ndays, dtype=bool)
         keep_bool[2] = False
         shuf_CI = shuf_CI[:, keep_bool][:, :, keep_bool]
 
@@ -1892,6 +1913,20 @@ class PFCombineObject:
         self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
                                                        pf_file=pf_file, speed_threshold=False,
                                                        keep_poor_overlap=True, batch_map_use=batch_map_use)
+
+    def get_pf_ang_delta(self, map_type="smooth", method="max", **kwargs):
+        """Get change in place field center-out angle from session to session"""
+
+        # Grab correct maps
+        maps_use = [self.tmap1_sm_reg, self.tmap2_sm_reg] if map_type == "smooth" else \
+            [self.tmap1_us_reg, self.tmap2_us_reg]
+
+        delta_ang = []
+        for pf1, pf2 in zip(maps_use[0], maps_use[1]):
+            delta = get_pf_angle(pf2, method=method, **kwargs) - get_pf_angle(pf1, method=method, **kwargs)
+            delta_ang.append(delta)
+
+        return np.array(delta_ang)
 
     def pfplot(self, nneuron, tmap_type="sm", best_rot=False, label=True, ax=None, **kwargs):
         """Plot raw trajectories with events overlaid and corresponding transient event maps (place fields)
