@@ -76,6 +76,18 @@ class MotionTuning:
 
         return ntuned/ntotal
 
+    def get_peri_event_bool(self, events: str = 'freeze_onset', buffer_sec=(2, 2)):
+        """Generates a boolean identifying +/- buffer_sec from event"""
+        event_starts = self.select_events(events)
+        event_start_inds = (event_starts * self.sr_image).astype(int)
+        peri_event_bool = np.zeros_like(self.PSAbool[0])
+
+        for start_ind in event_start_inds:
+            peri_event_bool[np.max([0, start_ind - buffer_sec[0] * self.sr_image]): np.min(
+                [len(peri_event_bool), start_ind + buffer_sec[1] * self.sr_image])] = 1
+
+        return peri_event_bool.astype(bool)
+
     def gen_pe_rasters(self, events='freeze_onset', buffer_sec=(2, 2)):
         """Generate the rasters for all cells and dump them into a dictionary"""
         # Get appropriate event times to use
