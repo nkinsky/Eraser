@@ -22,12 +22,18 @@ import eraser_reference as err
 
 
 class CovMat:
-    """Calculate covariance matrix for a given session"""
-    def __init__(self, mouse: str, arena: str, day: int, bin_size: float = 0.5):
+    """Calculate covariance matrix for a given session
+    :param bin_size (seconds): size to bin PSAbool for calculating covariance
+    :param exclude_events: str, typically "freeze_onset"
+    :param exclude_buffer: tuple len = 2, typically (2, 2) for #seconds before/after event to exclude """
+    def __init__(self, mouse: str, arena: str, day: int, bin_size: float = 0.5,
+                 exclude_events=None, exclude_buffer=None):
         # Save session info
         self.mouse = mouse
         self.arena = arena
         self.day = day
+        self.exclude_events = exclude_events
+        self.exclude_buffer = exclude_buffer
 
         # ID working directory
         dir_use = pf.get_dir(mouse, arena, day)
@@ -45,6 +51,9 @@ class CovMat:
             # Fix previously calculated occmap
             self.PF.occmap = pf.remake_occmap(self.PF.xBin, self.PF.yBin, self.PF.runoccmap)
             self.PSAbool = self.PF.PSAbool_align
+            if exclude_events is not None:
+                include_bool = np.bitwise_not(md.get_peri_event_bool(self.exclude_events, self.exclude_buffer))
+                self.PSAbool = self.PSAbool[:, include_bool]
             self.SR = self.PF.sr_image
 
         except FileNotFoundError:
@@ -71,9 +80,10 @@ class CovMat:
 
 class CovMatReg:
     """Track covariance matrix across days, playing base day in lower diagonal, reg day in upper diagonal and zeroing
-    out the diagonal"""
+    out the diagonal
+    :param **kwargs: used to feed 'exclude_events' and 'exclude_buffer' into CovMat class"""
     def __init__(self, mouse: str, base_arena: str, base_day: str, reg_arena: str, reg_day: str,
-               bin_size: float = 0.5):
+               bin_size: float = 0.5, **kwargs):
 
         self.mouse = mouse
         self.base_arena = base_arena
@@ -81,8 +91,8 @@ class CovMatReg:
         self.reg_arena = reg_arena
         self.reg_day = reg_day
 
-        self.CovMatbase = CovMat(mouse, base_arena, base_day, bin_size)
-        self.CovMatreg = CovMat(mouse, reg_arena, reg_day, bin_size)
+        self.CovMatbase = CovMat(mouse, base_arena, base_day, bin_size, **kwargs)
+        self.CovMatreg = CovMat(mouse, reg_arena, reg_day, bin_size, **kwargs)
 
         # Now register across days
         neuron_map = pfs.get_neuronmap(mouse, base_arena, base_day, reg_arena, reg_day, batch_map_use=True)
@@ -163,8 +173,11 @@ class CovMatReg:
 def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], arena2: str in ['Open', 'Shock'],
                           neurons: str in ['freeze_onset', 'move_onset', 'all'] or np.ndarray = 'freeze_onset',
                           keep_silent: bool = False, buffer_sec: int or list or tuple = (6, 6),
-                          base_days: list = [-2, -1, 4, 1, 2, 4], reg_days: list = [-1, 4, 1, 2, 7, 2]):
-    """Assemble all across-day covariance matrices into a dictionary for easy manipulating later on"""
+                          base_days: list = [-2, -1, 4, 1, 2, 4], reg_days: list = [-1, 4, 1, 2, 7, 2],
+                          **kwargs):
+    """Assemble all across-day covariance matrices into a dictionary for easy manipulating later on
+    :param **kwargs: used to exclude peri-event times from being analyzed with "exclude_events" and "exclude_buffer"
+    params."""
 
     group_plot = [err.learners, err.nonlearners, err.ani_mice_good]
     group_names = ['Learners', 'Non-learners', 'ANI']
@@ -180,7 +193,7 @@ def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], are
                 cov_dict[name][mouse][f'{d1}_{d2}'] = []
                 try:
                     # blockPrint()
-                    CMR = CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size)
+                    CMR = CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size, **kwargs)
                     covz_comb = CMR.cov_across_days(neurons, keep_silent=keep_silent, buffer_sec=buffer_sec)
                     # enablePrint()
                     cov_dict[name][mouse][f'{d1}_{d2}'] = covz_comb
