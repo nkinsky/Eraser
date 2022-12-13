@@ -1936,11 +1936,20 @@ class PFCombineObject:
         if ax is None:
             _, ax = plt.subplots(2, 2)
 
+        if best_rot:
+            _, best_rot, _ = get_best_rot(self.mouse, self.arena1, self.day1, self.arena2, self.day2)
+
         # Plot (and label) trajectory with events overlaid
-        for PF, PSAalign, a in zip([self.PF1, self.PF2], [self.PSAalign1, self.PSAalign2], ax[0, :]):
+        for ids, (PF, PSAalign, a) in enumerate(zip([self.PF1, self.PF2], [self.PSAalign1, self.PSAalign2], ax[0, :])):
             traj_lims = [[PF.xEdges.min(), PF.xEdges.max()], [PF.yEdges.min(), PF.yEdges.max()]]
-            pf.plot_events_over_pos2(PSAalign[nneuron, PF.isrunning], PF.pos_align[0, PF.isrunning],
-                                 PF.pos_align[1, PF.isrunning], traj_lims=traj_lims, ax=a, **kwargs)
+
+            if ids == 0 or isinstance(best_rot, bool):
+                pf.plot_events_over_pos2(PSAalign[nneuron, PF.isrunning], PF.pos_align[0, PF.isrunning],
+                                         PF.pos_align[1, PF.isrunning], traj_lims=traj_lims, ax=a, **kwargs)
+            elif ids == 1 and not isinstance(best_rot, bool):
+                xrot, yrot = rotate_traj_data(PF.pos_align[0, PF.isrunning], PF.pos_align[1, PF.isrunning], best_rot[1])
+                pf.plot_events_over_pos2(PSAalign[nneuron, PF.isrunning], xrot, yrot,
+                                         ax=a, **kwargs)
 
         if label:
             ax[0, 0].set_title(self.arena1 + ' Day ' + str(self.day1))
@@ -1950,9 +1959,8 @@ class PFCombineObject:
         tmap_use = [self.tmap1_sm_reg[nneuron], self.tmap2_sm_reg[nneuron]] if tmap_type == 'sm' else \
             [self.tmap1_us_reg[nneuron], self.tmap2_us_reg[nneuron]]
 
-        if best_rot:
-            _, best_rot, _ = get_best_rot(self.mouse, self.arena1, self.day1, self.arena2, self.day2)
-            tmap_use[1] = np.rot90(tmap_use[1], best_rot[1]/90)
+        if not isinstance(best_rot, bool):
+            tmap_use[1] = np.rot90(tmap_use[1], best_rot[1] / 90)
 
         for tmap, a in zip(tmap_use, ax[1, :]):
             pf.plot_tmap(tmap, a)
@@ -2004,12 +2012,14 @@ class PFCombineObject:
                          [self.PF2.xEdges.min(), self.PF2.xEdges.max()]]
             _, best_rot, _ = get_best_rot(self.mouse, self.arena1, self.day1, self.arena2, self.day2)
             # best_rot is spit out for un-smoothed and smoothed place maps. use smoothed [1]
+            x2rot, y2rot = rotate_traj_data(self.PF2.pos_align[0, self.PF2.isrunning],
+                                            self.PF2.pos_align[1, self.PF2.isrunning], best_rot[1])
+            # Set up the appropriate x2 and y2 values if rotation is used:
             self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm,
                                  plot_events_over_pos2, plot_tmap_us2, plot_tmap_sm2),
                                 current_position=current_position, n_neurons=self.nneurons,
                                 n_rows=2, n_cols=3, figsize=(17.2, 10.6), titles=titles,
-                                x=self.PF1.pos_align[0, self.PF1.isrunning],
-                                y=self.PF1.pos_align[1, self.PF1.isrunning],
+                                x=x2rot, y=y2rot,
                                 PSAbool=self.PSAalign1[spatial_neurons, :][:, self.PF1.isrunning],
                                 tmap_us=[self.tmap1_us_reg[a] for a in np.where(spatial_neurons)[0]],
                                 tmap_sm=[self.tmap1_sm_reg[a] for a in np.where(spatial_neurons)[0]],
@@ -2059,6 +2069,23 @@ class ShufMap:
         # dump into pickle file with name
         with open(self.save_file, 'wb') as output:
             dump(self, output)
+
+
+def rotate_traj_data(x, y, rot_deg: int in [0, 90, 180, 270]):
+    """Rotates x and y trajectory data"""
+
+    assert rot_deg in [0, 90, 180, 270], 'rot_deg must be 0, 90, 180, or 270'
+
+    if rot_deg == 0:
+        xrot, yrot = x, y
+    elif rot_deg == 90:
+        xrot, yrot = -y, x
+    elif rot_deg == 180:
+        xrot, yrot = -x, -y
+    elif rot_deg == 270:
+        xrot, yrot = x, -y
+
+    return xrot, yrot
 
 
 ## create a class to construct and keep all group data in a nice format and plot things...
