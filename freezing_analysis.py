@@ -76,15 +76,23 @@ class MotionTuning:
 
         return ntuned/ntotal
 
-    def get_peri_event_bool(self, events: str = 'freeze_onset', buffer_sec=(2, 2)):
-        """Generates a boolean identifying +/- buffer_sec from event"""
-        event_starts = self.select_events(events)
-        event_start_inds = (event_starts * self.sr_image).astype(int)
+    def get_peri_event_bool(self, events: str = 'freeze_onset', buffer_sec=(2, 2), nevents_max=None):
+        """Generates a boolean identifying +/- buffer_sec from event. Grabs only a random subset of
+        events if nevents_max is set and less than total # events found"""
+        events = self.select_events(events)
+        event_inds = (events * self.sr_image).astype(int)
         peri_event_bool = np.zeros_like(self.PSAbool[0])
 
-        for start_ind in event_start_inds:
-            peri_event_bool[np.max([0, start_ind - buffer_sec[0] * self.sr_image]): np.min(
-                [len(peri_event_bool), start_ind + buffer_sec[1] * self.sr_image])] = 1
+        # Grab only a subset of events
+        if nevents_max is not None:
+            nevents = len(event_inds)
+            if nevents_max < nevents:
+                events_subset = np.random.permutation(nevents)[0:nevents_max]
+                event_inds = event_inds[events_subset]
+
+        for event_ind in event_inds:
+            peri_event_bool[np.max([0, event_ind - buffer_sec[0] * self.sr_image]): np.min(
+                [len(peri_event_bool), event_ind + buffer_sec[1] * self.sr_image])] = 1
 
         return peri_event_bool.astype(bool)
 
