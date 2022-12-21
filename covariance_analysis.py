@@ -58,7 +58,7 @@ class CovMat:
                 else:
                     nevents_exclude = np.max([len(self.freeze_starts) - max_event_num, 0])
                     # Print out # events to exclude as a sanity check!
-                    # print(f'{nevents_exclude} events out of {len(self.freeze_starts)} excluded for day {day}')
+                    print(f'{nevents_exclude} events out of {len(self.freeze_starts)} excluded for day {day}')
                     include_bool = np.bitwise_not(md.get_peri_event_bool(self.exclude_events, self.exclude_buffer,
                                                   nevents_max=nevents_exclude))
                 self.PSAbool = self.PSAbool[:, include_bool]
@@ -93,7 +93,8 @@ class CovMatReg:
     covariance on days -2 and -1
     :param **kwargs: used to feed 'exclude_events' and 'exclude_buffer' into CovMat class"""
     def __init__(self, mouse: str, base_arena: str, base_day: str, reg_arena: str, reg_day: str,
-                 bin_size: float = 0.5, max_event_num: int or None = None, **kwargs):
+                 bin_size: float = 0.5, max_event_num: int or None = None, exclude_events=None,
+                 exclude_buffer=(2, 2)):
 
         self.mouse = mouse
         self.base_arena = base_arena
@@ -107,8 +108,10 @@ class CovMatReg:
         max_event_reg = 1000 if reg_day in [-2, -1] else max_event_num
 
         # Calculate covar for each day
-        self.CovMatbase = CovMat(mouse, base_arena, base_day, bin_size, max_event_num=max_event_base, **kwargs)
-        self.CovMatreg = CovMat(mouse, reg_arena, reg_day, bin_size, max_event_num=max_event_reg, **kwargs)
+        self.CovMatbase = CovMat(mouse, base_arena, base_day, bin_size, max_event_num=max_event_base,
+                                 exclude_events=exclude_events, exclude_buffer=exclude_buffer)
+        self.CovMatreg = CovMat(mouse, reg_arena, reg_day, bin_size, max_event_num=max_event_reg,
+                                exclude_events=exclude_events, exclude_buffer=exclude_buffer)
 
         # Now register across days
         neuron_map = pfs.get_neuronmap(mouse, base_arena, base_day, reg_arena, reg_day, batch_map_use=True)
@@ -190,7 +193,7 @@ def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], are
                           neurons: str in ['freeze_onset', 'move_onset', 'all'] or np.ndarray = 'freeze_onset',
                           keep_silent: bool = False, buffer_sec: int or list or tuple = (6, 6),
                           base_days: list = [-2, -1, 4, 1, 2, 4], reg_days: list = [-1, 4, 1, 2, 7, 2],
-                          match_event_num: bool = False, **kwargs):
+                          match_event_num: bool = False, exclude_events=None, exclude_buffer=(2, 2)):
     """Assemble all across-day covariance matrices into a dictionary for easy manipulating later on
     :param match_event_num: set to True to ensure that any covariance calculated from days after -2/-1 using motion
     tuned cells uses the same # of events on average as from day -2/-1.
@@ -209,18 +212,20 @@ def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], are
             cov_dict[name][mouse] = {}
             if match_event_num:  # Randomly downsample # freezing events to match that of day -2/-1 mean
                 # assert neurons != 'all'
-                nevents_baseline = [len(fa.MotionTuning(mouse, arena1, -2).select_events(neurons)),
-                                    len(fa.MotionTuning(mouse, arena1, -1).select_events(neurons))]
+                nevents_baseline = [len(fa.MotionTuning(mouse, arena1, -2).select_events(exclude_events)),
+                                    len(fa.MotionTuning(mouse, arena1, -1).select_events(exclude_events))]
                 nevents_max = np.mean(nevents_baseline).astype(int)
             for ida, (d1, d2) in tqdm(enumerate(zip(base_days, reg_days)), desc=mouse):
                 cov_dict[name][mouse][f'{d1}_{d2}'] = []
                 try:
                     # blockPrint()
                     if not match_event_num:
-                        CMR = CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size, **kwargs)
+                        CMR = CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size,
+                                        exclude_events=exclude_events, exclude_buffer=exclude_buffer)
                     else:
                         CMR = CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size,
-                                        max_event_num=nevents_max, **kwargs)
+                                        exclude_events=exclude_events, max_event_num=nevents_max,
+                                        exclude_buffer=exclude_buffer)
                     covz_comb = CMR.cov_across_days(neurons, keep_silent=keep_silent, buffer_sec=buffer_sec)
                     # enablePrint()
                     cov_dict[name][mouse][f'{d1}_{d2}'] = covz_comb
@@ -400,4 +405,6 @@ def enablePrint():
 
 
 if __name__ == '__main__':
-    group_cov_across_days(0.5, 'Shock', 'Shock')
+    group_cov_across_days(bin_size=0.5, arena1='Shock', arena2='Shock',
+                          neurons='all', keep_silent=True, match_event_num=True,
+                          exclude_events='freeze_onset')
