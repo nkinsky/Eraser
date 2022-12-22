@@ -201,7 +201,7 @@ class Fig:
                 ax_col = []
                 for col in range(grid[1]):
                     axtemp = self.fig.add_subplot(gssub[row, col], frame_on=False)
-                    axtemp.axis('off')
+                    # axtemp.axis('off')
                     ax_col.append(axtemp)
                 ax.append(ax_col)
 
