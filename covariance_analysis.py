@@ -58,7 +58,7 @@ class CovMat:
                 else:
                     nevents_exclude = np.max([len(self.freeze_starts) - max_event_num, 0])
                     # Print out # events to exclude as a sanity check!
-                    print(f'{nevents_exclude} events out of {len(self.freeze_starts)} excluded for day {day}')
+                    # print(f'{nevents_exclude} events out of {len(self.freeze_starts)} excluded for day {day}')
                     include_bool = np.bitwise_not(md.get_peri_event_bool(self.exclude_events, self.exclude_buffer,
                                                   nevents_max=nevents_exclude))
                 self.PSAbool = self.PSAbool[:, include_bool]
