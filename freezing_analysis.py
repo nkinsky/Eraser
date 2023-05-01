@@ -23,6 +23,86 @@ from helpers import contiguous_regions
 import eraser_reference as err
 
 
+class Raster:
+    def __init__(self, raster_array, buffer_sec=(2, 2), SR=20):
+        self.raster = raster_array
+        self.times = np.linspace(-buffer_sec[0], buffer_sec[1], np.sum(buffer_sec)*SR+1)
+
+    @property
+    def raster_mean(self):
+        raster_mean = (
+            np.nanmean(self.raster, axis=0) if self.raster is not None else None
+        )
+        return raster_mean
+
+    def get_mean_peak(self):
+        """Get peak of mean raster and index where it occurs"""
+        idx = np.argmax(self.raster_mean)
+
+        return idx, self.raster_mean[idx]
+
+    def get_mean_trough(self):
+        """Get trough of mean raster and index where it occurs"""
+        idx = np.argmin(self.raster_mean)
+
+        return idx, self.raster_mean[idx]
+
+
+class RasterGroup:
+    def __init__(self, raster_array_group, buffer_sec=(2, 2), SR=20):
+        self.Raster = []
+        for raster in raster_array_group:
+            self.Raster.append(
+                Raster(
+                    raster,
+                    buffer_sec=buffer_sec,
+                    SR=SR,
+                )
+            )
+
+    def sort_rasters(
+        self,
+        sortby: list or np.ndarray or str = "peak_time",
+        norm_each_row: None or str in ["max", "z"] = "max",
+    ):
+
+        assert isinstance(sortby, (list, np.ndarray)) or (
+            isinstance(sortby, str) and sortby in ["peak_time", "trough_time"]
+        )
+        if isinstance(sortby, str) and (
+            sortby == "peak_time" or sortby == "trough_time"
+        ):
+            peak_idx = []
+            for rast in self.Raster:
+                pid, _ = (
+                    rast.get_mean_peak()
+                    if sortby == "peak_time"
+                    else rast.get_mean_trough()
+                )
+                peak_idx.append(pid)
+            sort_ids = np.argsort(peak_idx)
+        else:
+            sort_ids = sortby
+
+        sorted_mean_rast = np.array([self.Raster[idx].raster_mean for idx in sort_ids])
+
+        # Normalize each row to itself
+        if norm_each_row == "max":
+            sorted_mean_rast = sorted_mean_rast / sorted_mean_rast.max(axis=1)[:, None]
+        elif norm_each_row == "z":
+            sorted_mean = np.array(
+                [np.nanmean(self.Raster[idx].raster.reshape(-1)) for idx in sort_ids]
+            )
+            sorted_std = np.array(
+                [np.nanstd(self.Raster[idx].raster.reshape(-1)) for idx in sort_ids]
+            )
+            sorted_mean_rast = (sorted_mean_rast - sorted_mean[:, None]) / sorted_std[
+                :, None
+            ]
+        return sorted_mean_rast, sort_ids
+
+
+
 class MotionTuning:
     """Identify and plot freeze and motion related cells
     **kwargs: inputs for getting freezing in eraser_plot_functions.get_freezing.
