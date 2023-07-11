@@ -729,6 +729,52 @@ class MotionTuningMultiDay:
         return locs, event_rates, pvals, corr, is_tuned
 
 
+def snake_plot(rasters, ax=None):
+    if ax is None:
+        _, ax = plt.subplots()
+
+    peak_id = np.array([helpers.allmax(rast) for rast in rasters])
+    sort_ids = np.argsort(peak_id)
+    sns.heatmap(rasters[sort_ids], ax=ax)
+
+    return ax, peak_id
+
+
+def freeze_group_snake_plot(group, arena, day, buffer_sec=(2, 2), sr_match=20, ax=None, plot=True):
+    """Plot freeze-tuned cells for each group/day"""
+
+    # Set up times
+    times = np.arange(-buffer_sec[0], buffer_sec[1], 1 / sr_match)
+
+    freeze_rasts_mean = []
+    for mouse in group:
+        MD1 = MotionTuning(mouse, arena, day, buffer_sec=buffer_sec)
+        MD1.gen_pe_rasters(buffer_sec=buffer_sec)
+        freeze_cells = MD1.select_cells('freeze_fine', buffer_sec=buffer_sec)
+        rast_use = MD1.pe_rasters['freeze_onset'][freeze_cells]
+
+        if MD1.sr_image != sr_match:  # interpolate values if sample rate doesn't match to make data compatible
+            rast_mean_interp = []
+            times_sr = np.arange(-buffer_sec[0], buffer_sec[1], 1 / MD1.sr_image)
+            for act in rast_use.mean(axis=1):
+                rast_mean_interp.append(np.interp(times, times_sr, act))
+            freeze_rasts_mean.append(rast_mean_interp)
+        else:
+            freeze_rasts_mean.append(rast_use.mean(axis=1))
+
+    freeze_rasts_mean_comb = np.concatenate(freeze_rasts_mean, axis=0)
+
+    if plot:
+        ax, peak_id = snake_plot(freeze_rasts_mean_comb, ax=ax)
+        ax.set_xticks([0, int(len(times) / 2), len(times)])
+        ax.set_xticklabels([-buffer_sec[0], 0, buffer_sec[1]])
+    else:
+        ax = None
+    print(freeze_rasts_mean_comb.shape)
+
+    return ax, peak_id, times
+
+
 class TuningStability:
     """Class to examine within arena stability of tuning curves across days"""
     def __init__(self, arena, events, alpha):
