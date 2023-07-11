@@ -223,15 +223,19 @@ class MotionTuning:
         calc_tuning = True
         # Check to see if appropriate tuning already run and stored and just use that, otherwise calculate from scratch.
         if 'nperm' in sig_use:
-            if sig_use['nperm'] == nperm:
+            # Check that rasters are correct size for buffer_sec and nperms are correct
+            # For debugging
+            # print(f'pval0shape={sig_use["pval"].shape[1]}')
+            # print(int(self.sr_image * np.sum(buffer_sec)))
+            if (sig_use['nperm'] == nperm) and \
+                    (sig_use['pval'].shape[1] == int(self.sr_image * np.sum(buffer_sec))):
                 calc_tuning = False
                 pval = sig_use['pval']
 
         if calc_tuning:
-            print('calculating significant tuning for nperm=' + str(nperm))
+            print(f'calculating significant tuning for buffer_sec={buffer_sec} and nperm={str(nperm)}')
             # check if both regular and permuted raster are run already!
-            pe_rasters, perm_rasters = self.check_rasters_run(events=events,
-                                                              buffer_sec=buffer_sec,  nperm=nperm)
+            pe_rasters, perm_rasters = self.check_rasters_run(events=events, buffer_sec=buffer_sec,  nperm=nperm)
 
             # Now calculate tuning curves and get significance!
             pe_tuning = gen_motion_tuning_curve(pe_rasters)
@@ -271,14 +275,86 @@ class MotionTuning:
 
         return sig_neurons
 
-    def save_sig_tuning(self):
+    def calc_pw_coactivity(self, events: str in ['freeze_onset', 'move_onset'] = 'freeze_onset', buffer_sec=(6, 6),
+                           sr_match: int = 20, cells_to_use: 'all' or list or np.array = 'all',
+                           jitter_frames: None or int = None):
+        """Calculate pairwise coactivty of all neurons around freeze or motion onset. Returns pairwise activations
+        (total # for each pair), pairwise activation probability, and timestamps relative to each event"""
+
+        assert jitter_frames is None or type(jitter_frames) == int
+        # Check if peri-event rasters are already loaded in
+        if self.pe_rasters[events] is not None:
+            # Check if #frames matches buffer_sec input
+            (load_rasters := not (np.sum(buffer_sec)*self.sr_image == self.pe_rasters[events].shape[1]))
+        else:
+            load_rasters = True
+
+        # Load rasters if necessary
+        if load_rasters:
+            self.gen_pe_rasters(events, buffer_sec)
+
+        # Select cells to use
+        if cells_to_use == 'all':
+            rasters_use = self.pe_rasters[events]
+        else:
+            rasters_use = self.pe_rasters[events][cells_to_use]
+            # print(f'calculating rasters with {rasters_use.shape[0]} cells')  # for debugging
+
+        # Set up variables
+        times = np.arange(-buffer_sec[0], buffer_sec[1], 1 / sr_match)
+        nevents = rasters_use[0].shape[1]
+        pw_co_all = []
+
+        # iterate through and calculate pairwise coactivity for all neuron pairs
+        n = 1
+        for rast1 in rasters_use[:-1]:
+            # Sum up pairwise activity
+            if jitter_frames is None:
+                pw_co = np.bitwise_and(rast1, rasters_use[n:]).sum(axis=1)
+            else:  # rotate all rasters circularly by specified # of frames
+                pw_co = np.bitwise_and(rast1, np.roll(rasters_use[n:], jitter_frames)).sum(axis=1)
+
+            if self.sr_image == sr_match:
+                pw_co_all.append(pw_co)
+            else:  # interpolate if sample rate is off
+                times_sr = np.arange(-buffer_sec[0], buffer_sec[1], 1 / self.sr_image)
+                npairs = pw_co.shape[0]
+                nframes = len(times)
+                po_co_interp = np.concatenate([np.interp(times, times_sr, co_pair) for co_pair in pw_co])\
+                    .reshape(npairs, nframes)
+                pw_co_all.append(po_co_interp)
+            n += 1
+        if len(pw_co_all) > 0:
+            pw_co_all = np.concatenate(pw_co_all)
+            pw_co_prob_all = pw_co_all/nevents
+
+            return pw_co_all, pw_co_prob_all, times
+
+        else:
+            return None, None, None
+
+    def save_sig_tuning(self, buffer_sec):
         """Saves any significant tuned neuron data"""
-        with open(self.dir_use / "sig_motion_tuning.pkl", 'wb') as f:
+
+        # Append buffer_sec before/after to save name if not default (2, 2)
+        if buffer_sec[0] == 2 and buffer_sec[1] == 2:
+            save_name = "sig_motion_tuning.pkl"
+        else:
+            save_name = f"sig_motion_tuning{buffer_sec[0]}_{buffer_sec[1]}.pkl"
+
+        with open(self.dir_use / save_name, 'wb') as f:
             dump(self.sig, f)
 
-    def load_sig_tuning(self):
+    def load_sig_tuning(self, buffer_sec):
         """Loads any previously calculated tunings"""
-        with open(self.dir_use / "sig_motion_tuning.pkl", 'rb') as f:
+
+        # Append buffer_sec before/after to save name if not default (2, 2)
+        if buffer_sec[0] == 2 and buffer_sec[1] == 2:
+            save_name = "sig_motion_tuning.pkl"
+        else:
+            save_name = f"sig_motion_tuning{buffer_sec[0]}_{buffer_sec[1]}.pkl"
+
+        with open(self.dir_use / save_name, 'rb') as f:
             self.sig = load(f)
 
     def check_rasters_run(self, events='freeze_onset', buffer_sec=(2, 2),  nperm=1000):
@@ -310,12 +386,15 @@ class MotionTuning:
             if nbins2 != nbins_use or nperm2 != nperm:
                 perm_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm)
 
-        elif not isinstance(pe_rasters, np.ndarray):
-            pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
+        else:
+            if not isinstance(pe_rasters, np.ndarray):
+                pe_rasters = self.gen_pe_rasters(events=events, buffer_sec=buffer_sec)
+
             if not isinstance(perm_rasters, np.ndarray):
                 perm_rasters = self.gen_perm_rasters(events=events, buffer_sec=buffer_sec, nperm=nperm)
-            else:
-                pe_rasters, perm_rasters = self.check_rasters_run(events=events, buffer_sec=buffer_sec, nperm=nperm)
+
+        # else:
+        #     pe_rasters, perm_rasters = self.check_rasters_run(events=events, buffer_sec=buffer_sec, nperm=nperm)
 
         return pe_rasters, perm_rasters
 
