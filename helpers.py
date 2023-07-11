@@ -302,12 +302,30 @@ def get_transient_peaks(rawtrace, psabool):
 
     return np.array(peak_heights)
 
+
 def flatten(xs):
     for x in xs:
         if isinstance(x, Iterable) and not isinstance(x, (str, bytes)):
             yield from flatten(x)
         else:
             yield x
+
+
+def allmax(a):
+    if len(a) == 0:
+        return []
+    all_ = [0]
+    max_ = a[0]
+    for i in range(1, len(a)):
+        if a[i] > max_:
+            all_ = [i]
+            max_ = a[i]
+        elif a[i] == max_:
+            all_.append(i)
+    if len(all_) == 1:
+        return np.array(all_, dtype=int).squeeze()
+    else:
+        return np.around(np.mean(all_)).astype(int).squeeze()
 
 if __name__ == '__main__':
     import Placefields as pf
