@@ -446,6 +446,6 @@ def enablePrint():
 
 
 if __name__ == '__main__':
-    group_cov_across_days(bin_size=0.5, arena1='Shock', arena2='Shock',
-                          neurons='all', keep_silent=True, match_event_num=True,
-                          exclude_events='freeze_onset')
+    freeze_silent_cov = group_cov_across_days(bin_size=0.5, arena1='Shock', arena2='Shock',
+                                              neurons='freeze_onset', keep_silent=True)
+
