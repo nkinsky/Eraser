@@ -175,14 +175,21 @@ class MotionTuning:
 
         return peri_event_bool.astype(bool)
 
-    def gen_pe_rasters(self, events='freeze_onset', buffer_sec=(2, 2)):
+    def gen_pe_rasters(self, events='freeze_onset', buffer_sec=(2, 2), bin_size: float or None = None):
         """Generate the rasters for all cells and dump them into a dictionary"""
         # Get appropriate event times to use
         if events in ['freeze_onset', 'move_onset']:
             event_starts = self.select_events(events)
-
-        pe_rasters = [get_PE_raster(psa, event_starts, buffer_sec=buffer_sec,
-                                    sr_image=self.sr_image) for psa in self.PSAbool]
+        if bin_size is None:
+            pe_rasters = [get_PE_raster(psa, event_starts, buffer_sec=buffer_sec,
+                                        sr_image=self.sr_image) for psa in self.PSAbool]
+        else:
+            PSAbin = []
+            for psa in self.PSAbool:
+                PSAbin.append(bin_array(psa, int(bin_size * self.sr_image)))  # Create non-overlapping bin array
+            PSAbin = np.asarray(PSAbin)
+            pe_rasters = [get_PE_raster(psa, event_starts, buffer_sec=buffer_sec,
+                                        sr_image=1/bin_size) for psa in PSAbin]
 
         pe_rasters = np.asarray(pe_rasters)
         self.pe_rasters[events] = pe_rasters
