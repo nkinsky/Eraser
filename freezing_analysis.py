@@ -22,7 +22,6 @@ import helpers
 from helpers import contiguous_regions
 import eraser_reference as err
 
-
 class Raster:
     def __init__(self, raster_array, buffer_sec=(2, 2), SR=20):
         self.raster = raster_array
@@ -102,12 +101,11 @@ class RasterGroup:
         return sorted_mean_rast, sort_ids
 
 
-
 class MotionTuning:
     """Identify and plot freeze and motion related cells
     **kwargs: inputs for getting freezing in eraser_plot_functions.get_freezing.
     """
-    def __init__(self, mouse, arena, day, **kwargs):
+    def __init__(self, mouse, arena, day, buffer_sec=(2, 2), **kwargs):
         self.session = {'mouse': mouse, 'arena': arena, 'day': day}
 
         # ID working directory
@@ -139,19 +137,20 @@ class MotionTuning:
         self.perm_rasters = {'freeze_onset': None, 'move_onset': None}
 
         try:  # Load in previously calculated tunings
-            self.load_sig_tuning()
+            self.load_sig_tuning(buffer_sec=buffer_sec)
         except FileNotFoundError:  # if not saved, initialize
             print(f'No tunings found for {mouse} {arena} day {day}: run .get_tuning_sig() and .save_sig_tuning()')
             self.sig = {'freeze_onset': {}, 'move_onset': {}}
 
-    def get_prop_tuned(self, events: str = 'freeze_onset', **kwargs):
+    def get_prop_tuned(self, events: str = 'freeze_onset', buffer_sec: tuple = (2, 2), **kwargs):
         """
         Gets proportion of neurons that exhibit freeze or motion related tuning
         :param events: str, 'freeze_onset' (default) or 'move_onset'
         :param kwargs: inputs to get_sig_neurons() to classify freeze or motion related movement
+        :param buffer_sec: seconds before/after to consider
         :return:
         """
-        ntuned = self.get_sig_neurons(events=events, **kwargs).shape[0]
+        ntuned = self.get_sig_neurons(events=events, buffer_sec=buffer_sec, **kwargs).shape[0]
         ntotal = self.sig[events]['pval'].shape[0]
 
         return ntuned/ntotal
@@ -237,7 +236,7 @@ class MotionTuning:
             self.sig[events]['nperm'] = nperm
 
             # Save to disk to save time in future
-            self.save_sig_tuning()
+            self.save_sig_tuning(buffer_sec=buffer_sec)
 
         return pval
 
@@ -401,13 +400,14 @@ class MotionTuning:
 
 class MotionTuningMultiDay:
     def __init__(self, mouse: str, arena: str or list, days: list = [-1, 4, 1, 2], events: str = 'freeze_onset',
-                 **kwargs):
+                 buffer_sec: tuple = (2, 2), **kwargs):
         """
         Create class for tracking motion or freezing tuning of cells across days.
         :param mouse: str of form 'Marble##'
         :param arena: str in ['Open', 'Shock'] or list matching len(days)
         :param days: int in [-2, -1, 0, 4, 1, 2, 7] though day 0 generally not analyzed in 'Shock' due to short
         (60 sec) recording time
+        :param buffer_sec: tuple with seconds before/after freeze start to calculated peri-event rasters
         :param **kwargs: see MotionTuning.gen_pe_rasters - inputs for calculating freezing.
         """
         self.mouse = mouse
@@ -425,8 +425,9 @@ class MotionTuningMultiDay:
         self.motion_tuning = {'Open': dict.fromkeys(days), 'Shock': dict.fromkeys(days)}
         self.rois = {'Open': dict.fromkeys(days), 'Shock': dict.fromkeys(days)}
         for arena, day in zip(self.arenas, days):
-            self.motion_tuning[arena][day] = MotionTuning(mouse, arena, day, **kwargs)  # Get motion tuning for each day above.
-            self.motion_tuning[arena][day].gen_pe_rasters(events=events)  # generate freeze_onset rasters by default
+            self.motion_tuning[arena][day] = MotionTuning(mouse, arena, day, buffer_sec=buffer_sec, **kwargs)  # Get motion tuning for each day above.
+            self.motion_tuning[arena][day].gen_pe_rasters(events=events, buffer_sec=buffer_sec)  # generate freeze_onset rasters by default
+            self.motion_tuning[arena][day].get_prop_tuned(buffer_sec=buffer_sec, **kwargs)
             self.rois[arena][day] = helpers.get_ROIs(mouse, arena, day)
 
         # Initialize map between sessions
