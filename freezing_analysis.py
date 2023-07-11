@@ -532,7 +532,8 @@ class MotionTuningMultiDay:
         return np.asarray(prop_tuned)
 
     def plot_raster_across_days(self, cell_id, base_arena='Shock', base_day=1, alpha=0.01, label_all=True,
-                                labelx=True, ax=None, batch_map=True, plot_ROI=True, label_fig=True, **kwargs):
+                                labelx=True, ax=None, batch_map=True, plot_ROI=True, label_fig=True,
+                                smooth_sec=False, **kwargs):
         """Plots a cell's peri-event raster on base_day and tracks backward/forward to all other days in object.
         e.g. if you have a freezing cell emerge on day1 and want to see what it looked like right before/after,
         use base_day=1
@@ -602,7 +603,7 @@ class MotionTuningMultiDay:
                 # plot rasters
                 _, secax = plot_raster(raster_plot, cell_id=id_plot, bs_rate=bs_rate, events=events,
                                        labelx=labelx, labely=labely, labely2=labely2, ax=ax[idd],
-                                       sig_bins=sig_bins, sr_image=sr_image, **kwargs)
+                                       sig_bins=sig_bins, sr_image=sr_image, smooth_sec=smooth_sec, **kwargs)
                 ax[idd].set_title(arena + ' Day ' + str(day) + '\n Cell ' + str(id_plot))
                 if idd == base_id:  # Make title bold if base day
                     ax[idd].set_title(ax[idd].get_title(), fontweight='bold')
@@ -1392,7 +1393,8 @@ def get_palettes(group: str in ['Group', 'Exp Group']):
 
 
 def plot_raster(raster, cell_id=None, sig_bins=None, sig_style='r.', bs_rate=None, y2scale=0.25, events='trial',
-                labelx=True, labely=True, labely2=True, sr_image=20, ax=None, y2zero=0, cmap='rocket', **kwargs):
+                labelx=True, labely=True, labely2=True, sr_image=20, ax=None, y2zero=0, cmap='rocket',
+                smooth_sec=False, **kwargs):
     #NRK todo: change bs_rate plot to incorporate sample rate. currently too high!!!
     """Plot peri-event raster with tuning curve overlaid.
 
@@ -1418,6 +1420,9 @@ def plot_raster(raster, cell_id=None, sig_bins=None, sig_style='r.', bs_rate=Non
         fig.set_size_inches([2.5, 3])
 
     curve = gen_motion_tuning_curve(raster).squeeze()
+    if smooth_sec:  # Smooth if specified
+        curve = np.convolve(curve, np.ones(int(smooth_sec*sr_image)),
+                            mode='same')/int(smooth_sec*sr_image)
 
     nevents, nframes = raster.shape
     buffer = np.floor(nframes / 2 / sr_image)
