@@ -392,6 +392,47 @@ def get_cov_pairs_from_mat(cov_mat: np.ndarray, cells: np.ndarray or None,
     return base_cov, reg_cov
 
 
+def get_group_PBE_rasters(animal_list, group_name, buffer_sec=(6, 6), event_type='freeze_onset', sr_match=20):
+    """Gets rasters of population level calcium activity centered on specified events default = freeze onset"""
+
+    # Set up times for all PBE rasters
+    times = np.arange(-buffer_sec[0], buffer_sec[1], 1 / sr_match)
+
+    nanimals = len(animal_list)
+    PBEdict = {}
+    for day in [-2, -1, 4, 1, 2]:
+        PBErast_comb, PBErast_combz, times_comb = [], [], []
+        for animal in animal_list:
+            MD1 = fa.MotionTuning(animal, 'Shock', day)
+            PBErast = fa.get_PE_raster(MD1.PSAbool.sum(axis=0), MD1.select_events(event_type),
+                                       sr_image=MD1.sr_image, buffer_sec=buffer_sec)
+            # Sum up cells active and divide by total to get proportion active before each event
+            PBErast_prop = PBErast.mean(axis=0) / MD1.PSAbool.shape[0]
+
+            # z-score proportions
+            prop_active = MD1.PSAbool.sum(axis=0) / MD1.PSAbool.shape[0]
+            PBErast_propz = (PBErast_prop - prop_active.mean()) / prop_active.std()
+
+            if MD1.sr_image != sr_match:  # interpolate values if sample rate doesn't match to make data compatible
+                rast_mean_interp = []
+                times_sr = np.arange(-buffer_sec[0], buffer_sec[1], 1 / MD1.sr_image)
+                PBErast_comb.extend(np.interp(times, times_sr, PBErast_prop))
+                PBErast_combz.extend(np.interp(times, times_sr, PBErast_propz))
+            else:
+                PBErast_comb.extend(PBErast_prop)
+                PBErast_combz.extend(PBErast_propz)
+            times_comb.extend(times)  # aggregate times
+
+        # Assemble into dataframes for easy plotting later on
+        PBEdict[day] = pd.DataFrame({'times': np.array(times_comb).reshape(-1),
+                                     'act_neuron_ratio': np.array(PBErast_comb).reshape(-1),
+                                     'act_neuron_ratio_z': np.array(PBErast_combz).reshape(-1),
+                                     'group': [group_name] * len(np.array(times_comb).reshape(-1)),
+                                     'day': [day] * len(np.array(times_comb).reshape(-1))})
+
+    return PBEdict
+
+
 def blockPrint():
     # Helper functions to block printing output
     # Disable
