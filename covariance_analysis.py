@@ -132,7 +132,7 @@ class CovMatReg:
         assert (isinstance(neurons, str) and neurons in ['freeze_onset', 'move_onset', 'all']) or isinstance(neurons,
                                                                                                              np.ndarray)
         if isinstance(neurons, str) and neurons in ['freeze_onset', 'move_onset']:
-            MDbase = fa.MotionTuning(self.mouse, self.base_arena, self.base_day)
+            MDbase = fa.MotionTuning(self.mouse, self.base_arena, self.base_day, buffer_sec=buffer_sec)
             sig_neurons = MDbase.get_sig_neurons(events=neurons, buffer_sec=buffer_sec)
             self.mat_type = neurons
         elif isinstance(neurons, str) and neurons == 'all':
@@ -447,5 +447,5 @@ def enablePrint():
 
 if __name__ == '__main__':
     freeze_silent_cov = group_cov_across_days(bin_size=0.5, arena1='Shock', arena2='Shock',
-                                              neurons='freeze_onset', keep_silent=True)
+                                              neurons='freeze_onset', keep_silent=True, buffer_sec=(4, 4))
 
