@@ -770,7 +770,7 @@ def freeze_group_snake_plot(group, arena, day, buffer_sec=(2, 2), sr_match=20, a
         ax.set_xticklabels([-buffer_sec[0], 0, buffer_sec[1]])
     else:
         ax = None
-    print(freeze_rasts_mean_comb.shape)
+        peak_id = np.array([helpers.allmax(rast) for rast in freeze_rasts_mean_comb])
 
     return ax, peak_id, times
 
@@ -1802,8 +1802,8 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')  # This is a bugfix to make sure plots don't always stay on top of ALL applications
-    mmd = MotionTuningMultiDay(err.learners[0], arena='Open', days=[-1, 4, 1, 2], buffer_sec=(4, 4))
-    p_tuned = mmd.get_prop_tuned()
+    MD = MotionTuning('Marble07', 'Shock', 1, buffer_sec=(4, 4))
+    MD.get_sig_neurons(buffer_sec=(4, 4))
 
 
 
