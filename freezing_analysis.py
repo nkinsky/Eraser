@@ -308,7 +308,7 @@ class MotionTuning:
 
         # Set up variables
         times = np.arange(-buffer_sec[0], buffer_sec[1], 1 / sr_match)
-        nevents = rasters_use[0].shape[1]
+        nevents = rasters_use[0].shape[0]
         pw_co_all = []
 
         # iterate through and calculate pairwise coactivity for all neuron pairs
