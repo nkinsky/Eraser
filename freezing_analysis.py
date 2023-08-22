@@ -105,8 +105,9 @@ class MotionTuning:
     """Identify and plot freeze and motion related cells
     **kwargs: inputs for getting freezing in eraser_plot_functions.get_freezing.
     """
-    def __init__(self, mouse, arena, day, buffer_sec=(2, 2), **kwargs):
+    def __init__(self, mouse, arena, day, buffer_sec=(4, 4), **kwargs):
         self.session = {'mouse': mouse, 'arena': arena, 'day': day}
+        self.buffer_sec = buffer_sec
 
         # ID working directory
         dir_use = pf.get_dir(mouse, arena, day)
@@ -142,7 +143,7 @@ class MotionTuning:
             print(f'No tunings found for {mouse} {arena} day {day}: run .get_tuning_sig() and .save_sig_tuning()')
             self.sig = {'freeze_onset': {}, 'move_onset': {}}
 
-    def get_prop_tuned(self, events: str = 'freeze_onset', buffer_sec: tuple = (2, 2), **kwargs):
+    def get_prop_tuned(self, events: str = 'freeze_onset', buffer_sec: tuple = (4, 4), **kwargs):
         """
         Gets proportion of neurons that exhibit freeze or motion related tuning
         :param events: str, 'freeze_onset' (default) or 'move_onset'
@@ -155,7 +156,7 @@ class MotionTuning:
 
         return ntuned/ntotal
 
-    def get_peri_event_bool(self, events: str = 'freeze_onset', buffer_sec=(2, 2), nevents_max=None):
+    def get_peri_event_bool(self, events: str = 'freeze_onset', buffer_sec=(4, 4), nevents_max=None, apply_not=False):
         """Generates a boolean identifying +/- buffer_sec from event. Grabs only a random subset of
         events if nevents_max is set and less than total # events found"""
         events = self.select_events(events)
@@ -173,9 +174,12 @@ class MotionTuning:
             peri_event_bool[np.max([0, event_ind - buffer_sec[0] * self.sr_image]): np.min(
                 [len(peri_event_bool), event_ind + buffer_sec[1] * self.sr_image])] = 1
 
-        return peri_event_bool.astype(bool)
+        if apply_not is False:
+            return peri_event_bool.astype(bool)
+        else:
+            return np.bitwise_not(peri_event_bool.astype(bool))
 
-    def gen_pe_rasters(self, events='freeze_onset', buffer_sec=(2, 2), bin_size: float or None = None):
+    def gen_pe_rasters(self, events='freeze_onset', buffer_sec=(4, 4), bin_size: float or None = None):
         """Generate the rasters for all cells and dump them into a dictionary"""
         # Get appropriate event times to use
         if events in ['freeze_onset', 'move_onset']:
@@ -196,7 +200,7 @@ class MotionTuning:
 
         return pe_rasters
 
-    def gen_perm_rasters(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000):
+    def gen_perm_rasters(self, events='freeze_onset', buffer_sec=(4, 4), nperm=1000):
         """Generate shuffled rasters and dump them into a dictionary"""
         # Get appropriate cells and event times to use
         event_starts = self.select_events(events)
@@ -209,7 +213,7 @@ class MotionTuning:
 
         return perm_rasters
 
-    def get_tuning_sig(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000):
+    def get_tuning_sig(self, events='freeze_onset', buffer_sec=(4, 4), nperm=1000):
         """This function will calculate significance values by comparing event-centered tuning curves to
         chance (calculated from circular permutation of neural activity).
         :param events:
@@ -251,7 +255,7 @@ class MotionTuning:
 
         return pval
 
-    def get_sig_neurons(self, events='freeze_onset', buffer_sec=(2, 2), nperm=1000,
+    def get_sig_neurons(self, events='freeze_onset', buffer_sec=(4, 4), nperm=1000,
                         alpha=0.01, nbins=3, active_prop=0.25):
         """Find freezing neurons as those which have sig < alpha for nbins (consecutive) or more AND are active on
         at least active_prop of events."""
@@ -275,7 +279,7 @@ class MotionTuning:
 
         return sig_neurons
 
-    def calc_pw_coactivity(self, events: str in ['freeze_onset', 'move_onset'] = 'freeze_onset', buffer_sec=(6, 6),
+    def calc_pw_coactivity(self, events: str in ['freeze_onset', 'move_onset'] = 'freeze_onset', buffer_sec=(4, 4),
                            sr_match: int = 20, cells_to_use: 'all' or list or np.array = 'all',
                            jitter_frames: None or int = None):
         """Calculate pairwise coactivty of all neurons around freeze or motion onset. Returns pairwise activations
@@ -357,7 +361,7 @@ class MotionTuning:
         with open(self.dir_use / save_name, 'rb') as f:
             self.sig = load(f)
 
-    def check_rasters_run(self, events='freeze_onset', buffer_sec=(2, 2),  nperm=1000):
+    def check_rasters_run(self, events='freeze_onset', buffer_sec=(4, 4),  nperm=1000):
         """ Verifies if you have already created rasters and permuted rasters and checks to make sure they match.
 
         :param cells:
@@ -398,7 +402,7 @@ class MotionTuning:
 
         return pe_rasters, perm_rasters
 
-    def select_cells(self, cells, buffer_sec=(2, 2), **kwargs):
+    def select_cells(self, cells, buffer_sec=(4, 4), **kwargs):
         """Select different types of cells for plotting
 
         :param cells: 'freeze_rough', 'move_rough', 'freeze_fine', 'move_fine', or list of cells to use
@@ -423,7 +427,7 @@ class MotionTuning:
 
         return cell_ids
 
-    def plot_pe_rasters(self, cells='freeze_fine', events='freeze_onset', buffer_sec=(2, 2), **kwargs):
+    def plot_pe_rasters(self, cells='freeze_fine', events='freeze_onset', buffer_sec=(4, 4), **kwargs):
         """Plot rasters of cells at either movement or freezing onsets.
 
         :param cells: str to auto-select either cells that have significant tuning to move or freeze onset
@@ -1803,7 +1807,7 @@ if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')  # This is a bugfix to make sure plots don't always stay on top of ALL applications
     MD = MotionTuning('Marble07', 'Shock', 1, buffer_sec=(4, 4))
-    MD.get_sig_neurons(buffer_sec=(4, 4))
+    MD.calc_pw_coactivity('freeze_onset', buffer_sec=(4, 4))
 
 
 
