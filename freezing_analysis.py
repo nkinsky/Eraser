@@ -283,7 +283,7 @@ class MotionTuning:
 
     def calc_pw_coactivity(self, events: str in ['freeze_onset', 'move_onset'] = 'freeze_onset', buffer_sec=(4, 4),
                            sr_match: int = 20, cells_to_use: 'all' or list or np.array = 'all',
-                           jitter_frames: None or int = None):
+                           jitter_frames: None or int = None, trial_shift: None or int = None):
         """Calculate pairwise coactivty of all neurons around freeze or motion onset. Returns pairwise activations
         (total # for each pair), pairwise activation probability, and timestamps relative to each event"""
 
@@ -320,15 +320,33 @@ class MotionTuning:
             else:  # rotate all rasters circularly by specified # of frames
                 pw_co = np.bitwise_and(rast1, np.roll(rasters_use[n:], jitter_frames)).sum(axis=1)
 
+            if trial_shift is None:
+                pw_co = np.bitwise_and(rast1, rasters_use[n:]).sum(axis=1)
+            elif trial_shift:  # randomly permute trial/event order for rast1 to compute chance level pairwise coact.
+                shift_array = []
+                for i in range(trial_shift):
+                    shift_array.append(
+                        np.bitwise_and(rast1[np.random.permutation(nevents)], rasters_use[n:]).sum(axis=1))
+
+                pw_co = np.dstack(shift_array)
+
             if self.sr_image == sr_match:
                 pw_co_all.append(pw_co)
             else:  # interpolate if sample rate is off
                 times_sr = np.arange(-buffer_sec[0], buffer_sec[1], 1 / self.sr_image)
+                nbins_sr = len(times_sr)
                 npairs = pw_co.shape[0]
                 nframes = len(times)
-                po_co_interp = np.concatenate([np.interp(times, times_sr, co_pair) for co_pair in pw_co])\
-                    .reshape(npairs, nframes)
-                pw_co_all.append(po_co_interp)
+
+                if trial_shift is None:
+                    pw_co_interp = np.concatenate([np.interp(times, times_sr, co_pair) for co_pair in pw_co])\
+                        .reshape(npairs, nframes)
+                else:
+                    nshifts = trial_shift
+                    pw_co_rs = pw_co.swapaxes(1, 2).reshape(-1, nbins_sr)
+                    pw_co_interp = np.concatenate([np.interp(times, times_sr, co_pair) for co_pair in pw_co_rs]) \
+                        .reshape(npairs, nframes, nshifts)
+                pw_co_all.append(pw_co_interp)
             n += 1
         if len(pw_co_all) > 0:
             pw_co_all = np.concatenate(pw_co_all)
