@@ -541,7 +541,7 @@ def gen_pw_coact(event_type, arena='Shock', buffer_sec=(6, 6), buffer_sec_filt=(
 
                 # Calculate coactivation
                 pwco, pwcoprob, times = MD1.calc_pw_coactivity(events=event_type, buffer_sec=buffer_sec,
-                                                               cells_to_use=cells_to_use)
+                                                               cells_to_use=cells_to_use, **kwargs)
 
                 # Append everything into a long list
                 if pwco is not None:
@@ -576,6 +576,6 @@ def enablePrint():
 
 
 if __name__ == '__main__':
-    freeze_silent_cov = group_cov_across_days(bin_size=0.5, arena1='Shock', arena2='Shock',
-                                              neurons='freeze_onset', keep_silent=True, buffer_sec=(4, 4))
+    pwco = PairwiseCoactivation('Marble20', 'Shock', 1, buffer_sec=(4, 4))
+    pwco.calc_pw_significance(nshifts=100)
 
