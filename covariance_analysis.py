@@ -27,13 +27,23 @@ class CovMat:
     :param exclude_events: str, typically "freeze_onset"
     :param exclude_buffer: tuple len = 2, typically (2, 2) for #seconds before/after event to exclude """
     def __init__(self, mouse: str, arena: str, day: int, bin_size: float = 0.5,
-                 max_event_num: int or None = None, exclude_events=None, exclude_buffer=None):
+                 max_event_num: int or None = None, exclude_events=None, exclude_buffer=None,
+                 keep_events=None, keep_buffer=None):
+
+        if exclude_events is not None:
+            assert keep_events is None, '"keep_events" and "exclude_events" cannot both be specified. One must be None.'
+        elif keep_events is not None:
+            assert exclude_events is None, \
+                '"keep_events" and "exclude_events" cannot both be specified. One must be None.'
+
         # Save session info
         self.mouse = mouse
         self.arena = arena
         self.day = day
         self.exclude_events = exclude_events
         self.exclude_buffer = exclude_buffer
+        self.keep_events = keep_events
+        self.keep_buffer = keep_buffer
         self.max_event_num = max_event_num
 
         # ID working directory
@@ -52,16 +62,30 @@ class CovMat:
             # Fix previously calculated occmap
             self.PF.occmap = pf.remake_occmap(self.PF.xBin, self.PF.yBin, self.PF.runoccmap)
             self.PSAbool = self.PF.PSAbool_align
-            if exclude_events is not None:  # exclude some peri-event times from consideration
-                if max_event_num is None:  # exclude all peri-freezing times
-                    include_bool = np.bitwise_not(md.get_peri_event_bool(self.exclude_events, self.exclude_buffer))
-                else:
-                    nevents_exclude = np.max([len(self.freeze_starts) - max_event_num, 0])
-                    # Print out # events to exclude as a sanity check!
-                    # print(f'{nevents_exclude} events out of {len(self.freeze_starts)} excluded for day {day}')
-                    include_bool = np.bitwise_not(md.get_peri_event_bool(self.exclude_events, self.exclude_buffer,
-                                                  nevents_max=nevents_exclude))
+            if exclude_events is not None and keep_events is None:  # exclude some peri-event times from consideration
+                if exclude_events == 'freeze_onset':
+                    if max_event_num is None:  # exclude all peri-freezing times
+                        include_bool = np.bitwise_not(md.get_peri_event_bool(self.exclude_events, self.exclude_buffer))
+                    else:
+                        nevents_exclude = np.max([len(self.freeze_starts) - max_event_num, 0])
+                        # Print out # events to exclude as a sanity check!
+                        # print(f'{nevents_exclude} events out of {len(self.freeze_starts)} excluded for day {day}')
+                        include_bool = np.bitwise_not(md.get_peri_event_bool(self.exclude_events, self.exclude_buffer,
+                                                      nevents_max=nevents_exclude))
                 self.PSAbool = self.PSAbool[:, include_bool]
+
+            # Keep only certain events such as peri-freeze times. Lots of double negatives in code, there
+            # is probably a better way
+            if keep_events is not None and exclude_events is None:
+                assert keep_events == 'freeze_onset'
+                if max_event_num is None:  # exclude all peri-freezing times
+                    include_bool = np.bitwise_not(md.get_peri_event_bool(self.keep_events, self.keep_buffer,
+                                                                         apply_not=True))
+                else:
+                    include_bool = np.bitwise_not(md.get_peri_event_bool(self.keep_events, self.keep_buffer,
+                                                                         apply_not=True, nevents_max=max_event_num))
+                self.PSAbool = self.PSAbool[:, include_bool]
+
             self.SR = self.PF.sr_image
 
         except FileNotFoundError:
@@ -107,11 +131,13 @@ class CovMatReg:
         max_event_base = 1000 if base_day in [-2, -1] else max_event_num
         max_event_reg = 1000 if reg_day in [-2, -1] else max_event_num
 
-        # Calculate covar for each day
+        # Calculate covariance matrices for each day
         self.CovMatbase = CovMat(mouse, base_arena, base_day, bin_size, max_event_num=max_event_base,
-                                 exclude_events=exclude_events, exclude_buffer=exclude_buffer)
+                                 exclude_events=exclude_events, exclude_buffer=exclude_buffer,
+                                 keep_events=keep_events, keep_buffer=keep_buffer)
         self.CovMatreg = CovMat(mouse, reg_arena, reg_day, bin_size, max_event_num=max_event_reg,
-                                exclude_events=exclude_events, exclude_buffer=exclude_buffer)
+                                exclude_events=exclude_events, exclude_buffer=exclude_buffer,
+                                keep_events=keep_events, keep_buffer=keep_buffer)
 
         # Now register across days
         neuron_map = pfs.get_neuronmap(mouse, base_arena, base_day, reg_arena, reg_day, batch_map_use=True)
@@ -212,8 +238,9 @@ def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], are
             cov_dict[name][mouse] = {}
             if match_event_num:  # Randomly downsample # freezing events to match that of day -2/-1 mean
                 # assert neurons != 'all'
-                nevents_baseline = [len(fa.MotionTuning(mouse, arena1, -2).select_events(exclude_events)),
-                                    len(fa.MotionTuning(mouse, arena1, -1).select_events(exclude_events))]
+                events_use = exclude_events if exclude_events is not None else keep_events
+                nevents_baseline = [len(fa.MotionTuning(mouse, arena1, -2).select_events(events_use)),
+                                    len(fa.MotionTuning(mouse, arena1, -1).select_events(events_use))]
                 nevents_max = np.mean(nevents_baseline).astype(int)
             for ida, (d1, d2) in tqdm(enumerate(zip(base_days, reg_days)), desc=mouse):
                 cov_dict[name][mouse][f'{d1}_{d2}'] = []
@@ -221,11 +248,13 @@ def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], are
                     # blockPrint()
                     if not match_event_num:
                         CMR = CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size,
-                                        exclude_events=exclude_events, exclude_buffer=exclude_buffer)
+                                        exclude_events=exclude_events, exclude_buffer=exclude_buffer,
+                                        keep_events=keep_events, keep_buffer=keep_buffer)
                     else:
                         CMR = CovMatReg(mouse, arena1, d1, arena2, d2, bin_size=bin_size,
                                         exclude_events=exclude_events, max_event_num=nevents_max,
-                                        exclude_buffer=exclude_buffer)
+                                        exclude_buffer=exclude_buffer,
+                                        keep_events=keep_events, keep_buffer=keep_buffer)
                     covz_comb = CMR.cov_across_days(neurons, keep_silent=keep_silent, buffer_sec=buffer_sec)
                     # enablePrint()
                     cov_dict[name][mouse][f'{d1}_{d2}'] = covz_comb
