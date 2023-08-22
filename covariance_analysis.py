@@ -265,7 +265,8 @@ def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], are
                           neurons: str in ['freeze_onset', 'move_onset', 'all'] or np.ndarray = 'freeze_onset',
                           keep_silent: bool = False, buffer_sec: int or list or tuple = (6, 6),
                           base_days: list = [-2, -1, 4, 1, 2, 4], reg_days: list = [-1, 4, 1, 2, 7, 2],
-                          match_event_num: bool = False, exclude_events=None, exclude_buffer=(6, 6)):
+                          match_event_num: bool = False, exclude_events=None, exclude_buffer=(6, 6),
+                          keep_events=None, keep_buffer=(6, 6)):
     """Assemble all across-day covariance matrices into a dictionary for easy manipulating later on
     :param match_event_num: set to True to ensure that any covariance calculated from days after -2/-1 using motion
     tuned cells uses the same # of events on average as from day -2/-1.
