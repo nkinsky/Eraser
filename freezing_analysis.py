@@ -158,7 +158,9 @@ class MotionTuning:
 
     def get_peri_event_bool(self, events: str = 'freeze_onset', buffer_sec=(4, 4), nevents_max=None, apply_not=False):
         """Generates a boolean identifying +/- buffer_sec from event. Grabs only a random subset of
-        events if nevents_max is set and less than total # events found"""
+        events if nevents_max is set and less than total # events found.
+        apply_not: apply a bitwise not to the output, e.g. events='freeze_onset', apply=True will give you
+        a boolean of all non peri-freeze times. Default = True"""
         events = self.select_events(events)
         event_inds = (events * self.sr_image).astype(int)
         peri_event_bool = np.zeros_like(self.PSAbool[0])
