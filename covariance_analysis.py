@@ -118,7 +118,7 @@ class CovMatReg:
     :param **kwargs: used to feed 'exclude_events' and 'exclude_buffer' into CovMat class"""
     def __init__(self, mouse: str, base_arena: str, base_day: str, reg_arena: str, reg_day: str,
                  bin_size: float = 0.5, max_event_num: int or None = None, exclude_events=None,
-                 exclude_buffer=(2, 2)):
+                 exclude_buffer=(2, 2), keep_events=None, keep_buffer=(2, 2)):
 
         self.mouse = mouse
         self.base_arena = base_arena
@@ -213,6 +213,52 @@ class CovMatReg:
         sigcovreg = covreg[sigbool]
 
         return np.vstack((sigcovbase, sigcovreg))
+
+
+class PairwiseCoactivation:
+    """Class to calculate pairwise activation between neurons and calculate significance based on trial shuffling"""
+    def __init__(self, mouse, arena, day, buffer_sec, event_type='freeze_onset'):
+        self.session = {'mouse': mouse, 'arena': arena, 'day': day}
+        self.buffer_sec = buffer_sec
+        self.event_type = event_type
+
+        self.MD = fa.MotionTuning(mouse, arena, day, buffer_sec=buffer_sec)
+        self.pval = None
+
+    def calc_pw_significance(self, alpha=0.05, nbins = 3, nshifts=1000,
+                             neurons: str in ['all', 'freeze_onset']='freeze_onset'):
+        """Calculate pairwise significance by shifting trials to get chance level.
+        :param alpha: significance threshold (1 - proportion of shuffles exceeding actual covariance)
+        :param nbins: must have more than this number of consecutive bins with p < alpha to be considered significant
+        :param nshifts: int, number of shifts to perform"""
+
+        # First select neurons to use
+        assert neurons in ['all', 'freeze_onset']
+        cells_to_use = 'all'
+        if neurons == 'freeze_onset':
+            cells_to_use = self.MD.get_sig_neurons(events=self.event_type, buffer_sec=self.buffer_sec)
+
+        # Calculate pairwise activity
+        pw_co_all, pw_co_all_prob, times = self.MD.calc_pw_coactivity('freeze_onset', buffer_sec=self.buffer_sec,
+                                                                      cells_to_use=cells_to_use)
+
+        # Calculate shuffled activity
+        pw_co_all_shift, pw_co_all_prob_shift, times = self.MD.calc_pw_coactivity('freeze_onset',
+                                                                                  buffer_sec=self.buffer_sec,
+                                                                                  trial_shift=nshifts,
+                                                                                  cells_to_use=cells_to_use)
+
+        # Calculate diff b/w actual and shuffled activity - gives npairs x nshifts x ntime_bins array
+        pwdiff = (pw_co_all_prob[:, :, None] - pw_co_all_prob_shift).swapaxes(1, 2)
+
+        # Calculate p-value
+        pval = 1 - (pwdiff > 0).sum(axis=1)/pwdiff.shape[1]
+
+        # Calculate significance
+        sig_bool = np.asarray([(np.diff(contiguous_regions(p < alpha), axis=1) > nbins).any() for p in pval],
+                              dtype=bool)
+
+        return pval, sig_bool
 
 
 def group_cov_across_days(bin_size: float, arena1: str in ['Open', 'Shock'], arena2: str in ['Open', 'Shock'],
