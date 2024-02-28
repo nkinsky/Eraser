@@ -11,6 +11,7 @@ from matplotlib.colors import ListedColormap
 
 from helpers import range_to_slice
 
+figsavepath = Path('/Users/nkinsky/Dropbox (University of Michigan)/BU/Imaging Project/Manuscripts/Eraser/Figures/Figure_Dumpse')
 
 class Colormap:
     def dynamicMap(self):
@@ -233,13 +234,17 @@ class Fig:
                 ha="left",
             )
 
-    def savefig(self, fname: Path, scriptname=None, fig=None, caption=None, dpi=300):
+    def savefig(self, fname: Path or str, save_dir: None or Path = figsavepath,
+                scriptname=None, fig=None, caption=None, dpi=300):
 
         if fig is None:
             fig = self.fig
 
         # fig.set_dpi(300)
-        filename = fname.with_suffix(".pdf")
+        if isinstance(fname, Path):
+            filename = fname.with_suffix(".pdf")
+        else:
+            filename = (save_dir / fname).with_suffix(".pdf")
 
         today = date.today().strftime("%m/%d/%y")
 
@@ -354,3 +359,24 @@ def pretty_plot(ax, round_ylim=False):
     ax.spines["top"].set_visible(False)
 
     return ax
+
+
+def fix_xlabels(axbad, session_names=True, rotate=False):
+    """Nicely and correctly format xticklabels and rotate them 30 degrees to make things readable"""
+    if session_names:
+        axbad.set_xticks(axbad.get_xticks())
+        axbad.set_xticklabels([f"Day {_.get_text()}" if _.get_text() != '4' else "4 Hour" for _ in axbad.get_xticklabels()], ha="right")
+    if rotate:
+        axbad.tick_params(axis="x", labelrotation=30)
+    axbad.set_xlabel('Session')
+
+
+def fix_open_legend(ax):
+    """Change 'Open' to 'Neutral' in figure legends"""
+    if isinstance(ax, plt.Axes):
+        h, labels = ax.get_legend_handles_labels()
+        label_fix = ["Neutral" if label == "Open" else label for label in labels]
+        ax.legend(h,label_fix)
+    else:
+        for a in ax:
+            fix_open_legend(a)
