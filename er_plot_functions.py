@@ -676,7 +676,7 @@ def write_all_freezing(fratio_all, filepath, days=[-2, -1, 4, 1, 2, 7]):
 
 
 def plot_overlaps(overlaps, days=(-1, 4, 1, 2, 7), arenas=('Neutral', 'Shock'), ref_day='Shock -2',
-                  jitter=(-0.05, 0.05), colors=('b', 'r'), ax=None, **kwargs):
+                  offset=(-0.05, 0.05), jitter=(-0.05, 0.05), colors=('b', 'r'), meanlinewidth=1, ax=None, **kwargs):
     """
 
     :param overlaps: nmice x 5sesh x narenas ndarray with cell overlap ratios
@@ -699,11 +699,15 @@ def plot_overlaps(overlaps, days=(-1, 4, 1, 2, 7), arenas=('Neutral', 'Shock'), 
         fig = ax.figure
 
     hline = []
-    for ida, (arena, jitter_use) in enumerate(zip(arenas, jitter)):
+    for ida, (arena, offset_use) in enumerate(zip(arenas, offset)):
         # if nmice != 1: # There should be a better way to do this!
-        ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1) + jitter_use, overlaps[:, :, ida], colors[ida] + 'o',
+        jitter_add = offset_use + np.random.uniform(jitter[0], jitter[1], (nmice, ndays))
+        # ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1) + jitter_use, overlaps[:, :, ida], colors[ida] + 'o',
+        #         **kwargs)
+        ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1) + jitter_add, overlaps[:, :, ida], colors[ida] + 'o',
                 **kwargs)
-        linetemp, = ax.plot(np.arange(0, ndays), np.nanmean(overlaps[:, :, ida], axis=0), colors[ida] + '-')
+        linetemp, = ax.plot(np.arange(0, ndays), np.nanmean(overlaps[:, :, ida], axis=0), colors[ida] + '-',
+                            linewidth=meanlinewidth)
         # elif nmice == 1:
         # linetemp, = ax.plot(np.arange(0, ndays), overlaps[:, ida], colors[ida] + 'o-')
         hline.append(linetemp)
