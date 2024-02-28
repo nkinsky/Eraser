@@ -89,7 +89,12 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=False):
     elif batch_map_use:
         neuron_map = get_pairwise_map_from_batch(mouse, arena1, day1, arena2, day2)
 
+    if np.__version__ > "1.21.00":  # Fix numpy update bug where nans get cast to 0.
+        neuron_map[np.isnan(neuron_map)] = -1
+
     return neuron_map.astype(int)
+
+
 
 
 def reverse_neuron_map(mouse, arena1, day1, arena2, day2):
@@ -128,6 +133,9 @@ def fix_batchmap(batch_path):
     dates = [a[1][0] for a in batch_map_import['session'][0]]
     sessions = [a[2][0][0] for a in batch_map_import['session'][0]]
     session_list = [animals, dates, sessions]
+
+    if np.__version__ > "1.21.00":  # Fix numpy update bug where nans get cast to 0.
+        map[np.isnan(map)] = -1
 
     return map, session_list
 
@@ -290,7 +298,6 @@ def get_overlap(mouse, arena1, day1, arena2, day2, batch_map=True):
     neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map)
     reg_session = sd.find_eraser_session(mouse, arena2, day2)
     good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
-
     if np.isnan(good_map_bool).all():
         overlap_ratio1, overlap_ratio2, overlap_ratio_both, overlap_ratio_min, overlap_ratio_max = \
             np.nan, np.nan, np.nan, np.nan, np.nan
@@ -2520,6 +2527,9 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    get_overlap('Marble14', 'Open', 1, 'Open', 2, batch_map=True)
+    _, _, a, _, _ = get_overlap('Marble14', 'Shock', -2, 'Shock', 4, batch_map=True)
+    print(a)
+    print(__file__)
+    print(np.__version__)
     pass
 
