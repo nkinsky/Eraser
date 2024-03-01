@@ -68,7 +68,7 @@ def get_group_num_neurons(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Shock', 'Ope
 
 
 def plot_num_neurons(nneurons, arena1='Shock', arena2='Open', day_labels=('-2', '-1', '4hr', '1', '2', '7'),
-                     normalize=False, jitter=(-0.05, 0.05), colors = ('b', 'r'), ax=None, **kwargs):
+                     normalize=False, offset=(-0.05, 0.05), jitter=0.05, colors = ('b', 'r'), ax=None, **kwargs):
     """
     Plots # neurons active in each arena on a given day. For eraser but could be used elsewhere
     :param nneurons: nmice x ndays x narenas array. arena1/2 = shock/open by default
@@ -81,8 +81,8 @@ def plot_num_neurons(nneurons, arena1='Shock', arena2='Open', day_labels=('-2', 
 
     nmice, narenas, ndays = nneurons.shape
 
-    jitter = (jitter,) if isinstance(jitter, float) else jitter
-    assert len(jitter) == narenas, 'Must enter jitter amount for each arena'
+    offset = (offset,) if isinstance(offset, float) else offset
+    assert len(offset) == narenas, 'Must enter offset amount for each arena'
     if ax is None:
         fig, ax = plt.subplots()
     else:
@@ -93,14 +93,14 @@ def plot_num_neurons(nneurons, arena1='Shock', arena2='Open', day_labels=('-2', 
         norm_sesh_ind = [day_labels.index(i) for i in day_labels if normalize in i][0]
         nneurons = norm_num_neurons(nneurons, norm_sesh_ind)
 
-    ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1) + jitter[0], nneurons[:, 0, :],
-            color=colors[0], marker='o', linestyle='None', **kwargs)
-    lineshock, = ax.plot(np.arange(0, ndays) + jitter[0], np.nanmean(nneurons[:, 0, :], axis=0),
+    ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1) + offset[0] + np.random.uniform(-jitter, jitter, (nmice, ndays)),
+            nneurons[:, 0, :], color=colors[0], marker='o', linestyle='None', **kwargs)
+    lineshock, = ax.plot(np.arange(0, ndays) + offset[0], np.nanmean(nneurons[:, 0, :], axis=0),
                          color=colors[0], marker=None, linestyle='-', **kwargs)
     if narenas == 2:
-        ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1) + jitter[1], nneurons[:, 1, :],
-                color=colors[1], marker='o', linestyle='None', **kwargs)
-        lineopen, = ax.plot(np.arange(0, ndays) + jitter[1], np.nanmean(nneurons[:, 1, :], axis=0),
+        ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1) + offset[1] + np.random.uniform(-jitter, jitter, (nmice, ndays)),
+                nneurons[:, 1, :], color=colors[1], marker='o', linestyle='None', **kwargs)
+        lineopen, = ax.plot(np.arange(0, ndays) + offset[1], np.nanmean(nneurons[:, 1, :], axis=0),
                             color=colors[1], marker=None, linestyle='-', **kwargs)
         plt.legend((lineshock, lineopen), (arena1, arena2))
 
