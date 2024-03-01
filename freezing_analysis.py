@@ -1267,6 +1267,13 @@ def get_freeze_bool(mouse, arena, day, **kwargs):
     return PF.PSAbool_align, freeze_bool
 
 
+def get_freeze_ratio(mouse, arena, day, **kwargs):
+    """Gets freeze ratio. **kwargs see get_freeze_bool and er_plot_functions.detect_freezing"""
+    _, freeze_bool = get_freeze_bool(mouse, arena, day, **kwargs)
+
+    return freeze_bool.sum() / len(freeze_bool)
+
+
 def motion_modulation_index(mouse, arena, day, **kwargs):
     """ Calculate motion modulation index (MMI): difference/sum of event rates during motion and freezing (1 = only
     active during motion, -1 = only active during freezing)
