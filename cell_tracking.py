@@ -89,8 +89,10 @@ def plot_num_neurons(nneurons, arena1='Shock', arena2='Open', day_labels=('-2', 
         fig = ax.figure
 
     # normalize nneurons to day indicated
+    assert isinstance(normalize, (str, list, bool))
     if normalize is not False:
-        norm_sesh_ind = [day_labels.index(i) for i in day_labels if normalize in i][0]
+        normalize = [normalize] if isinstance(normalize, str) else normalize
+        norm_sesh_ind = [day_labels.index(i) for i in day_labels if i in normalize]
         nneurons = norm_num_neurons(nneurons, norm_sesh_ind)
 
     ax.plot(np.matlib.repmat(np.arange(0, ndays), nmice, 1) + offset[0] + np.random.uniform(-jitter, jitter, (nmice, ndays)),
@@ -107,7 +109,7 @@ def plot_num_neurons(nneurons, arena1='Shock', arena2='Open', day_labels=('-2', 
     if normalize is False:
         ax.set_ylabel('# Neurons')
     else:
-        ax.set_ylabel('Norm. # Neurons ' + normalize + '=ref')
+        ax.set_ylabel(f'Norm. # Neurons {norm_sesh_ind}=ref')
     ax.set_xlabel('Day')
     ax.set_xticks(np.arange(0, ndays))
     ax.set_xticklabels(day_labels)
@@ -115,16 +117,18 @@ def plot_num_neurons(nneurons, arena1='Shock', arena2='Open', day_labels=('-2', 
     return fig, ax
 
 
-def norm_num_neurons(nneurons, norm_sesh_ind):
+def norm_num_neurons(nneurons, norm_sesh_ind: list or float):
     """Normalize nneurons to a particular session
 
-    :param nneurons: nmice x ndays x narenas array of active neurons
+    :param nneurons: nmice x  narenas x ndays array of active neurons
     :param norm_sesh_ind: index in dimension 1 (days) to normalize to. Default = 0.
     :return: nnorm:
     """
     nmice, narenas, ndays = nneurons.shape
+    assert isinstance(norm_sesh_ind, (int, list))
+    norm_sesh_ind = norm_sesh_ind if isinstance(norm_sesh_ind, list) else [norm_sesh_ind]
     nnorm = nneurons.reshape(narenas * nmice, ndays) / \
-            nneurons[:, :, norm_sesh_ind].reshape(narenas * nmice, -1)
+            np.mean(nneurons[:, :, norm_sesh_ind], axis=2).reshape(narenas * nmice, -1)
     nnorm = nnorm.reshape((nmice, narenas, ndays))
 
     ### Old code here where I had ndays in dim 1. above should be better.
