@@ -872,6 +872,33 @@ def get_pf_corrs(tmaps1, tmaps2, keep_poor_overlap=False):
     return np.asarray(corrs)
 
 
+def pf_corrs_to_df(mouse, arena1, day1, arena2, day2, use_best_rot=True, batch_map_use=True):
+    """Grab place-field correlations between all cells and spit out a nice dataframe"""
+
+    # Identify best rotation
+    best_rot_deg = 0
+    if use_best_rot:
+        _, best_rot, _ = get_best_rot(mouse, arena1=arena1, arena2=arena2, day1=day1, day2=day2,
+                                      batch_map_use=batch_map_use)
+        best_rot_deg = best_rot[1]  # grab best rotation from smoothed fields
+
+    # Get correlations of smoothed maps
+    try:
+        _, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, rot_deg=best_rot_deg,
+                                      batch_map_use=batch_map_use)
+
+        # Dump into dataframe
+        npairs = len(corrs_sm)
+        corrs_df = pd.DataFrame({'mouse': [mouse] * npairs, 'arena1': [arena1] * npairs, 'day1': [day1] * npairs,
+                                 'arena2': [arena2] * npairs, 'day2': [day2] * npairs, 'pair_no': np.arange(npairs),
+                                 'corrs_sm': corrs_sm})
+
+    except FileNotFoundError:
+        corrs_df = None
+
+    return corrs_df
+
+
 def rotate_tmaps(tmaps, rot_deg):
     """
         Rotate all transient maps in tmaps in 90 degree increments
@@ -1104,8 +1131,8 @@ def get_best_rot(mouse, arena1='Shock', day1=-2, arena2='Shock', day2=-1,
             try:
                 corrs_us, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file=pf_file,
                                                      rot_deg=rot, shuf_map=False, batch_map_use=batch_map_use)
-            except IndexError:  # Fix for missing sessions
-                print('Index Error for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' + str(day2))
+            except (IndexError, FileNotFoundError):  # Fix for missing sessions
+                print('IndexError or FileNotFoundError for ' + mouse + ' ' + arena1 + ' day ' + str(day1) + ' to ' + arena2 + ' day ' + str(day2))
                 corrs_us = corrs_sm = np.ones(1)*np.nan
             corr_mean_all[0, idr] = corrs_us.mean(axis=0)
             corr_mean_all[1, idr] = corrs_sm.mean(axis=0)
@@ -1217,12 +1244,14 @@ def plot_pfcorr_bygroup(corr_mean_mat, arena1, arena2, group_type, shuf_mat=None
     return fig, ax, ascat, axl, aCI
 
 
-def get_time_epochs(nmice, group_desig=1, include_day_zero=False):
+def get_time_epochs(nmice, group_desig=1, include_day_zero=False, output_animal_array=False):
     """
     Returns groupings for plotting different time-epochs in group correlation matrices, e.g. BEFORE shock, AFTER shock,
     BEFORE v AFTER shock
     :param nmice:
     :param group_desig: 1: include day 1, 2, AND 7 in AFTER epochs, 2: include day 1 and 2 only in AFTER
+    :param include_day_zero: include day 0, boolean
+    :param output_animal_array: boolean, True = output arrays the same size as epochs with animal number
     :return: epochs: nmice x 7 x 7 array with groupings for pf comparisons - see below comments for description
     """
 
@@ -1261,8 +1290,13 @@ def get_time_epochs(nmice, group_desig=1, include_day_zero=False):
         keep_bool = np.ones(7, dtype=bool)
         keep_bool[2] = False
         epochs = epochs[:, keep_bool][:, :, keep_bool]
-
-    return epochs, epoch_labels
+    if not output_animal_array:
+        return epochs, epoch_labels
+    else:
+        animal_num_array = np.ones_like(epochs, dtype=int)
+        for anum in range(nmice):
+            animal_num_array[anum, :, :] = anum
+        return epochs, epoch_labels, animal_num_array
 
 
 def get_seq_time_pairs(nmice, include_dayzero=False):
