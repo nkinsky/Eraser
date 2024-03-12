@@ -4,6 +4,7 @@ import pandas as pd
 from joblib import Parallel, delayed
 import functools
 from tqdm import tqdm
+from copy import copy
 
 
 def bootstrap(pairs, data: pd.DataFrame, x, y, hue, hue_order, n_boot=10000, **kwargs):
@@ -22,7 +23,7 @@ def bootstrap(pairs, data: pd.DataFrame, x, y, hue, hue_order, n_boot=10000, **k
         print(f"{p[0][0]}_{p[0][1]} vs {p[1][0]}_{p[1][1]}: {p_val}")
 
 
-def resample(df: pd.DataFrame, level="both", apply=None):
+def resample_sd(df: pd.DataFrame, level="both", apply=None):
     """Resamples variables by sampling with replacement at hierarichy levels: 'session' and 'associated variables'. The associated variables are columns other than the 'session' columns. They could be pairwise correlations, ripple frequencies etc.
 
     session grp var1 var2 var3 ..........
@@ -52,29 +53,24 @@ def resample(df: pd.DataFrame, level="both", apply=None):
     _type_
         _description_
     """
-    sess_ids = df["session"].unique()
-    n_sess = len(sess_ids)
+    animal_ids = df["mouse"].unique()
+    n_mice = len(animal_ids)
     # print(sess_ids)
-    if level in {"session", "both"}:
+    if level in {"animal", "all"}:
         # bootstrap session_ids
         rng = np.random.default_rng()
-        sess_ids = rng.choice(sess_ids, size=n_sess, replace=True)
+        animal_ids = rng.choice(animal_ids, size=n_mice, replace=True)
 
     new_df = []
-    for i, idx in enumerate(sess_ids):
-        idx_df = df[df.session == idx].copy()  # df of variables for that session
-        idx_df.loc[:, "session"] = i  # make selected session independent
+    for i, idx in enumerate(animal_ids):
+        idx_df = df[df.animal == idx].copy()  # df of variables for that session
+        idx_df.loc[:, "animal"] = i  # make selected session independent
 
-        if level in {"both", "samples"}:
+        if level in {"all", "session_id"}:
             # bootstrap second level
-            if "zt" in idx_df.columns:
-                idx_df = (
-                    idx_df.groupby(["zt"], sort=False)
-                    .apply(pd.DataFrame.sample, frac=1, replace=True, ignore_index=True)
-                    .reset_index(drop=True)
-                )
-            else:
-                idx_df = idx_df.sample(frac=1, replace=True, ignore_index=True)
+            session_names = df["session_id"]
+
+            idx_df = idx_df.sample(frac=1, replace=True, ignore_index=True)
 
         new_df.append(idx_df)
     new_df = pd.concat(new_df, ignore_index=True)
@@ -84,6 +80,35 @@ def resample(df: pd.DataFrame, level="both", apply=None):
         new_df = apply(new_df)
 
     return new_df
+
+
+def resample(df, level=['mouse', 'session', 'corrs_sm'], apply=None):
+    """Resample data with replacement at each level indicated"""
+
+    if len(level) > 1:
+        param = level[0]  # Get name of level to resample at
+        next_levels = copy(level[1:])  # Get next levels to resample
+        ids = df[param].unique()  # Grab unique values to resample from, e.g. animal names or session ids
+
+        # Now resample
+        rng = np.random.default_rng()
+        resample_ids = rng.choice(ids, size=len(ids), replace=True)
+
+        new_df = []
+        # Loop through and generate a new dataframe for each id in the resample ids
+        for i, idx in enumerate(resample_ids):
+            idx_df = df[df[param] == idx].copy()
+            idx_df.loc[:, param] = i  # Make each sample "independent"
+
+            # Recursively call resample to resample at the next level(s)
+            idx_df = resample(idx_df, level=next_levels, apply=apply)
+            new_df.append(idx_df)
+
+    elif len(level) == 1:  # If at the bottom level, actually resample!
+        assert level[0] in df.keys(), 'Last parameter in "level" not in keys of df'
+        new_df = [df.sample(frac=1, replace=True, ignore_index=True)]
+
+    return pd.concat(new_df, ignore_index=True)
 
 
 def bootstrap_resample(df: pd.DataFrame, n_iter, n_jobs=1, apply=None, level="both"):
