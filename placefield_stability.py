@@ -319,7 +319,7 @@ def get_overlap(mouse, arena1, day1, arena2, day2, batch_map=True):
 
 
 def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, batch_map_use=True,
-                    pf_file='placefields_cm1_manlims_1000shuf.pkl', shuf_map=False):
+                    pf_file='placefields_cm1_manlims_1000shuf.pkl', bootstrap=False, shuf_map=False):
     """
     Gets 1-d population vector correlations between sessions.
     :param mouse:
@@ -329,6 +329,7 @@ def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, batch_
     :param day2:
     :param speed_thresh: speed threshold to use (default = 1.5cm/s). Not
     :param pf_file: string. Defauls = 'placefields_cm1_manlims_1000shuf.pkl'
+    :param bootstrap: bool, True = resample with replacement from all neurons before doing correlation.
     :param shuf_map: randomly shuffle neuron_map to get shuffled correlations
     :return: PVcorr_all, PVcorr_both: spearman correlation between PVs. Includes ALL neurons active in either session or
     only neurons active in both sessions
@@ -347,6 +348,14 @@ def PV1_corr_bw_sesh(mouse, arena1, day1, arena2, day2, speed_thresh=1.5, batch_
 
     # Now register between sessions
     PV1all, PV2all, PV1both, PV2both = registerPV(PV1, PV2, neuron_map, reg_session, shuf_map=shuf_map)
+
+    # resample if specified
+    if bootstrap:
+        rng = np.random.default_rng()
+        resample_all_ids = rng.choice(np.arange(len(PV1all)), size=len(PV1all), replace=True)
+        resample_both_ids = rng.choice(np.arange(len(PV1both)), size=len(PV1both), replace=True)
+        PV1all, PV2all = PV1all[resample_all_ids], PV2all[resample_all_ids]
+        PV1both, PV2both = PV1both[resample_both_ids], PV2both[resample_both_ids]
 
     # Now get ALL corrs and BOTH corrs
     PVcorr_all, all_p = sstats.spearmanr(PV1all, PV2all, nan_policy='omit')
@@ -1281,6 +1290,15 @@ def get_time_epochs(nmice, group_desig=1, include_day_zero=False, output_animal_
         epochs[3, 5:7] = 5  # 5 = STM-v-LTM (4hr to 1,2,7)
         epoch_labels = ['Before', 'After(Days 2-7)', 'Before v After(Days 2-7)',
                         'Before v STM', 'STM v After(Days 2-7)']
+    elif group_desig == 4:  # For revision - only compares one session to one other session
+        epochs[0, 1] = 1  # 1 = before shock (Day -2 to -1)
+        epochs[1, 4] = 2  # 2 = before-v-after shock (Day -1 to Day 1)
+        epochs[4, 5] = 3  # 3 = after shock days 1-2
+        epochs[5, 6] = 4  # 4 = after shock day 2-7
+        epochs[1, 3] = 5  # 5 = before vs 4hr
+        epochs[3, 4] = 6  # 6 = 4hr vs day 1
+        epoch_labels = ['Before', 'Before v After', 'After',
+                        'After2', 'Before v STM', 'STM v After']
     # now keep only values above diagonal, shape and repeat matrix to shape (nmice, 7, 7)
     epochs = np.triu(epochs, 1)
     epochs[epochs == 0] = np.nan
@@ -2561,9 +2579,6 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    _, _, a, _, _ = get_overlap('Marble14', 'Shock', -2, 'Shock', 4, batch_map=True)
-    print(a)
-    print(__file__)
-    print(np.__version__)
+    PV1_corr_bw_sesh("Marble07", "Shock", 1, "Shock", 2, bootstrap=True)
     pass
 
