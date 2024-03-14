@@ -31,6 +31,9 @@ from skimage.transform import resize as sk_resize
 # import csv
 # import pandas as pd
 
+# Sends a warning for Marble06 shock arena where behavioral data (but not neural data) was corrupted
+no_behav_data_warn = True  # global variable (supposedly)
+
 
 def load_pf(mouse, arena, day, session_index=None, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
     if session_index is None:
@@ -68,13 +71,21 @@ def get_PV1(mouse, arena, day, speed_thresh=1.5, pf_file='placefields_cm1_manlim
         PFthresh = PF.PSAbool_align[:, PF.speed_sm > speed_thresh]
         sr_image = PF.sr_image
     except FileNotFoundError:
-        print('No placefields file found for ' + mouse + ' ' + arena + ' day ' + str(day) + ': creating PV1 from neural data only - NO SPEED THRESHOLDING')
+        global no_behav_data_warn
+        if no_behav_data_warn:
+            print('No placefields file found for ' + mouse + ' ' + arena + ' day ' + str(day) + ': creating PV1 from neural data only - NO SPEED THRESHOLDING')
+            no_behav_data_warn = False
         dir_use = get_dir(mouse, arena, day)
-        im_data_file = path.join(dir_use, 'FinalOutput.mat')
-        im_data = sio.loadmat(im_data_file)
-        PSAbool = im_data['PSAbool']
+        try:  # try to load fast method
+            PSAbool = np.load(path.join(dir_use, 'PSAbool.npy'))
+            sr_image = np.load(path.join(dir_use, 'sr_image.npy'))
+        except FileNotFoundError:  # default to slow import of matlab file if above fails
+            im_data_file = path.join(dir_use, 'FinalOutput.mat')
+            im_data = sio.loadmat(im_data_file)
+            PSAbool = im_data['PSAbool']
+            sr_image = im_data['SampleRate'][0]
         PFthresh = PSAbool
-        sr_image = im_data['SampleRate'][0]
+
 
     # Calculate PV
     nframes = PFthresh.shape[1]
@@ -772,5 +783,5 @@ def plot_tmap(tmap, ax=None):
 
 
 if __name__ == '__main__':
-    placefields('Marble07', 'Open', -2)
+    get_PV1('Marble06', 'Shock', 7)
     pass
