@@ -703,7 +703,7 @@ def PV2_shuf_corrs(mouse, arena1, day1, arena2, day2, nshuf, batch_map=True, deb
 
 def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl',
                     rot_deg=0, shuf_map=False, batch_map_use=True, speed_threshold=True,
-                    keep_poor_overlap=False):
+                    calc_us_corr=True, keep_poor_overlap=False):
     """
     Gets placefield correlations between sessions. Note that
     :param mouse:
@@ -714,6 +714,7 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
     :param pf_file: string. Defaults = 'placefields_cm1_manlims_1000shuf.pkl'
     :param rot_deg: indicates how much to rotate day2 tmaps before calculating corrs. 0=default, 0/90/180/270 = options
     :param shuf_map: randomly shuffle neuron_map to get shuffled correlations
+    :param calc_us_corr: bool, False = don't calculcate un-smoothed correlations
     :return: corrs_us, corrs_sm: spearman rho values between all cells that are active
     in both sessions. us = unsmoothed, sm = smoothed
     """
@@ -755,7 +756,8 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
 
     # Next rotate session 2 maps if specified
     if rot_deg != 0:
-        tmaps2_us_rot = rotate_tmaps(tmaps2_us_valid, rot_deg)
+        if calc_us_corr:
+            tmaps2_us_rot = rotate_tmaps(tmaps2_us_valid, rot_deg)
         tmaps2_sm_rot = rotate_tmaps(tmaps2_sm_valid, rot_deg)
     elif rot_deg == 0:
         tmaps2_us_rot, tmaps2_sm_rot = tmaps2_us_valid, tmaps2_sm_valid
@@ -765,12 +767,14 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
         tmaps2_us_use, tmaps2_sm_use = tmaps2_us_rot, tmaps2_sm_rot
     else:
         tmap1_shape = tmaps1_us_valid[0].shape
-        tmaps2_us_use = pf.rescale_tmaps(tmaps2_us_rot, tmap1_shape)
+        if calc_us_corr:
+            tmaps2_us_use = pf.rescale_tmaps(tmaps2_us_rot, tmap1_shape)
         tmaps2_sm_use = pf.rescale_tmaps(tmaps2_sm_rot, tmap1_shape)
 
     # Finally do your correlations!
     try:
-        corrs_us = get_pf_corrs(tmaps1_us_valid, tmaps2_us_use, keep_poor_overlap=keep_poor_overlap)
+        if calc_us_corr:
+            corrs_us = get_pf_corrs(tmaps1_us_valid, tmaps2_us_use, keep_poor_overlap=keep_poor_overlap)
     except ValueError:
         print('Error in ' + mouse + ' ' + arena1 + str(day1) + ' to ' + arena2 + str(day2))
     corrs_sm = get_pf_corrs(tmaps1_sm_valid, tmaps2_sm_use, keep_poor_overlap=keep_poor_overlap)
@@ -782,17 +786,19 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
         # if debug and base_neuron == 364:  # for debugging nans in sstats.spearmanr
         try:
             if rot == 0 and arena1 == arena2:  # Do correlations directly if possible
-                corr_us, p_us, poor_overlap_us = spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1),
-                                                               PF2.tmap_us[reg_neuron].reshape(-1))
+                if calc_us_corr:
+                    corr_us, p_us, poor_overlap_us = spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1),
+                                                                   PF2.tmap_us[reg_neuron].reshape(-1))
 
                 corr_sm, p_sm, poor_overlap_sm = spearmanr_nan(PF1.tmap_sm[base_neuron].reshape(-1),
                                                                PF2.tmap_sm[reg_neuron].reshape(-1))
 
             else:  # rotate and resize PF2 before doing corrs if rotations are specified
                 PF1_size = PF1.tmap_us[0].shape
-                corr_us, p_us, poor_overlap_us = spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1),
-                                                               np.reshape(sk_resize(np.rot90(PF2.tmap_us[reg_neuron], rot),
-                                                                                    PF1_size, anti_aliasing=True), -1))
+                if calc_us_corr:
+                    corr_us, p_us, poor_overlap_us = spearmanr_nan(PF1.tmap_us[base_neuron].reshape(-1),
+                                                                   np.reshape(sk_resize(np.rot90(PF2.tmap_us[reg_neuron], rot),
+                                                                                           PF1_size, anti_aliasing=True), -1))
 
                 corr_sm, p_sm, poor_overlap_sm = spearmanr_nan(np.reshape(PF1.tmap_sm[base_neuron], -1),
                                                                np.reshape(sk_resize(np.rot90(PF2.tmap_sm[reg_neuron], rot),
@@ -803,11 +809,12 @@ def pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_
 
         # exclude any correlations that would throw a scipy.stats.spearmanr RuntimeWarning due to
         # # poor overlap after rotation...
-        if keep_poor_overlap: # This is necessary to make pfscroll work
+        if keep_poor_overlap:  # This is necessary to make pfscroll work
             corrs_us_old.append(corr_us)
             corrs_sm_old.append(corr_sm)
         elif not keep_poor_overlap:
-            if not poor_overlap_us: corrs_us_old.append(corr_us)
+            if calc_us_corr:
+                if not poor_overlap_us: corrs_us_old.append(corr_us)
             if not poor_overlap_sm: corrs_sm_old.append(corr_sm)
 
     corrs_us_old, corrs_sm_old = np.asarray(corrs_us_old), np.asarray(corrs_sm_old)
@@ -881,7 +888,7 @@ def get_pf_corrs(tmaps1, tmaps2, keep_poor_overlap=False):
     return np.asarray(corrs)
 
 
-def pf_corrs_to_df(mouse, arena1, day1, arena2, day2, use_best_rot=True, batch_map_use=True):
+def pf_corrs_to_df(mouse, arena1, day1, arena2, day2, use_best_rot=True, batch_map_use=True, shuf_map=False):
     """Grab place-field correlations between all cells and spit out a nice dataframe"""
 
     # Identify best rotation
@@ -894,7 +901,7 @@ def pf_corrs_to_df(mouse, arena1, day1, arena2, day2, use_best_rot=True, batch_m
     # Get correlations of smoothed maps
     try:
         _, corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, rot_deg=best_rot_deg,
-                                      batch_map_use=batch_map_use)
+                                      batch_map_use=batch_map_use, shuf_map=shuf_map)
 
         # Dump into dataframe
         npairs = len(corrs_sm)
@@ -1422,7 +1429,7 @@ def load_shuffled_corrs(mouse, arena1, day1, arena2, day2, nshuf, print_to_scree
     save_file = path.join(dir_use, file_name)
 
     if path.exists(save_file):
-        ShufMaptemp = load(open(save_file,'rb'))
+        ShufMaptemp = load(open(save_file, 'rb'))
         shuf_corrs_us_mean = ShufMaptemp.shuf_corrs_us_mean
         shuf_corrs_sm_mean = ShufMaptemp.shuf_corrs_sm_mean
     else:
@@ -1932,7 +1939,7 @@ class SessionStability:
 class PFCombineObject:
     """map and view placefields for same neuron mapped between different sessions"""
     def __init__(self, mouse, arena1, day1, arena2, day2, pf_file='placefields_cm1_manlims_1000shuf.pkl',
-                 batch_map_use=True):
+                 batch_map_use=True, best_rot=True):
         self.mouse = mouse
         self.arena1 = arena1
         self.day1 = day1
@@ -1969,9 +1976,20 @@ class PFCombineObject:
         self.pval1_reg = [self.PF1.pval[a] for a in good_map_ind]
 
         # Get correlations between sessions! Note these are not speed-thresholded (quick bug fix).
-        self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
-                                                       pf_file=pf_file, speed_threshold=False,
-                                                       keep_poor_overlap=True, batch_map_use=batch_map_use)
+        self.best_rot = best_rot
+        if not best_rot:
+            self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2,
+                                                           pf_file=pf_file, speed_threshold=False,
+                                                           keep_poor_overlap=True, batch_map_use=batch_map_use)
+
+            print('Correlations calculated without rotating')
+
+        elif best_rot:
+            _, best_rot, _ = get_best_rot(self.mouse, self.arena1, self.day1, self.arena2, self.day2)
+            self.corrs_us, self.corrs_sm = pf_corr_bw_sesh(mouse, arena1, day1, arena2, day2, rot_deg=best_rot[1],
+                                                           pf_file=pf_file, speed_threshold=False,
+                                                           keep_poor_overlap=True, batch_map_use=batch_map_use)
+            print(f'Correlations calculated at best rotation angle = {best_rot[1]}')
 
     def get_pf_ang_delta(self, map_type="smooth", method="max", **kwargs):
         """Get change in place field center-out angle from session to session"""
@@ -2066,24 +2084,25 @@ class PFCombineObject:
                                 corrs_us=self.corrs_us[spatial_neurons], corrs_sm=self.corrs_sm[spatial_neurons],
                                 traj_lims=lims1, traj_lims2=lims2)
         elif best_rot:
-            if best_rot == 90 or best_rot == 270:  # change limits if rotated 90 or 270 degrees
-                lims2 = [[self.PF2.yEdges.min(), self.PF2.yEdges.max()],
-                         [self.PF2.xEdges.min(), self.PF2.xEdges.max()]]
             _, best_rot, _ = get_best_rot(self.mouse, self.arena1, self.day1, self.arena2, self.day2)
             # best_rot is spit out for un-smoothed and smoothed place maps. use smoothed [1]
             x2rot, y2rot = rotate_traj_data(self.PF2.pos_align[0, self.PF2.isrunning],
                                             self.PF2.pos_align[1, self.PF2.isrunning], best_rot[1])
+            if best_rot[1] != 0:  # rotate limits too
+                rot_xlims, rot_ylims = rotate_traj_data(np.array(lims2[0]), np.array(lims2[1]), best_rot[1])
+                lims2 = [np.sort(rot_xlims), np.sort(rot_ylims)]
             # Set up the appropriate x2 and y2 values if rotation is used:
             self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm,
                                  plot_events_over_pos2, plot_tmap_us2, plot_tmap_sm2),
                                 current_position=current_position, n_neurons=self.nneurons,
                                 n_rows=2, n_cols=3, figsize=(17.2, 10.6), titles=titles,
-                                x=x2rot, y=y2rot,
+                                x=self.PF1.pos_align[0, self.PF1.isrunning],
+                                y=self.PF1.pos_align[1, self.PF1.isrunning],
                                 PSAbool=self.PSAalign1[spatial_neurons, :][:, self.PF1.isrunning],
                                 tmap_us=[self.tmap1_us_reg[a] for a in np.where(spatial_neurons)[0]],
                                 tmap_sm=[self.tmap1_sm_reg[a] for a in np.where(spatial_neurons)[0]],
-                                x2=self.PF2.pos_align[0, self.PF2.isrunning],
-                                y2=self.PF2.pos_align[1, self.PF2.isrunning],
+                                x2=x2rot,
+                                y2=y2rot,
                                 PSAbool2=self.PSAalign2[spatial_neurons, :][:, self.PF2.isrunning],
                                 tmap_us2=[np.rot90(self.tmap2_us_reg[a], best_rot[1]/90) for a in np.where(spatial_neurons)[0]],
                                 tmap_sm2=[np.rot90(self.tmap2_sm_reg[a], best_rot[1]/90) for a in np.where(spatial_neurons)[0]],
@@ -2579,6 +2598,7 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    PV1_corr_bw_sesh("Marble07", "Shock", 1, "Shock", 2, bootstrap=True)
+    pf7 = PFCombineObject('Marble07', 'Shock', -2, 'Shock', 1)
+    pf7.pfscroll(best_rot=True)
     pass
 
