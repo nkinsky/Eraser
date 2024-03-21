@@ -113,7 +113,7 @@ class Fig:
         size=(8.5, 11),
         fontsize=5,
         axis_color="#545454",
-        axis_lw=1.0,
+        axis_lw=0.8,
         constrained_layout=True,
         fontname="Arial",
         **kwargs,
