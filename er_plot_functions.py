@@ -142,8 +142,11 @@ def plot_frame_and_traj(ax, dir_use, plot_frame=True, xcorr=0, ycorr=0):
         plot_frams: True = plot AVI frame, False = plot trajectory only
     :return:
     """
-    pos_location = glob(path.join(dir_use + '\FreezeFrame', 'pos.csv'))
-    avi_location = glob(path.join(dir_use + '\FreezeFrame', '*.avi'))
+    # pos_location = glob(path.join(dir_use + '\FreezeFrame', 'pos.csv'))
+    # avi_location = glob(path.join(dir_use + '\FreezeFrame', '*.avi'))
+
+    pos_location = sorted(Path(dir_use).glob("pos.csv"))
+    avi_location = sorted(Path(dir_use).glob("*.avi"))
 
     try:
         if plot_frame:
