@@ -264,7 +264,7 @@ def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
     """
 
     # Get silent neurons
-    silent_ind = np.where(np.isnan(neuron_map))[0]
+    silent_ind = np.where(np.bitwise_or(np.isnan(neuron_map), neuron_map < 0))[0]
     good_map_bool = np.bitwise_or(np.isnan(neuron_map), neuron_map < 0) == 0
 
     # Get new neurons
@@ -279,6 +279,50 @@ def classify_cells(neuron_map, reg_session, overlap_thresh=0.5):
         good_map_bool, silent_ind, new_ind = np.ones((3,))*np.nan
 
     return good_map_bool, silent_ind, new_ind
+
+
+def bootstrap_overlap(mouse, arena1, day1, arena2, day2, nboot=1000, batch_map=True):
+    """Bootstrap the overlap ratio for a given pair of sessions by sampling with replacement from all neurons active in
+    EITHER session.  Not very useful, because it bootstraps each pair of sessions individually.
+    better is to run get_overlap_bool
+    :return olap_boot: nboot long array with overlap ratio = # active in both sessions / total # neurons active either session
+    """
+    # Get mapping between sessions
+    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map)
+    reg_session = sd.find_eraser_session(mouse, arena2, day2)
+    good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
+    coactive_bool = np.hstack((good_map_bool, np.zeros_like(new_ind, dtype=bool)))
+
+    rng = np.random.default_rng()
+    nneurons = len(coactive_bool)
+    olap_boot = []
+    for ii in tqdm(range(nboot)):
+        olap_boot.append(rng.choice(coactive_bool, size=nneurons, replace=True).sum() / nneurons)
+    olap_boot = np.array(olap_boot)
+
+    return olap_boot
+
+
+def get_overlap_bool(mouse, arena1, day1, arena2, day2, batch_map=True):
+    """Calculates a boolean for all neurons active in either session.
+     True/1 = active, False/0 = active in one session only
+     first column = day1/arena1, second column = day2/arena2
+     e.g. a row [0, 1] means the neuron was inactive on day1 but active on day2 and
+     [1, 1[] means it was active on both days"""
+    neuron_map = get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map)
+    reg_session = sd.find_eraser_session(mouse, arena2, day2)
+    good_map_bool, silent_ind, new_ind = classify_cells(neuron_map, reg_session)
+    if np.isnan(good_map_bool).all():
+        overlap_bool = np.nan
+    else:
+        nnew = len(new_ind)
+        day1bool = np.hstack((np.ones_like(good_map_bool, dtype=bool),
+                              np.zeros(nnew, dtype=bool)))
+        day2bool = np.hstack((good_map_bool,
+                             np.ones(nnew, dtype=bool)))
+        overlap_bool = np.vstack((day1bool, day2bool)).T
+
+    return overlap_bool
 
 
 def get_overlap(mouse, arena1, day1, arena2, day2, batch_map=True):
@@ -1957,6 +2001,8 @@ class PFCombineObject:
         good_map = neuron_map[good_map_bool].astype(np.int64)
         good_map_ind = np.where(good_map_bool)[0]
         self.nneurons = len(good_map_ind)
+        self.good_map = good_map
+        self.good_map_ind = good_map_ind
 
         # For loop to dump all PFs into matching lists for easy later scrolling!
         self.tmap1_us_reg = []
@@ -2025,12 +2071,19 @@ class PFCombineObject:
                                          PF.pos_align[1, PF.isrunning], traj_lims=traj_lims, ax=a, **kwargs)
             elif ids == 1 and not isinstance(best_rot, bool):
                 xrot, yrot = rotate_traj_data(PF.pos_align[0, PF.isrunning], PF.pos_align[1, PF.isrunning], best_rot[1])
+                traj_lims2 = traj_lims
+
+                if best_rot[1] != 0:
+                    rot_xlims, rot_ylims = rotate_traj_data(np.array(traj_lims2[0]), np.array(traj_lims2[1]), best_rot[1])
+                    traj_lims2 = [np.sort(rot_xlims), np.sort(rot_ylims)]
+
                 pf.plot_events_over_pos2(PSAalign[nneuron, PF.isrunning], xrot, yrot,
-                                         ax=a, **kwargs)
+                                         ax=a, traj_lims=traj_lims2, **kwargs)
 
         if label:
             ax[0, 0].set_title(self.arena1 + ' Day ' + str(self.day1))
-            ax[0, 1].set_title(self.arena2 + ' Day ' + str(self.day2))
+            # ax[0, 1].set_title(self.arena2 + ' Day ' + str(self.day2))
+            ax[0, 1].set_title(f"r={self.corrs_sm[nneuron]:0.2g}\n{self.arena2} Day {self.day2}")
 
         # Grab correct tmaps to plot and plot them
         tmap_use = [self.tmap1_sm_reg[nneuron], self.tmap2_sm_reg[nneuron]] if tmap_type == 'sm' else \
@@ -2039,8 +2092,11 @@ class PFCombineObject:
         if not isinstance(best_rot, bool):
             tmap_use[1] = np.rot90(tmap_use[1], best_rot[1] / 90)
 
-        for tmap, a in zip(tmap_use, ax[1, :]):
+        for ida, (tmap, a) in enumerate(zip(tmap_use, ax[1, :])):
             pf.plot_tmap(tmap, a)
+
+        # if label:
+        #     ax[1, 1].set_xlabel(f"r={self.corrs_sm[nneuron]:0.2g}")
 
         return ax
 
@@ -2059,16 +2115,17 @@ class PFCombineObject:
         spatial_neurons = [a < pval_thresh for a in self.pval1_reg]
 
         # Plot frame and position of mouse.
-        titles = ["Neuron " + str(n) + " best_rot=" + str(best_rot) for n in np.where(spatial_neurons)[0]]  # set up array of neuron numbers
-
+        titles = [f"Neuron {self.good_map_ind[n]}(ind={n}) best_rot={best_rot}" for n in np.where(spatial_neurons)[0]]  # set up array of neuron numbers
+        titles2 = [f"Neuron {self.good_map[n]}" for n in np.where(spatial_neurons)[0]]
         # Hijack Will's ScrollPlot function to make it through
         lims1 = [[self.PF1.xEdges.min(), self.PF1.xEdges.max()], [self.PF1.yEdges.min(), self.PF1.yEdges.max()]]
         lims2 = [[self.PF2.xEdges.min(), self.PF2.xEdges.max()], [self.PF2.yEdges.min(), self.PF2.yEdges.max()]]
         if not best_rot:
+            print(lims2)
             self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm,
                                  plot_events_over_pos2, plot_tmap_us2, plot_tmap_sm2),
-                                current_position=current_position, n_neurons=self.nneurons,
-                                n_rows=2, n_cols=3, figsize=(17.2, 10.6), titles=titles,
+                                current_position=current_position, n_neurons=np.sum(spatial_neurons),
+                                n_rows=2, n_cols=3, figsize=(17.2, 10.6), titles=titles, titles2=titles2,
                                 x=self.PF1.pos_align[0, self.PF1.isrunning],
                                 y=self.PF1.pos_align[1, self.PF1.isrunning],
                                 PSAbool=self.PSAalign1[spatial_neurons, :][:, self.PF1.isrunning],
@@ -2091,11 +2148,12 @@ class PFCombineObject:
             if best_rot[1] != 0:  # rotate limits too
                 rot_xlims, rot_ylims = rotate_traj_data(np.array(lims2[0]), np.array(lims2[1]), best_rot[1])
                 lims2 = [np.sort(rot_xlims), np.sort(rot_ylims)]
+                print(lims2)
             # Set up the appropriate x2 and y2 values if rotation is used:
             self.f = ScrollPlot((plot_events_over_pos, plot_tmap_us, plot_tmap_sm,
                                  plot_events_over_pos2, plot_tmap_us2, plot_tmap_sm2),
-                                current_position=current_position, n_neurons=self.nneurons,
-                                n_rows=2, n_cols=3, figsize=(17.2, 10.6), titles=titles,
+                                current_position=current_position, n_neurons=np.sum(spatial_neurons),
+                                n_rows=2, n_cols=3, figsize=(17.2, 10.6), titles=titles, titles2=titles2,
                                 x=self.PF1.pos_align[0, self.PF1.isrunning],
                                 y=self.PF1.pos_align[1, self.PF1.isrunning],
                                 PSAbool=self.PSAalign1[spatial_neurons, :][:, self.PF1.isrunning],
@@ -2161,7 +2219,7 @@ def rotate_traj_data(x, y, rot_deg: int in [0, 90, 180, 270]):
     elif rot_deg == 180:
         xrot, yrot = -x, -y
     elif rot_deg == 270:
-        xrot, yrot = x, -y
+        xrot, yrot = y, -x
 
     return xrot, yrot
 
@@ -2598,7 +2656,6 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    pf7 = PFCombineObject('Marble07', 'Shock', -2, 'Shock', 1)
-    pf7.pfscroll(best_rot=True)
+    get_overlap_bool('Marble06', 'Shock', 1, 'Open', 1)
     pass
 
