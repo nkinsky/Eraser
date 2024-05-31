@@ -20,8 +20,8 @@ from session_directory import find_eraser_directory as get_dir
 import session_directory as sd
 try:
     sd.make_session_list()  # update session list
-except KeyError:
-    print('bad/empty SessionDirectories.csv file - must enter all directories manually')
+except (KeyError, FileNotFoundError):
+    print('bad/empty/missing SessionDirectories.csv file - must enter all directories manually')
 from scipy.signal import decimate
 import placefield_stability as pfs
 import scipy.stats as s
