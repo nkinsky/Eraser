@@ -772,7 +772,7 @@ def plot_overlaps(overlaps, days=(-1, 4, 1, 2, 7), arenas=('Neutral', 'Shock'), 
     return fig, ax
 
 
-def DIFreeze(mouse, days=[-2,-1,4,1,2,7]):
+def DIFreeze(mouse, days=[-2, -1, 4, 1, 2, 7]):
     fratios = get_all_freezing(mouse, days)
     frz_shock = fratios[1, :]
     frz_open = fratios[0, :]
