@@ -371,7 +371,7 @@ def get_cov_pairs_across_days(dict_use, include_silent):
 
 
 def cov_dict_to_df(dict_use, baseline_dict_use, register: bool = False, include_silent: bool = True,
-                   group_ctrls=True):
+                   group_ctrls=True, return_all_cov=False):
     """Calculate z-scored covariance of all cells in dict compared to pre-shock days for all mice
      and put into DataFrame. Also designates animals into Ctrl or ANI groups.
      :param dict_use: dictionary containing covariance mats of cells you want to look at, e.g. freeze cells
@@ -381,6 +381,7 @@ def cov_dict_to_df(dict_use, baseline_dict_use, register: bool = False, include_
      :param group_ctrls: bool, group Learners and Non-Learners into a control group"""
 
     day_code, group_code, sigzmean, sigzall = [], [], [], []  # pre-allocate for plotting!
+    df_all_list = []
     for group_name in dict_use.keys():
         group_dict = dict_use[group_name]
 
@@ -409,11 +410,18 @@ def cov_dict_to_df(dict_use, baseline_dict_use, register: bool = False, include_
                     else:
                         group_code.append(group_name)
                     day_code.append(d1_d2)
+                    df_all_list.append(pd.DataFrame({"Mouse": mouse_name, "d1_d2": d1_d2, "covz": sigzall[-1],
+                                                     "Group": group_name}))
                 except KeyError:
                     pass
 
     sigz_df = pd.DataFrame(data={'d1_d2': day_code, 'Group': group_code, 'cov_z_mean': sigzmean})
-    return sigz_df
+    if not return_all_cov:
+        return sigz_df
+    else:
+        sigz_all_df = pd.concat(df_all_list, axis=0).reset_index().drop(columns="index")
+
+        return sigz_df, sigz_all_df
 
 
 def get_cov_pairs_from_array(cov_array: np.ndarray, include_silent: bool = False):
