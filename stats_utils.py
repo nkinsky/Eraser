@@ -136,31 +136,32 @@ def resample(df, level=['mouse', 'session', 'corrs_sm'], n_level=None, apply=Non
     return new_df
 
 
-def bootstrap_resample(df: pd.DataFrame, n_iter, n_jobs=1, apply=None, level="both"):
-    groups = df["grp"].unique()
+def bootstrap_resample(df: pd.DataFrame, n_iter, n_jobs=1, apply=None,
+                       level=['mouse', 'session', 'corrs_sm'], n_level=None):
+    # groups = df["grp"].unique()
 
-    partial_resample = functools.partial(resample, level=level, apply=apply)
+    partial_resample = functools.partial(resample, level=level, n_level=n_level, apply=apply)
     out_df = []
-    for grp in groups:
-        print(f"Running bootstraps for {grp} group")
-        df_grp = df[df["grp"] == grp]
-        data = [
-            r
-            for r in tqdm(
-                Parallel(n_jobs=n_jobs, return_as="generator")(
-                    delayed(partial_resample)(df_grp) for _ in range(n_iter)
-                ),
-                total=n_iter,
-                # position=1,
-                # leave=False,
-            )
-        ]
-        data = pd.concat(data, ignore_index=True)
-        data["grp"] = grp
-        out_df.append(data)
+    # for grp in groups:
+    #     print(f"Running bootstraps for {grp} group")
+    #     df_grp = df[df["grp"] == grp]
+    data = [
+        r
+        for r in tqdm(
+            Parallel(n_jobs=n_jobs, return_as="generator")(
+                delayed(partial_resample)(df) for _ in range(n_iter)
+            ),
+            total=n_iter,
+            # position=1,
+            # leave=False,
+        )
+    ]
+    data = pd.concat(data, ignore_index=True)
+        # data["grp"] = grp
+        # out_df.append(data)
 
-    return pd.concat(out_df, ignore_index=True)
-
+    # return pd.concat(out_df, ignore_index=True)
+    return data
 
 def get_bootstrap_prob(sample1, sample2):
     """
