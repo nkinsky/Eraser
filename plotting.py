@@ -111,10 +111,11 @@ class Fig:
         num=None,
         grid=(2, 2),
         size=(8.5, 11),
-        fontsize=5,
+        fontsize=6,
         axis_color="#545454",
         axis_lw=0.8,
         constrained_layout=True,
+        tight_layout=False,
         fontname="Arial",
         **kwargs,
     ):
@@ -160,7 +161,7 @@ class Fig:
             ],
         )
 
-        fig = plt.figure(num=num, figsize=(8.5, 11), clear=True)
+        fig = plt.figure(num=num, figsize=(8.5, 11), clear=True, **kwargs)
         fig.set_size_inches(size[0], size[1])
         gs = gridspec.GridSpec(grid[0], grid[1], figure=fig)
 
@@ -170,8 +171,13 @@ class Fig:
         self.gs = gs
 
     def subplot(self, subplot_spec, sharex=None, sharey=None, **kwargs):
-        # return plt.subplot(subplot_spec, sharex=sharex, sharey=sharey, **kwargs)
-        return self.fig.add_subplot(subplot_spec, sharex=sharex, sharey=sharey, **kwargs)
+        """subplot_spec: either 3 digit int, e.g. 431, or length 3 tuple, e.g. (4, 3, 1)
+        Both the above would create a subplot in row 0 and column 0 or a 4 row x 3 column grid"""
+        if isinstance(subplot_spec, (int, plt.SubplotSpec)):
+            return self.fig.add_subplot(subplot_spec, sharex=sharex, sharey=sharey, **kwargs)
+        else:
+            return self.fig.add_subplot(*subplot_spec, sharex=sharex, sharey=sharey, **kwargs)
+
 
     def add_subfigure(self, *args, **kwargs) -> mpl.figure.SubFigure:
         return self.fig.add_subfigure(*args, **kwargs)
@@ -341,6 +347,12 @@ class FigMirror:
         gs2 = self.Fig2.subplot2grid(subspec_use[1], grid, return_axes=return_axes, **kwargs)
 
         return gs1, gs2
+
+    def savefig(self, plot_path, file_prefix, suffix=["_fig1", "_fig2"], scriptname=None, **kwargs):
+        """Saves both figures from FigMirror Class with the same file_prefix and different suffixes"""
+
+        self.Fig1.savefig(plot_path / f"{file_prefix}{suffix[0]}.pdf", scriptname=scriptname)
+        self.Fig2.savefig(plot_path / f"{file_prefix}{suffix[1]}.pdf", scriptname=scriptname)
 
 
 def pretty_plot(ax, round_ylim=False):
