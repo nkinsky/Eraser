@@ -616,6 +616,28 @@ def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
     return fig, ax, fratio_all
 
 
+def fratio_to_df(fratio_all, mice, days, arenas):
+    """Use with plot_all_freezing to turn fratio into a dataframe. See plot_all_freezing for inputs and outputs"""
+
+    assert fratio_all.shape == (len(arenas), len(days), len(mice))
+    mice_array = np.ones_like(fratio_all, dtype=np.object_)
+    day_array = np.ones_like(fratio_all, dtype=np.object_)
+    arena_array = np.ones_like(fratio_all, dtype=np.object_)
+
+    for idm, mouse in enumerate(mice):
+        mice_array[:, :, idm] = mouse
+
+    for idd, day in enumerate(days):
+        day_array[:, idd, :] = day
+
+    for ida, arena in enumerate(arenas):
+        arena_array[ida, :, :] = arena
+
+    fratio_df = pd.DataFrame({"Mouse": mice_array.reshape(-1), "Arena": arena_array.reshape(-1),
+                              "Day": day_array.reshape(-1), "Frz. Ratio": fratio_all.reshape(-1)})
+
+    return fratio_df
+
 def get_conv_factors(arena, vthresh=1.45, min_dur=2.67):
     """
     Gets thresholds in cm/sec and num frames as well as pix2cm conversion factor for an arena
