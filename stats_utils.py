@@ -82,33 +82,58 @@ def resample_sd(df: pd.DataFrame, level="both", apply=None):
     return new_df
 
 
-def resample(df, level=['mouse', 'session', 'corrs_sm'], apply=None):
-    """Resample data with replacement at each level indicated"""
+def resample(df, level=['mouse', 'session', 'corrs_sm'], n_level=None, apply=None):
+    """Resample data with replacement at each level indicated.
+    n_level = number of samples to grab at each level. If None, it will resample with replacement from each level n times,
+    where n is the number of unique values in that level. If not None, it must be a list the same length as `level`
+    with either None or an int for the number of samples to grab from the corresponding level.
+    e.g., if you wanted to resample smoothed correlation values from all mice but only grab ONE session from each mouse
+    for each bootstrap, you would enter:
+    >>> resample(df, level=['mouse', 'session', 'corrs_sm'], n_level=[None, 1, None])"""
 
-    if len(level) > 1:
-        param = level[0]  # Get name of level to resample at
-        next_levels = copy(level[1:])  # Get next levels to resample
-        ids = df[param].unique()  # Grab unique values to resample from, e.g. animal names or session ids
+    if apply is not None:
+        assert callable(apply), "apply can only be a function"
+        df = resample(df, level=level, n_level=n_level, apply=None)
+        new_df = apply(df)
 
-        # Now resample
-        rng = np.random.default_rng()
-        resample_ids = rng.choice(ids, size=len(ids), replace=True)
+    else:
+        n_level = [None]*len(level) if n_level == None else n_level
+        assert (len(n_level) == len(level)) & np.all([isinstance(_, int) or _ is None for _ in n_level]), "`n_level` must be a list of ints and None the same length as `level`"
+        if len(level) > 1:
+            param = level[0]  # Get name of level to resample at
+            next_levels = copy(level[1:])  # Get next levels to resample
+            next_n_levels = copy(n_level[1:])
+            ids = df[param].unique()  # Grab unique values to resample from, e.g. animal names or session ids
+            n_samples = len(ids) if n_level[0] is None else n_level[0]
 
-        new_df = []
-        # Loop through and generate a new dataframe for each id in the resample ids
-        for i, idx in enumerate(resample_ids):
-            idx_df = df[df[param] == idx].copy()
-            idx_df.loc[:, param] = i  # Make each sample "independent"
+            # Now resample
+            rng = np.random.default_rng()
+            # resample_ids = rng.choice(ids, size=len(ids), replace=True)
+            resample_ids = rng.choice(ids, size=n_samples, replace=True)
 
-            # Recursively call resample to resample at the next level(s)
-            idx_df = resample(idx_df, level=next_levels, apply=apply)
-            new_df.append(idx_df)
+            new_df = []
+            # Loop through and generate a new dataframe for each id in the resample ids
+            for i, idx in enumerate(resample_ids):
+                idx_df = df[df[param] == idx].copy()
+                idx_df.loc[:, param] = i  # Make each sample "independent"
 
-    elif len(level) == 1:  # If at the bottom level, actually resample!
-        assert level[0] in df.keys(), 'Last parameter in "level" not in keys of df'
-        new_df = [df.sample(frac=1, replace=True, ignore_index=True)]
+                # Recursively call resample to resample at the next level(s)
+                # idx_df = resample(idx_df, level=next_levels, apply=apply)
+                idx_df = resample(idx_df, level=next_levels, n_level=next_n_levels, apply=apply)
+                new_df.append(idx_df)
 
-    return pd.concat(new_df, ignore_index=True)
+            new_df = pd.concat(new_df, ignore_index=True)
+
+            # if apply is not None:
+            #     assert callable(apply), "apply can only be a function"
+            #     new_df = apply(new_df)
+
+        elif len(level) == 1:  # If at the bottom level, actually resample!
+            assert level[0] in df.keys(), 'Last parameter in "level" not in keys of df'
+            # new_df = [df.sample(frac=1, replace=True, ignore_index=True)]
+            new_df = df.sample(frac=1, replace=True, ignore_index=True)
+
+    return new_df
 
 
 def bootstrap_resample(df: pd.DataFrame, n_iter, n_jobs=1, apply=None, level="both"):
