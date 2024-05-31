@@ -178,25 +178,18 @@ def get_sampling_rate(PF):
     return sr_image
 
 
-def get_eventrate(PSAbool_align,fps):
+def get_eventrate(PSAbool_align, fps):
     """
     gets event rate and event probability for calcium rasters
     :param timeseries: boolean
     :return:
     """
+    dur_min = PSAbool_align.shape[1] / (60 * fps)
     event_rate = []
-    event_prob = []
-    for x in list(range(len(PSAbool_align))):
-        epochs = find_epochs(PSAbool_align[x,:])
-        active_frames = 0
-        total_frames = len(PSAbool_align[x,:])
-        transients = len(epochs)
-        for x in range(len(epochs)):
-            active_frames += epochs[x,1] - epochs[x,0]
-        event_rate += [transients/(total_frames/(60*fps))] # transients per minute
-        event_prob += [(active_frames/total_frames)*100]
+    for psa in PSAbool_align:
+        event_rate.append(len(find_epochs(psa)) / dur_min)
+    event_prob = PSAbool_align.sum(axis=1) / PSAbool_align.shape[1]
     event_rate = np.array(event_rate)
-    event_prob = np.array(event_prob)
     return event_rate, event_prob
 
 
