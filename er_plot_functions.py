@@ -505,59 +505,70 @@ def get_freezing_epochs(freezing):
     return freezing_epochs
 
 
-def get_all_freezing(mouse, day_des=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
-                     velocity_threshold=1.044, min_freeze_duration=10):
+def get_all_freezing(mouse_or_mice: str or list, day_des: list = [-2, -1, 4, 1, 2, 7], arenas: list = ['Open', 'Shock'],
+                     velocity_threshold: float = 1.044, min_freeze_duration: float = 10):
     """
     Gets freezing ratio for all experimental sessions for a given mouse.
     :param
-        mouse: Mouse name (string), e.g. 'DVHPC_5' or 'Marble7'
+        mouse: Mouse name (string), e.g. 'DVHPC_5' or 'Marble7' or list of mice
         arenas: 'Open' (denotes square) or 'Shock' or 'Circle' (denotes open field circle arena)
         day_des: array of session days -2,-1,0,1,2,7 and 4 = 4hr session on day 0
         list_dir: alternate location of SessionDirectories
+        return_df: bool, True = return a pd.DataFrame of freezing values
     :return:
-        fratios: narena x nsession array of fratios
+        fratios: narena x nsession array of fratios if mouse_or_mice is a str, narena x nsession x nmice array if
+        mouse_or_mice is a list
     """
     nsesh = len(day_des)
     narena = len(arenas)
 
-    # Iterate through all sessions and get fratio
-    fratios = np.ones((narena, nsesh))*float('NaN')  # pre-allocate fratio as nan
-    for idd, day in enumerate(day_des):
-        for ida, arena in enumerate(arenas):
-            # print(mouse + " " + str(day) + " " + arena)
-            try:
+    if isinstance(mouse_or_mice, list):
+        mice = mouse_or_mice
+        fratio_all = np.empty((narena, nsesh, len(mice)))
+        for idm, mouse in enumerate(mice):
+            fratio_all[:, :, idm] = get_all_freezing(mouse, day_des=day_des, arenas=arenas,
+                                                     velocity_threshold=velocity_threshold,
+                                                     min_freeze_duration=min_freeze_duration)
 
-                path_use = get_dir(mouse, arena, day)
-                freezing, _ = detect_freezing(path_use, velocity_threshold=velocity_threshold,
-                                              min_freeze_duration=min_freeze_duration,
-                                              arena=arena)
-                fratios[ida, idd] = freezing.sum()/freezing.__len__()
-            except (IOError, IndexError, TypeError):  # FileNotFoundError is IOError in earlier versions
-                # print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
-                print(['Unknown file missing and/or IndexError for ' + mouse + ' ' + arena + ' ' + str(day)])
-                print('Freezing left as NaN for this session')
+        return fratio_all
 
-    return fratios
+    else:
+        mouse = mouse_or_mice
+        # Iterate through all sessions and get fratio
+        fratios = np.ones((narena, nsesh))*float('NaN')  # pre-allocate fratio as nan
+        for idd, day in enumerate(day_des):
+            for ida, arena in enumerate(arenas):
+                # print(mouse + " " + str(day) + " " + arena)
+                try:
+
+                    path_use = get_dir(mouse, arena, day)
+                    freezing, _ = detect_freezing(path_use, velocity_threshold=velocity_threshold,
+                                                  min_freeze_duration=min_freeze_duration,
+                                                  arena=arena)
+                    fratios[ida, idd] = freezing.sum()/freezing.__len__()
+                except (IOError, IndexError, TypeError):  # FileNotFoundError is IOError in earlier versions
+                    # print(['Unknown error processing ' + mouse + ' ' + arena + ' ' + str(day)])
+                    print(['Unknown file missing and/or IndexError for ' + mouse + ' ' + arena + ' ' + str(day)])
+                    print('Freezing left as NaN for this session')
+
+        return fratios
 
 
 def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'], velocity_threshold=1.0,
-                      min_freeze_duration=10, title='', ax=None, xoffset=0.05, **kwargs):
+                      min_freeze_duration=10, title='', ax=None, xoffset=0.05, return_df=False, **kwargs):
 
     """
     Plots freezing ratios for all mice
     :param mice: list of all mice to include in plot
         days
     :return: figure and axes handles, and all freezing values in freeze_ratio_all (narenas x ndays x nmice)
+            fratio_all is in pandas DataFrame format if return_df=True
     """
     plot_colors = ['b', 'r']
     ndays = len(days)
-    nmice = len(mice)
-    narenas = len(arenas)
 
-    fratio_all = np.empty((narenas, ndays, nmice))
-    for idm, mouse in enumerate(mice):
-        fratio_all[:, :, idm] = get_all_freezing(mouse, day_des=days, arenas=arenas,
-                                        velocity_threshold=velocity_threshold, min_freeze_duration=min_freeze_duration)
+    fratio_all = get_all_freezing(mice, day_des=days, arenas=arenas, velocity_threshold=velocity_threshold,
+                                  min_freeze_duration=min_freeze_duration)
 
     if ax is None:
         fig, ax = plt.subplots()
@@ -598,6 +609,9 @@ def plot_all_freezing(mice, days=[-2, -1, 4, 1, 2, 7], arenas=['Open', 'Shock'],
         ax.legend((hopen, hshock), arenas)
     plt.xticks(days_plot, days_str)
     ax.set_title(title)
+
+    if return_df:  # Make into a DataFrame if specified
+        fratio_all = fratio_to_df(fratio_all, mice, days, arenas)
 
     return fig, ax, fratio_all
 
