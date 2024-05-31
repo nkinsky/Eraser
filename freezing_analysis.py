@@ -1052,7 +1052,7 @@ class TuningStability:
         met_name = metric_plot if not delta else 'Delta' + metric_plot
 
         # Plot scatter
-        sns.stripplot(x='Day', y=met_name, data=df, hue=group_by, dodge=True, order=days_plot,
+        sns.stripplot(x='Day', y=met_name, data=df.reset_index(), hue=group_by, dodge=True, order=days_plot,
                       palette=pal_use, ax=ax[0], **kwargs)
 
         # This is the only easy way I could figure out to NOT duplicate labels in the legend
@@ -1061,7 +1061,7 @@ class TuningStability:
         df.loc[:, group_by] = group_rows_
 
         # Plot overlaying bar graph
-        sns.barplot(x='Day', y=met_name, data=df, hue=group_by, dodge=True, order=days_plot,
+        sns.barplot(x='Day', y=met_name, data=df.reset_index(), hue=group_by, dodge=True, order=days_plot,
                     palette=pal_use_bar, facecolor=(1, 1, 1, 0), edgecolor=(1, 1, 1, 0), ax=ax[0])
 
         # Cleanup
@@ -1833,9 +1833,13 @@ def plot_PSA_w_freezing(mouse, arena, day, sort_by='first_event', day2=False, ax
 if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')  # This is a bugfix to make sure plots don't always stay on top of ALL applications
-    MD = MotionTuning('Marble07', 'Shock', 1, buffer_sec=(4, 4))
-    MD.calc_pw_coactivity('freeze_onset', buffer_sec=(4, 4))
 
+    ts = TuningStability('Shock', 'freeze_onset', 0.01)  # Load in tuningstability object
+    base_day = 1
+    metric_plot = 'event_rates'
+    delta = True
+    fig, ax = ts.plot_metric_stability_by_group(base_day=base_day, metric_plot=metric_plot, delta=delta,
+                                                size=2, alpha=0.7, jitter=0.15)
 
 
     pass
