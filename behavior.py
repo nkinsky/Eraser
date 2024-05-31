@@ -4,7 +4,7 @@
 import numpy as np
 import Placefields as pf  ## Eraser module
 
-def get_thigmotaxis(mouse, day, arena, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
+def get_thigmotaxis(mouse, arena, day, pf_file='placefields_cm1_manlims_1000shuf.pkl'):
     """
     Get thigmotaxis for a given session.  Wrapper function for calc_thigmotaxis specific to eraser and
     assumes pre-cultivated position data.
@@ -41,13 +41,13 @@ def calc_thigmotaxis(occmap, nbins_pad = 1):
     yspan = nbinsy - 2*nbins_pad
 
     # Calculate extent of outer ring and make boolean
-    outer_ring = np.zeros(occmap.shape)
-    outer_x = np.floor(xspan/5)
-    outer_y = np.floor(yspan/5)
-    outer_ring[nbins_pad:nbins_pad + outer_x, nbins_pad:-nbins_pad] = 1  # top part of ring
-    outer_ring[-(nbins_pad + outer_x):-nbins_pad, nbins_pad:-nbins_pad] = 1  # bottom part of ring
-    outer_ring[nbins_pad:-nbins_pad, nbins_pad:nbins_pad+outer_y] = 1  # left part of ring
-    outer_ring[nbins_pad:-nbins_pad, -(nbins_pad + outer_y):-nbins_pad] = 1  # right part of ring
+    outer_ring = np.zeros(occmap.shape, dtype=bool)
+    outer_x = np.floor(xspan/5).astype(int)
+    outer_y = np.floor(yspan/5).astype(int)
+    outer_ring[nbins_pad:nbins_pad + outer_x, nbins_pad:-nbins_pad] = True  # top part of ring
+    outer_ring[-(nbins_pad + outer_x):-nbins_pad, nbins_pad:-nbins_pad] = True  # bottom part of ring
+    outer_ring[nbins_pad:-nbins_pad, nbins_pad:nbins_pad+outer_y] = True  # left part of ring
+    outer_ring[nbins_pad:-nbins_pad, -(nbins_pad + outer_y):-nbins_pad] = True # right part of ring
 
     # Calculate thigmotaxis
     occ_outer = occmap[outer_ring].sum()
@@ -58,3 +58,16 @@ def calc_thigmotaxis(occmap, nbins_pad = 1):
 
 # def PCA_fear(freezing, thigmo_ratio, speed):  # Should these variables be a single time point or multiple time points?
 #
+
+
+if __name__ == "__main__":
+    import matplotlib
+    matplotlib.use('TkAgg')
+    import matplotlib.pyplot as plt
+    mouse, arena, day = "Marble07", "Open", 0
+    _, ax = plt.subplots(1, 2, figsize=(10, 5))
+    pfo = pf.load_pf(mouse, arena, day)
+    ax[0].plot(pfo.xrun, pfo.yrun)
+    ax[1].imshow(pfo.occmap)
+
+    get_thigmotaxis(mouse, arena, day)
