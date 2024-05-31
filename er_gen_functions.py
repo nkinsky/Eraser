@@ -99,7 +99,7 @@ def plot_tmap_sm2(obj, ax_ind):
     obj.ax[ax_ind].imshow(obj.tmap_sm2[obj.current_position], cmap='viridis')
     obj.last_position = obj.n_neurons - 1
     obj.ax[ax_ind].axis('off')
-    obj.ax[ax_ind].set_title('rho_spear = ' + str(round(obj.corrs_sm[obj.current_position], 3)))
+    obj.ax[ax_ind].set_title(f'{obj.titles2[obj.current_position]} rho_spear = {round(obj.corrs_sm[obj.current_position], 3)}')
 
 
 def plot_events_over_pos2(obj, ax_ind):
