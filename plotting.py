@@ -119,7 +119,7 @@ class Fig:
         fontname="Arial",
         **kwargs,
     ):
-
+        assert not (tight_layout and constrained_layout), "Can't set both tight_layout and constrained_layout to True"
         # --- plot settings --------
         mpl.rcParams["font.family"] = fontname
         mpl.rcParams["font.size"] = fontsize
@@ -144,6 +144,7 @@ class Fig:
         mpl.rcParams['legend.fontsize'] = 6
         mpl.rcParams['legend.markerscale'] = 1
         mpl.rcParams["figure.constrained_layout.use"] = constrained_layout
+        mpl.rcParams["figure.autolayout"] = tight_layout
         mpl.rcParams["axes.prop_cycle"] = cycler(
             "color",
             [
