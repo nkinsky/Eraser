@@ -585,6 +585,8 @@ def enablePrint():
 
 
 if __name__ == '__main__':
-    pwco = PairwiseCoactivation('Marble20', 'Shock', 1, buffer_sec=(4, 4))
-    pwco.calc_pw_significance(nshifts=100)
+    # pwco = PairwiseCoactivation('Marble20', 'Shock', 1, buffer_sec=(4, 4))
+    # pwco.calc_pw_significance(nshifts=100)
+    gen_pw_coact('freeze_onset', buffer_sec=(4, 4), buffer_sec_filt=(4, 4),
+                 cell_filt='freeze_cells')
 

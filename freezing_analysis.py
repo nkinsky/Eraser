@@ -300,7 +300,7 @@ class MotionTuning:
             self.gen_pe_rasters(events, buffer_sec)
 
         # Select cells to use
-        if cells_to_use == 'all':
+        if isinstance(cells_to_use, str) and (cells_to_use == 'all'):
             rasters_use = self.pe_rasters[events]
         else:
             rasters_use = self.pe_rasters[events][cells_to_use]
