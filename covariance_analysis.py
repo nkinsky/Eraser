@@ -476,7 +476,8 @@ def get_cov_pairs_from_mat(cov_mat: np.ndarray, cells: np.ndarray or None,
     return base_cov, reg_cov
 
 
-def get_group_PBE_rasters(animal_list, group_name, buffer_sec=(6, 6), event_type='freeze_onset', sr_match=20):
+def get_group_PBE_rasters(animal_list, group_name, buffer_sec=(6, 6), event_type='freeze_onset', sr_match=20,
+                          arena="Shock"):
     """Gets rasters of population level calcium activity centered on specified events default = freeze onset"""
 
     # Set up times for all PBE rasters
@@ -487,7 +488,7 @@ def get_group_PBE_rasters(animal_list, group_name, buffer_sec=(6, 6), event_type
     for day in [-2, -1, 4, 1, 2]:
         PBErast_comb, PBErast_combz, times_comb = [], [], []
         for animal in animal_list:
-            MD1 = fa.MotionTuning(animal, 'Shock', day)
+            MD1 = fa.MotionTuning(animal, arena, day)
             PBErast = fa.get_PE_raster(MD1.PSAbool.sum(axis=0), MD1.select_events(event_type),
                                        sr_image=MD1.sr_image, buffer_sec=buffer_sec)
             # Sum up cells active and divide by total to get proportion active before each event
