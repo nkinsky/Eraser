@@ -9,6 +9,7 @@ from pickle import dump, load
 from pathlib import Path
 import pandas as pd
 import pingouin as pg
+from tqdm import tqdm
 from sklearn.datasets import load_digits
 from sklearn.decomposition import FastICA as skFastICA
 from sklearn.decomposition import PCA as skPCA
