@@ -14,6 +14,6 @@ def save_df(df: pd.DataFrame, savename: str, save_dir=group_data_dir):
     print(f"{savename} saved")
 
 
-def load_df(savename: str, save_dir=group_data_dir):
+def load_df(savename: str, save_dir=group_data_dir, header='infer'):
     savename = savename if savename.split(".")[-1] == "csv" else f"{savename}.csv"
-    return pd.read_csv(save_dir / savename)
+    return pd.read_csv(save_dir / savename, header=header)
