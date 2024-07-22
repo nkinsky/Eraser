@@ -82,6 +82,66 @@ def resample_sd(df: pd.DataFrame, level="both", apply=None):
     return new_df
 
 
+def resample_corrs_paired(df_list: pd.DataFrame, apply=None):
+    """Resamples variables by sampling with replacement at 'mouse', 'day_pair', and 'corrs_sm' level.
+    df_list is a list of pandas dataframes: One in the Shock and the other in the Open (Neutral) arena.
+
+    session grp var1 var2 var3 ..........
+    0       SD  0.2   0.3  0.4
+    0       SD  0.5   0.3  0.4
+    1       SD  0.2   0.73  0.2
+    1       SD  0.2   0.73  0.2
+    2       SD  0.1   0.2  0.23
+    2       SD  0.1   0.2  0.23
+    5       NSD  0.2   0.3  0.4
+    5       NSD  0.2   0.3  0.4
+    6       NSD  0.5   0.3  0.4
+    6       NSD  0.2   0.73  0.2
+    6       NSD  0.1   0.2  0.23
+
+    Parameters
+    ----------
+    df_list : [pd.DataFrame, pd.DataFrame]. First dataframe is Shock only, second is Neutral/Open only.
+        columns should specify session and variables
+    apply : callable/function, optional
+        a function to operate on resampled dataframe, by default None
+
+    Returns
+    -------
+    _type_
+        _description_
+    """
+    mouse_ids = df_list[0]["mouse"].unique()
+    n_mice = len(mouse_ids)
+    df, df2 = df_list
+
+    rng = np.random.default_rng()
+    mouse_ids = rng.choice(mouse_ids, size=n_mice, replace=True)
+
+    new_df = []
+    for i, idx in enumerate(mouse_ids):
+        idx_df = df[df.mouse == idx].copy()  # df of variables for that session
+        idx_df.loc[:, "mouse_rs"] = i  # make selected session independent
+
+        idx_df2 = df2[df2.mouse == idx].copy()  # df of variables for that session
+        idx_df2.loc[:, "mouse_rs"] = i  # make selected session independent
+
+        day_pairs = df["day_pair"].unique()
+        day_pair = rng.choice(day_pairs, size=1, replace=True)[0]
+
+        idx_df = idx_df[idx_df["day_pair"] == day_pair].sample(frac=1, replace=True, ignore_index=True)
+        idx_df2 = idx_df2[idx_df2["day_pair"] == day_pair].sample(frac=1, replace=True, ignore_index=True)
+
+        new_df.append(idx_df)
+        new_df.append(idx_df2)
+    new_df = pd.concat(new_df, ignore_index=True)
+
+    if apply is not None:
+        assert callable(apply), "apply can only be a function"
+        new_df = apply(new_df)
+
+    return new_df
+
 def resample(df, level=['mouse', 'session', 'corrs_sm'], n_level=None, apply=None):
     """Resample data with replacement at each level indicated.
     n_level = number of samples to grab at each level. If None, it will resample with replacement from each level n times,
