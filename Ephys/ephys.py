@@ -14,9 +14,11 @@ from neuropy.core.epoch import Epoch
 
 if environ['HOME'] == '/Users/nkinsky':
     working_dir = Path('/Users/nkinsky/Documents/UM/Working/Anisomycin/Recording_Rats/Wedge')
+elif environ['HOME']  == '/Users/kimqi':
+    working_dir = Path('/media/kimqi/BK/Data/Anisomycin/Recording_Rats/Creampuff')
 
 
-def get_cluster_info(folder_use, keep_good_only=True):
+def get_cluster_info(folder_use, keep_good_only=True, working_dir=working_dir):
     """Grabs cluster info and returns a dataframe, keeping only good units (those with an entry in their 'q' field)
     by default"""
     spyk_circ_dir = working_dir / folder_use / 'spyk-circ'
@@ -32,7 +34,7 @@ def get_cluster_info(folder_use, keep_good_only=True):
         return clu_info_df
 
 
-def load_events_csv(events_file_dir, start_time):
+def load_events_csv(events_file_dir, start_time, working_dir=working_dir):
     """Loads epochs events file delineating start/end of each recording. """
     events_file_dir = working_dir / events_file_dir
     events_file = sorted(Path(events_file_dir).glob("*_events_full.csv"))[0]
@@ -46,7 +48,7 @@ def load_events_csv(events_file_dir, start_time):
     return epochs
 
 
-def epochs_to_neuroscope(session_folder, timestamps=None, SR=30000):
+def epochs_to_neuroscope(session_folder, timestamps=None, SR=30000, working_dir=working_dir):
     """Export event epochs to neuroscope format"""
 
     if timestamps is None:
@@ -72,7 +74,7 @@ def epochs_to_neuroscope(session_folder, timestamps=None, SR=30000):
     return epochs_out
 
 
-def get_single_units(folder_use, SR=30000, keep_separate=False):
+def get_single_units(folder_use, SR=30000, keep_separate=False, working_dir=working_dir):
     """Get single unit activity from each session after curation in phy"""
     spyk_circ_dir = working_dir / folder_use / 'spyk-circ'
     unit_dir = sorted(spyk_circ_dir.glob("**/spike_times.npy"))[0].parent
@@ -109,7 +111,7 @@ def calc_burst_index(sp_times, burst_thresh_ms=8, nspikes_min=3):
     return nburst_spikes / nspikes_total
 
 
-def calc_burst_ind_by_epoch(session_folder, timestamps=None, SR=30000):
+def calc_burst_ind_by_epoch(session_folder, timestamps=None, SR=30000, working_dir=working_dir):
     """Calculate burst index by epoch"""
     # Load timestamps if not done already
     if timestamps is None:
@@ -154,7 +156,7 @@ def calc_firing_rate(spike_times):
     return len(spike_times) / epoch_duration
 
 
-def calc_firing_rate_by_epoch(session_folder, timestamps=None, SR=30000, combine_units=False):
+def calc_firing_rate_by_epoch(session_folder, timestamps=None, SR=30000, combine_units=False, working_dir=working_dir):
     """Calculate burst index by epoch"""
     # Load timestamps if not done already
     if timestamps is None:
@@ -193,7 +195,8 @@ def calc_firing_rate_by_epoch(session_folder, timestamps=None, SR=30000, combine
     return epochs_used, FR_by_epoch_all
 
 
-def calc_ccg_by_epoch(session_folder, timestamps=None, SR=30000, window_size=0.5, bin_size=0.001, combine_units=False):
+def calc_ccg_by_epoch(session_folder, timestamps=None, SR=30000, window_size=0.5, bin_size=0.001, combine_units=False,
+                      working_dir=working_dir):
     """Calculate CCG between all cells across each epoch of the recording"""
     # Load timestamps if not done already
     if timestamps is None:
@@ -285,7 +288,6 @@ def plot_ccg_by_epoch(corr_by_epoch_use, time_bins_use, epochs_use, session_name
     # Label x and y axes
 
 
-
 def bin_spikes2(sp_times, bin_size_sec=10):
     """Much faster than the above!!!"""
     time_bins = np.arange(0, np.ceil(sp_times.max()) + bin_size_sec, bin_size_sec)
@@ -293,6 +295,7 @@ def bin_spikes2(sp_times, bin_size_sec=10):
     binned_rate = np.histogram(sp_times, bins=time_bins)[0] / bin_size_sec
 
     return time_bins, np.array(binned_rate)
+
 
 if __name__ == "__main__":
     pass
