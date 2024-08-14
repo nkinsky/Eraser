@@ -95,8 +95,6 @@ def get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=False):
     return neuron_map.astype(int)
 
 
-
-
 def reverse_neuron_map(mouse, arena1, day1, arena2, day2):
     """Get neuron map from day1 to day2 using map from day2 to day1. Useful if you haven't performed the
     registration in that direction yet.
@@ -2656,6 +2654,6 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    get_overlap_bool('Marble06', 'Shock', 1, 'Open', 1)
+    get_neuronmap('Marble07', 'Shock', -2, 'Shock', -1)
     pass
 
