@@ -11,7 +11,7 @@ import seaborn as sns
 from os import path
 import scipy.io as sio
 from PIL import Image
-from skimage import feature
+from skimage import feature, measure
 
 # project specific packages
 from session_directory import load_session_list, master_directory, make_session_list
@@ -38,6 +38,66 @@ def load_ROIs(mouse, arena, day, list_dir:str = master_directory):
     """Load in ncells x nxpixels x nypixels list"""
     im_data = load_imaging_data(mouse, arena, day, list_dir=list_dir)
     return np.stack(im_data['NeuronImage'].squeeze().flatten())
+
+
+def get_roi_orientations(rois):
+    """Get roi orientations"""
+
+    orientations = [measure.regionprops((roi > 0).astype(int))[0].orientation for roi in rois]
+
+    return np.array(orientations)
+
+
+def calc_orientation_diff_bw_sessions(mouse, arena1, day1, arena2, day2, batch_map_use=True):
+    """Calculate change in neuron ROI orientation between sessions as a metric of cell registration quality"""
+
+    # Load ROIs
+    rois1 = load_ROIs(mouse, arena1, day1)
+    rois2 = load_ROIs(mouse, arena2, day2)
+
+    # Get ROI orientation
+    orient1 = get_roi_orientations(rois1)
+    orient2 = get_roi_orientations(rois2)
+
+    # Get mapping between sessions
+    neuron_map = pfs.get_neuronmap(mouse, arena1, day1, arena2, day2, batch_map_use=batch_map_use)
+
+    # Calculate orientation diff
+    orient1_reg = orient1[neuron_map > -1]
+    orient2_reg = orient2[neuron_map[neuron_map > -1]]
+    orient_diff = orient1_reg - orient2_reg
+
+    # Now make sure values range from -pi/2 to pi/2
+    orient_diff[orient_diff < -np.pi/2] = orient_diff[orient_diff < -np.pi/2] + np.pi
+    orient_diff[orient_diff > np.pi/2] = orient_diff[orient_diff > np.pi/2] - np.pi
+
+    return orient_diff
+
+
+def plot_ROI_orientation(roi, ax=None, zoom_buffer: int or None = 10):
+    """Plot neuron ROI with orientation overlaid. Zoom in with buffer to zoom_buffer around roi"""
+    if ax is None:
+        _, ax = plt.subplots()
+
+    # Detect ROI
+    rprops = measure.regionprops((roi > 0).astype(int))
+    assert len(rprops) == 1, "More/less than one ROI detected"
+
+    # Calculate orientation line
+    xmajor = rprops[0].centroid[1] + rprops[0].axis_major_length / 2 * np.array([-1, 1]) * np.cos(rprops[0].orientation)
+    ymajor = rprops[0].centroid[0] + rprops[0].axis_major_length / 2 * np.array([-1, 1]) * np.sin(rprops[0].orientation)
+
+    # Plot
+    ax.imshow(roi)
+    ax.plot(xmajor, ymajor, 'r-')
+
+    # Zoom in
+    if zoom_buffer is not None:
+        ax.set_xlim(np.array([np.min(xmajor), np.max(xmajor)]) + np.array([-zoom_buffer, zoom_buffer]))
+        ax.set_ylim(np.array([np.min(ymajor), np.max(ymajor)]) + np.array([-zoom_buffer, zoom_buffer]))
+        ax.invert_yaxis()
+
+    return ax
 
 
 def load_proj(mouse, arena, day, type: str in ['min', 'max'], list_dir: str = master_directory):
@@ -83,7 +143,7 @@ def plot_ROIs_bw_sessions(mouse, arena1, day1, arena2, day2, proj: str = 'min', 
     """Plot ROIs from two sessions in different colors with co-active cells in green.
 
     Currently only works for same-day sessions - does not register ROIs between sessions due to
-    affine transformation data being loading from MATLAB into python improperly"""
+    affine transformation data being loaded from MATLAB into python improperly"""
 
     # Load ROIs and projection from first session
     rois1 = load_ROIs(mouse, arena1, day1)
@@ -190,8 +250,8 @@ def plot_traces(traces: np.ndarray or list, psabool: np.ndarray or list = None, 
 
     pass
 
+
 if __name__ == "__main__":
-    traces, psabool = load_traces('Marble07', 'Shock', -1, psa=True)
-    plot_traces(traces[0:10], psabool=psabool[0:10], SR=20)
+    calc_orientation_diff_bw_sessions('Marble07', 'Shock', -2, 'Shock', -1)
 
 
