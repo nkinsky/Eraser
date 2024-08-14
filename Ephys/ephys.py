@@ -8,7 +8,7 @@ from os import environ
 
 from neuropy.utils.ccg import correlograms
 from neuropy.utils.mathutil import contiguous_regions
-from neuropy.io.openephysio import get_dat_timestamps
+from neuropy.io.openephysio import get_dat_timestamps, get_lfp_timestamps
 from neuropy.io.neuroscopeio import NeuroscopeIO
 from neuropy.core.epoch import Epoch
 
@@ -160,7 +160,8 @@ def calc_firing_rate_by_epoch(session_folder, timestamps=None, SR=30000, combine
     """Calculate burst index by epoch"""
     # Load timestamps if not done already
     if timestamps is None:
-        timestamps = get_dat_timestamps(working_dir / session_folder)
+        # timestamps = get_dat_timestamps(working_dir / session_folder)
+        timestamps = get_lfp_timestamps(working_dir / session_folder)
 
     spike_times, clu_ids = get_single_units(session_folder, keep_separate=False)
 
@@ -224,8 +225,8 @@ def calc_ccg_by_epoch(session_folder, timestamps=None, SR=30000, window_size=0.5
     for epoch in epochs['label']:
         print(f'Calculating CCGs for epoch {epoch}')
         epoch_use = epochs[epochs['label'] == epoch]
-        start_sec = ts.searchsorted(epoch_use['start'])/SR
-        stop_sec = ts.searchsorted(epoch_use['stop'])/SR
+        start_sec = ts.searchsorted(epoch_use['start'].dt.tz_localize(ts.iloc[0].tz))/SR
+        stop_sec = ts.searchsorted(epoch_use['stop'].dt.tz_localize(ts.iloc[0].tz))/SR
         if start_sec != stop_sec:  # Skip the below for injection or any epoch with no data!
             epoch_bool = np.bitwise_and(spike_times > start_sec, spike_times < stop_sec)
             epoch_bool = np.bitwise_and(epoch_bool, good_clu_bool)
@@ -299,4 +300,4 @@ def bin_spikes2(sp_times, bin_size_sec=10):
 
 if __name__ == "__main__":
     pass
-    # calc_burst_ind_by_epoch(working_dir / rec_only_folder)
+    calc_ccg_by_epoch('/Users/nkinsky/Documents/UM/Working/Anisomycin/Recording_Rats/Wedge/2022_12_13_anisomycin50mg')
