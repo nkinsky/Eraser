@@ -214,7 +214,7 @@ def fix_neuronmap(map_import):
     map_fixed = np.ones(map_import.shape, dtype=np.int64)*np.nan  #pre-allocate to NaNs
     for idn, neuron in enumerate(map_import):
         if neuron[0] != 0:
-            map_fixed[idn] = neuron[0][0]-1  # subtract 1 to convert to python numbering!
+            map_fixed[idn] = neuron[0][0] - 1  # subtract 1 to convert to python numbering!
 
     return map_fixed
 
