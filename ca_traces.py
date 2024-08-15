@@ -6,15 +6,18 @@ Created on Fri Aug 12 12:30:00 2022
 """
 # general packages
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from os import path
 import scipy.io as sio
 from PIL import Image
 from skimage import feature, measure
+from pathlib import Path
+import scipy.ndimage as ndi
 
 # project specific packages
-from session_directory import load_session_list, master_directory, make_session_list
+from session_directory import load_session_list, master_directory, make_session_list, find_eraser_session
 from session_directory import find_eraser_directory as get_dir
 import placefield_stability as pfs
 import helpers
@@ -139,16 +142,21 @@ def plot_ROIs(rois, bkgrd: np.ndarray or bool = True, color: str = 'r', ax=None)
     return ax
 
 
-def plot_ROIs_bw_sessions(mouse, arena1, day1, arena2, day2, proj: str = 'min', ax=None):
+def plot_ROIs_bw_sessions(mouse, arena1, day1, arena2, day2, proj: str in ['min', 'max', 'custom'] = 'min',
+                          custom_bkgrd: np.ndarray or None = None, ax=None):
     """Plot ROIs from two sessions in different colors with co-active cells in green.
 
     Currently only works for same-day sessions - does not register ROIs between sessions due to
-    affine transformation data being loaded from MATLAB into python improperly"""
+    affine transformation data being loaded from MATLAB into python improperly.
+
+    Can provide a custom background with proj='custom' and backgroun=np.ndarray"""
 
     # Load ROIs and projection from first session
     rois1 = load_ROIs(mouse, arena1, day1)
     if proj in ['min', 'max']:
         bkgrd = load_proj(mouse, arena1, day1, proj)
+    elif proj == 'custom':
+        bkgrd = custom_bkgrd
 
     # Load rois from second session
     rois2 = load_ROIs(mouse, arena2, day2)
@@ -160,8 +168,16 @@ def plot_ROIs_bw_sessions(mouse, arena1, day1, arena2, day2, proj: str = 'min', 
         _, ax = plt.subplots()
 
     # Now plot ROIs
-    plot_ROIs(rois1, bkgrd=bkgrd, color='g', ax=ax)  # First session
-    plot_ROIs(rois2, bkgrd=False, color='y', ax=ax)  # Second session
+    try:
+        _, rois2 = register_all_ROIs(mouse, arena1, day1, arena2, day2, method='all')
+    except AssertionError:
+        print("No _tform.csv file found for this pair of sessions. Check directory and create in MATLAB to run.")
+        print("Plotting without transforming second session ROIs, be warned!")
+    # plot_ROIs(rois1, bkgrd=bkgrd, color='g', ax=ax)  # First session
+    plot_ROIs(rois1[neuron_map < 0], bkgrd=bkgrd, color='g', ax=ax)  # First session
+    # plot_ROIs(rois2, bkgrd=False, color='y', ax=ax)  # Second session
+    plot_ROIs(rois2, bkgrd=False, color='y', ax=ax)
+    plot_ROIs(rois2[neuron_map[neuron_map >= 0]], bkgrd=False, color='r', ax=ax)  # Overlapping ROIs
     plot_ROIs(rois1[neuron_map >= 0], bkgrd=False, color='r', ax=ax)  # Overlapping ROIs
 
     return ax
@@ -177,6 +193,42 @@ def detect_roi_edges(roi_binary):
     yedges = np.append(inds[0][isort], inds[0][isort[0]])
 
     return xedges, yedges
+
+
+def register_all_ROIs(mouse, arena1, day1, arena2, day2, method: str in ["combined", "all"]="combined"):
+
+    # Load in ROIs
+    rois1 = load_ROIs(mouse, arena1, day1)
+    rois2 = load_ROIs(mouse, arena2, day2)
+
+    # Combine into one 2d array
+    rois1_comb = np.sum(rois1, axis=0)
+    rois2_comb = np.sum(rois2, axis=0)
+
+    # load in transform
+    base_dir = Path(get_dir(mouse, arena1, day1))
+    reg_sess_info = find_eraser_session(mouse, arena2, day2)
+    reg_sess_info['Date'] = f"0{reg_sess_info['Date']}" if len(reg_sess_info['Date']) == 9 else reg_sess_info['Date']  # fix date string format
+
+    tform_file_name = (f"RegistrationInfo-{reg_sess_info['Animal']}-{'_'.join(reg_sess_info['Date'].split('/'))}-"
+                       f"session{reg_sess_info['Session']}_tform.csv")
+    assert (base_dir / tform_file_name).exists(), "RegistrationInfo..._tform.csv file missing, save with csvwrite in MATLAB"
+    tform = pd.read_csv(base_dir / tform_file_name, header=None)
+
+    # Now flip around the x/y translation coordinates to convert from MATLAB affine2d function to Scipy.
+    tform.iloc[2, :2] = -tform.iloc[2, 1::-1]
+
+    if method == "combined":
+        rois2_reg = ndi.affine_transform(rois2_comb, tform.values.T, order=1, output_shape=rois1_comb.shape)
+        rois1 = rois1_comb
+    elif method == "all":
+        rois2_all = []
+        for roi in rois2:
+            roi2_reg = ndi.affine_transform(roi, tform.values.T, order=1, output_shape=rois1_comb.shape)
+            rois2_all.append(roi2_reg)
+        rois2_reg = np.array(rois2_all)
+
+    return rois1, rois2_reg
 
 
 def load_traces(mouse: str, arena: str in ['Shock', 'Open'], day: int in [-2, -1, 0, 4, 1, 2, 7], psa: bool = False,
@@ -252,6 +304,6 @@ def plot_traces(traces: np.ndarray or list, psabool: np.ndarray or list = None, 
 
 
 if __name__ == "__main__":
-    calc_orientation_diff_bw_sessions('Marble07', 'Shock', -2, 'Shock', -1)
-
-
+    # calc_orientation_diff_bw_sessions('Marble07', 'Shock', -2, 'Shock', -1)
+    # register_all_ROIs('Marble07', 'Shock', -1, 'Shock', 1)
+    plot_ROIs_bw_sessions('Marble07', 'Shock', -1, 'Shock', 1, proj='min')
