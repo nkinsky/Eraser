@@ -172,7 +172,7 @@ class Fig:
         self.gs = gs
 
     def subplot(self, subplot_spec, sharex=None, sharey=None, **kwargs):
-        """subplot_spec: either 3 digit int, e.g. 431, or length 3 tuple, e.g. (4, 3, 1)
+        """subplot_spec: either 3 digit int, e.g. 431, or length 3 tuple, e.g. (4, 3, 1), OR gs
         Both the above would create a subplot in row 0 and column 0 of a 4 row x 3 column grid"""
         if isinstance(subplot_spec, (int, plt.SubplotSpec)):
             return self.fig.add_subplot(subplot_spec, sharex=sharex, sharey=sharey, **kwargs)
