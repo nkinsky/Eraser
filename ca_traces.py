@@ -115,11 +115,11 @@ def load_proj(mouse, arena, day, type: str in ['min', 'max'], list_dir: str = ma
     return im
 
 
-def plot_ROIs(rois, bkgrd: np.ndarray or bool = True, color: str = 'r', ax=None):
+def plot_ROIs(rois, bkgrd: np.ndarray or bool = True, color: str = 'r', ax=None, bkgrd_cmap='gray'):
     """Plot all rois in desired color. bkgrd can be a max/min projection, or True = plot over white background
     the size of the imaging FOV. False = just plot with no background."""
 
-   # Create white background if not provided
+    # Create white background if not provided
     if not isinstance(bkgrd, np.ndarray) and bkgrd:
         bkgrd = np.ones_like(rois[1])  # Make background white
 
@@ -129,7 +129,7 @@ def plot_ROIs(rois, bkgrd: np.ndarray or bool = True, color: str = 'r', ax=None)
 
     # Plot bkgrd if specified
     if isinstance(bkgrd, np.ndarray):
-        ax.imshow(bkgrd, cmap='gray')
+        ax.imshow(bkgrd, cmap=bkgrd_cmap)
 
     # Detect edges and plot neurons
     for roi in rois:
@@ -143,13 +143,17 @@ def plot_ROIs(rois, bkgrd: np.ndarray or bool = True, color: str = 'r', ax=None)
 
 
 def plot_ROIs_bw_sessions(mouse, arena1, day1, arena2, day2, proj: str in ['min', 'max', 'custom'] = 'min',
-                          custom_bkgrd: np.ndarray or None = None, ax=None):
+                          custom_bkgrd: np.ndarray or None = None, ax=None, bkgrd_cmap='gray',
+                          plot_all_rois: bool = True):
     """Plot ROIs from two sessions in different colors with co-active cells in green.
 
     Currently only works for same-day sessions - does not register ROIs between sessions due to
     affine transformation data being loaded from MATLAB into python improperly.
 
-    Can provide a custom background with proj='custom' and backgroun=np.ndarray"""
+    Can provide a custom background with proj='custom' and backgroun=np.ndarray
+
+    plot_all_rois: False = only plot correctly registered cell outlines, default = True (plot all)
+    """
 
     # Load ROIs and projection from first session
     rois1 = load_ROIs(mouse, arena1, day1)
@@ -173,12 +177,17 @@ def plot_ROIs_bw_sessions(mouse, arena1, day1, arena2, day2, proj: str in ['min'
     except AssertionError:
         print("No _tform.csv file found for this pair of sessions. Check directory and create in MATLAB to run.")
         print("Plotting without transforming second session ROIs, be warned!")
-    # plot_ROIs(rois1, bkgrd=bkgrd, color='g', ax=ax)  # First session
-    plot_ROIs(rois1[neuron_map < 0], bkgrd=bkgrd, color='g', ax=ax)  # First session
-    # plot_ROIs(rois2, bkgrd=False, color='y', ax=ax)  # Second session
-    plot_ROIs(rois2, bkgrd=False, color='y', ax=ax)
-    plot_ROIs(rois2[neuron_map[neuron_map >= 0]], bkgrd=False, color='r', ax=ax)  # Overlapping ROIs
-    plot_ROIs(rois1[neuron_map >= 0], bkgrd=False, color='r', ax=ax)  # Overlapping ROIs
+
+    # Plot ROIs registered between sessions
+    plot_ROIs(rois2[neuron_map[neuron_map >= 0]], bkgrd=bkgrd, color='r', ax=ax, bkgrd_cmap=bkgrd_cmap)
+    plot_ROIs(rois1[neuron_map >= 0], bkgrd=False, color='r', ax=ax)  # Overlapping ROIs from sesh1
+
+    # Plot ROIs from each session
+    if plot_all_rois:
+        plot_ROIs(rois1[neuron_map < 0], bkgrd=False, color='g', ax=ax)  # First session
+        plot_ROIs(rois2, bkgrd=False, color='y', ax=ax) # Second session
+        # plot_ROIs(rois1, bkgrd=bkgrd, color='g', ax=ax)  # First session
+        # plot_ROIs(rois2, bkgrd=False, color='y', ax=ax)  # Second session
 
     return ax
 
