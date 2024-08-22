@@ -349,6 +349,7 @@ def detect_freezing(dir_use, velocity_threshold=1.5, min_freeze_duration=10, are
 
     # Downsample Cineplex data to approximately match freezeframe acquisition rate
     # Lucky for us 30 Hz / 3.75 Hz = 8!!!
+    arena = "Open" if arena == "Neutral" else arena
     if arena == 'Open':
         t_int = np.arange(video_t[0], video_t[-1], 1 / 3.75)
         if ds_method == 'decimate':
