@@ -286,7 +286,8 @@ class MotionTuning:
                            sr_match: int = 20, cells_to_use: 'all' or list or np.array = 'all',
                            jitter_frames: None or int = None, trial_shift: None or int = None):
         """Calculate pairwise coactivty of all neurons around freeze or motion onset. Returns pairwise activations
-        (total # for each pair), pairwise activation probability, and timestamps relative to each event"""
+        (total # for each pair), pairwise activation probability, and timestamps relative to each event.
+        Less fleixble than calc_pw_coactivity_full but has more tools for estimating chance level, so kept in"""
 
         assert jitter_frames is None or type(jitter_frames) == int
         # Check if peri-event rasters are already loaded in
@@ -357,6 +358,53 @@ class MotionTuning:
 
         else:
             return None, None, None
+
+    def calc_pw_coactivity_full(self, events: str in ['freeze_onset', 'move_onset'] = 'freeze_onset',
+                                buffer_sec=(4, 4), sr_match: int = 20,
+                                cells_to_use: 'all' or list or np.array = 'all'):
+        """Calculates pairwise activation probability by trial, return an npairs x nevents x ntimebins array of
+        pairwise coactivations (1 = coactive, 0 = not). More flexible than calc_pw_coactivity but less ability
+        to shuffle/get chance levels"""
+
+        # Check if peri-event rasters are already loaded in
+        if self.pe_rasters[events] is not None:
+            # Check if #frames matches buffer_sec input
+            (load_rasters := not (np.sum(buffer_sec) * self.sr_image == self.pe_rasters[events].shape[1]))
+        else:
+            load_rasters = True
+
+        # Load rasters if necessary
+        if load_rasters:
+            self.gen_pe_rasters(events, buffer_sec)
+
+        # Select cells to use
+        if isinstance(cells_to_use, str) and (cells_to_use == 'all'):
+            rasters_use = self.pe_rasters[events]
+        else:
+            rasters_use = self.pe_rasters[events][cells_to_use]
+            # print(f'calculating rasters with {rasters_use.shape[0]} cells')  # for debugging
+
+        # Set up variables
+        times = np.arange(-buffer_sec[0], buffer_sec[1], 1 / sr_match)
+        # iterate through and calculate pairwise coactivity for all neuron pairs
+        rast_all = []
+        for idn, rast in enumerate(rasters_use[:-1]):
+            rast_all.append(np.bitwise_and(rast, rasters_use[(idn + 1):]))
+
+        pw_co_all = np.concatenate(rast_all, axis=0)
+
+        if self.sr_image != sr_match:
+            times_sr = np.arange(-buffer_sec[0], buffer_sec[1], 1 / self.sr_image)
+            npairs, nevents, _ = pw_co_all.shape
+            nbins_interp = len(times)
+            pw_co_all_interp = (np.concatenate(
+                [np.interp(times, times_sr, co_trial) for co_pair in pw_co_all for co_trial in co_pair])
+                            .reshape((npairs, nevents, nbins_interp)))
+            pw_co_all = pw_co_all_interp
+            times = times
+
+        return pw_co_all, times
+
 
     def save_sig_tuning(self, buffer_sec):
         """Saves any significant tuned neuron data"""
@@ -1088,10 +1136,13 @@ class TuningStability:
                 df_day = df[df['Day'] == day]
                 astats = pg.anova(data=df_day, dv='Deltaevent_rates', between='Group')
                 posthoc_stats = pg.pairwise_tukey(data=df_day, dv='Deltaevent_rates', between='Group')
-                ax[1].text(0.1, ycoord + 0.1, f'Day {day} anova and post-hoc tukey test stats', fontdict=fontdict)
+                ax[1].text(0.1, ycoord + 0.2, f'Day {day} anova and post-hoc tukey test stats', fontdict=fontdict)
+                ax[1].text(0.1, ycoord + 0.1,
+                           f"n = {[np.sum(~np.isnan(df_day[df_day['Group'] == gname]['Deltaevent_rates'])) for gname in df_day['Group'].unique()]} for {df_day['Group'].unique()}",
+                           fontdict=fontdict)
                 ax[1].text(0.1, ycoord, str(astats), fontdict=fontdict)
-                ax[1].text(0.1, ycoord - 0.3, str(posthoc_stats), fontdict=fontdict)
-                ycoord -= 0.5
+                ax[1].text(0.1, ycoord - 0.5, str(posthoc_stats), fontdict=fontdict)
+                ycoord -= 0.8
 
         else:
             print('Stats not yet enabled for "Exp Group" plotting')
@@ -1393,7 +1444,8 @@ def get_PE_raster(psa, event_starts, buffer_sec=(2, 2), sr_image=20):
         start_id = int(start_time * sr_image)
         raster_list.append(psa[(start_id - buffer_frames[0]):(start_id + buffer_frames[1])])
 
-    pe_raster = np.asarray(raster_list[1:])
+    # pe_raster = np.asarray(raster_list[1:])
+    pe_raster = np.asarray(raster_list)
 
     return pe_raster
 
@@ -1835,12 +1887,15 @@ if __name__ == '__main__':
     import matplotlib
     matplotlib.use('TkAgg')  # This is a bugfix to make sure plots don't always stay on top of ALL applications
 
-    ts = TuningStability('Shock', 'freeze_onset', 0.01)  # Load in tuningstability object
-    base_day = 1
-    metric_plot = 'event_rates'
-    delta = True
-    fig, ax = ts.plot_metric_stability_by_group(base_day=base_day, metric_plot=metric_plot, delta=delta,
-                                                size=2, alpha=0.7, jitter=0.15)
+    # ts = TuningStability('Shock', 'freeze_onset', 0.01)  # Load in tuningstability object
+    #
+    # base_day = 1
+    # metric_plot = 'event_rates'
+    # delta = True
+    # fig, ax = ts.plot_metric_stability_by_group(base_day=base_day, metric_plot=metric_plot, delta=delta,
+    #                                             size=2, alpha=0.7, jitter=0.15)
+    MD2 = MotionTuning('Marble14', 'Shock', 2)
+    MD2.gen_pe_rasters('freeze_onset')
 
 
     pass
