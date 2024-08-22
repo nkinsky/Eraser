@@ -519,15 +519,17 @@ def get_group_PBE_rasters(animal_list, group_name, buffer_sec=(6, 6), event_type
 
 
 def gen_pw_coact(event_type, arena='Shock', buffer_sec=(6, 6), buffer_sec_filt=(6, 6), sr_match=20,
-                 days=[-2, -1, 4, 1, 2], cell_filt: str in ['all', 'freeze_cells'] = 'all', **kwargs):
-    """Get pairwise coactivity for all animals and fold it nicely into a dataframe for easy plotting.  'pw_co' is the
+                 days=[-2, -1, 4, 1, 2], cell_filt: str in ['all', 'freeze_cells'] = 'all',
+                 take_mean_across: str in ["session", "cell_pairs", "events"] = "session", **kwargs):
+    """Get MEAN pairwise coactivity for all animals and fold it nicely into a dataframe for easy plotting.  'pw_co' is the
     mean # of coactivation events for all pairs. 'pw_co_prob' is the mean probability that each pair of cells is
-    coactive on a given frame, e.g.  #frames coactive / # events.
+    coactive on a given frame, averages across all cells, e.g.  #frames coactive / # events.
     'buffer_sec' gives you the extent of the axes while 'buffer_sec_filt' is used to select freeze cells.  For example
     if you want to only consider cells with significant freeze tuning between -2 and 2 seconds from freeze onset, but
     you want your plot to extend out to +/- 6 seconds, you would use buffer_sec_filt=(2, 2) and buffer_sec=(6, 6).
 
     **kwargs goes to MotionTuning.get_sig_neurons(...)"""
+    assert take_mean_across in ["session", "cell_pairs", "events"]
     # Set up times for all PBE rasters
     times = np.arange(-buffer_sec[0], buffer_sec[1], 1 / sr_match)
 
@@ -535,36 +537,74 @@ def gen_pw_coact(event_type, arena='Shock', buffer_sec=(6, 6), buffer_sec_filt=(
     for animal_list, grp_name in zip((err.learners, err.nonlearners, err.ani_mice_good),
                                      ('Learners', 'Non-learners', 'ANI')):
         pw_co_all, pw_co_prob_all, times_all, day_all, grp_all, animal_all = [], [], [], [], [], []
+        nevents_all = []
         for idm, mouse in enumerate(animal_list):
             for day in days:
 
                 # Get motion tuning curves
                 MD1 = fa.MotionTuning(mouse, arena, day, buffer_sec=buffer_sec_filt)
                 MD1.gen_pe_rasters(buffer_sec=buffer_sec)
+                rasters_use = MD1.pe_rasters[event_type]
 
                 # Grab appropriate cells
                 if cell_filt == 'all':
                     cells_to_use = 'all'
                 else:
-                    cells_to_use = MD1.get_sig_neurons(event_type, buffer_sec=buffer_sec_filt)
+                    cells_to_use = MD1.get_sig_neurons(event_type, buffer_sec=buffer_sec_filt, **kwargs)
+                    rasters_use = rasters_use[cells_to_use]
+                # nevents = rasters_use[0].shape[0]
 
                 # Calculate coactivation
-                pwco, pwcoprob, times = MD1.calc_pw_coactivity(events=event_type, buffer_sec=buffer_sec,
-                                                               cells_to_use=cells_to_use, **kwargs)
+                # Old method - less flexible
+                # pwco, pwcoprob, times = MD1.calc_pw_coactivity(events=event_type, buffer_sec=buffer_sec,
+                #                                                cells_to_use=cells_to_use)
+                pwco, times = MD1.calc_pw_coactivity_full(events=event_type, buffer_sec=buffer_sec,
+                                                          cells_to_use=cells_to_use)
 
-                # Append everything into a long list
-                if pwco is not None:
-                    pw_co_all.extend(pwco.mean(axis=0))
-                    pw_co_prob_all.extend(pwcoprob.mean(axis=0))
-                    times_all.extend(times)
-                    day_all.extend([day] * len(times))
-                    grp_all.extend([grp_name] * len(times))
-                    animal_all.extend([idm] * len(times))
+                # Append to list
+                npairs, nevents, nbins = pwco.shape
+                if take_mean_across == "cell_pairs":
+                    pwco_mean = pwco.mean(axis=0).reshape(-1)
+                    times_use = np.repeat(times[None, :], nevents, axis=0).reshape(-1)
+                    row_id = "event_num"
+                    id_vals = np.repeat(np.arange(nevents)[:, None], nbins, axis=1).reshape(-1)
+                elif take_mean_across == "events":
+                    pwco_mean = pwco.mean(axis=1).reshape(-1)
+                    times_use = np.repeat(times[None, :], npairs, axis=0).reshape(-1)
+                    row_id = "cell_pair"
+                    id_vals = np.repeat(np.arange(npairs)[:, None], nbins, axis=1).reshape(-1)
+                elif take_mean_across == "session":
+                    pwco_mean = pwco.mean(axis=0).mean(axis=0)
+                    times_use = times
+                    row_id = "session"
+                    id_vals = f"{MD1.session['arena']}_{MD1.session['day']}"
 
-        # Make your dataframe
-        coact_df = pd.DataFrame({'time': times_all, 'pw_co': pw_co_all, 'pw_co_prob': pw_co_prob_all,
-                                 'day': day_all, 'group': grp_all, 'mouse': animal_all})
-        coact_df_list.append(coact_df)
+                coact_df_list.append(pd.DataFrame({"time": times_use, "pw_co_prob": pwco_mean, "group": grp_name,
+                                                   "mouse": idm, "day": day, row_id: id_vals}))
+
+        # Old Method
+        #         # Append everything into a long list
+        #         if pwco is not None:
+        #             if take_mean:
+        #                 pw_co_all.extend(pwco.mean(axis=0))
+        #                 pw_co_prob_all.extend(pwcoprob.mean(axis=0))
+        #                 times_all.extend(times)
+        #                 day_all.extend([day] * len(times))
+        #                 grp_all.extend([grp_name] * len(times))
+        #                 animal_all.extend([idm] * len(times))
+        #                 nevents_all.extend([nevents] * len(times))
+        #             else:
+        #                 npairs = pwco.shape[0]
+        #                 coact_df_list.append(pd.DataFrame({"time": np.repeat(times[None, :], npairs, axis=0).reshape(-1),
+        #                                                    "pw_co": pwco.reshape(-1), "pw_co_prob": pwcoprob.reshape(-1),
+        #                                                    "day": day, "group": grp_name, "mouse": idm,
+        #                                                    "nevents": nevents}))
+        #
+        # # Make your dataframe
+        # if take_mean:
+        #     coact_df = pd.DataFrame({'time': times_all, 'pw_co': pw_co_all, 'pw_co_prob': pw_co_prob_all,
+        #                              'day': day_all, 'group': grp_all, 'mouse': animal_all, "nevents": nevents_all})
+        #     coact_df_list.append(coact_df)
 
     # Concat to create final dataframe
     coact_df_all = pd.concat(coact_df_list)
@@ -588,5 +628,5 @@ if __name__ == '__main__':
     # pwco = PairwiseCoactivation('Marble20', 'Shock', 1, buffer_sec=(4, 4))
     # pwco.calc_pw_significance(nshifts=100)
     gen_pw_coact('freeze_onset', buffer_sec=(4, 4), buffer_sec_filt=(4, 4),
-                 cell_filt='freeze_cells')
+                 cell_filt='freeze_cells', take_mean_across="cell_pairs")
 
