@@ -12,9 +12,9 @@ from neuropy.io.openephysio import get_dat_timestamps, get_lfp_timestamps
 from neuropy.io.neuroscopeio import NeuroscopeIO
 from neuropy.core.epoch import Epoch
 
-if environ['HOME'] == '/Users/nkinsky':
+if environ['HOME'] == '/home/nkinsky':
     working_dir = Path('/Users/nkinsky/Documents/UM/Working/Anisomycin/Recording_Rats/Wedge')
-elif environ['HOME']  == '/Users/kimqi':
+elif environ['HOME'] == '/Users/kimqi':
     working_dir = Path('/media/kimqi/BK/Data/Anisomycin/Recording_Rats/Creampuff')
 
 
@@ -203,11 +203,11 @@ def calc_ccg_by_epoch(session_folder, timestamps=None, SR=30000, window_size=0.5
     if timestamps is None:
         timestamps = get_dat_timestamps(working_dir / session_folder)
 
-    spike_times, clu_ids = get_single_units(session_folder, keep_separate=False)
+    spike_times, clu_ids = get_single_units(session_folder, keep_separate=False, working_dir=working_dir)
     #     clu_list = np.unique(clu_ids)
     #     n_units = len(clu_list)
 
-    clu_info = get_cluster_info(session_folder, keep_good_only=True)
+    clu_info = get_cluster_info(session_folder, keep_good_only=True, working_dir=working_dir)
     good_clu = clu_info['cluster_id'].values
     n_units = len(good_clu)
 
@@ -299,5 +299,6 @@ def bin_spikes2(sp_times, bin_size_sec=10):
 
 
 if __name__ == "__main__":
-    pass
-    calc_ccg_by_epoch('/Users/nkinsky/Documents/UM/Working/Anisomycin/Recording_Rats/Wedge/2022_12_13_anisomycin50mg')
+    working_dir = Path('/data3/Anisomycin/Recording_Rats/Creampuff')
+    ani_timestamps = get_lfp_timestamps(working_dir / "2024_07_17_Anisomycin")
+    calc_ccg_by_epoch("2024_07_17_Anisomycin", timestamps=ani_timestamps, working_dir=working_dir)
