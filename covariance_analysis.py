@@ -486,8 +486,8 @@ def get_group_PBE_rasters(animal_list, group_name, buffer_sec=(6, 6), event_type
     nanimals = len(animal_list)
     PBEdict = {}
     for day in [-2, -1, 4, 1, 2]:
-        PBErast_comb, PBErast_combz, times_comb = [], [], []
-        for animal in animal_list:
+        PBErast_comb, PBErast_combz, times_comb, animal_num = [], [], [], []
+        for ida, animal in enumerate(animal_list):
             MD1 = fa.MotionTuning(animal, arena, day)
             PBErast = fa.get_PE_raster(MD1.PSAbool.sum(axis=0), MD1.select_events(event_type),
                                        sr_image=MD1.sr_image, buffer_sec=buffer_sec)
@@ -506,6 +506,8 @@ def get_group_PBE_rasters(animal_list, group_name, buffer_sec=(6, 6), event_type
             else:
                 PBErast_comb.extend(PBErast_prop)
                 PBErast_combz.extend(PBErast_propz)
+
+            animal_num.extend([ida] * len(times))
             times_comb.extend(times)  # aggregate times
 
         # Assemble into dataframes for easy plotting later on
@@ -513,7 +515,8 @@ def get_group_PBE_rasters(animal_list, group_name, buffer_sec=(6, 6), event_type
                                      'act_neuron_ratio': np.array(PBErast_comb).reshape(-1),
                                      'act_neuron_ratio_z': np.array(PBErast_combz).reshape(-1),
                                      'group': [group_name] * len(np.array(times_comb).reshape(-1)),
-                                     'day': [day] * len(np.array(times_comb).reshape(-1))})
+                                     'day': [day] * len(np.array(times_comb).reshape(-1)),
+                                     'animal_num': animal_num})
 
     return PBEdict
 
