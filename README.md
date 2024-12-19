@@ -10,4 +10,4 @@ This repository contains all the code required to generate figures for Kinsky, O
  - Download group data
    - Update location of group data in `subjects.py` file
  - 
- - Run notebook of choice in
+ - Run notebooks in `Notebooks` folder to generate figure panels.
