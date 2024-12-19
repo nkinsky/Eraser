@@ -2654,6 +2654,7 @@ class GroupPF:
 
 
 if __name__ == '__main__':
-    get_neuronmap('Marble07', 'Shock', -2, 'Shock', -1)
+    # get_neuronmap('Marble07', 'Shock', -2, 'Shock', -1)
+    get_pairwise_map_from_batch('Marble06', 'Shock', 1, 'Shock', 2)
     pass
 
