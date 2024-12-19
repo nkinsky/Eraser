@@ -9,5 +9,5 @@ This repository contains all the code required to generate figures for Kinsky, O
     - Update `get_comp_name` function in `eraser_reference.py` with locations of data folder and directory to plot things into 
  - Download group data
    - Update location of group data in `subjects.py` file
- - 
+   - (You may have to add this path to a few notebooks directly as well)
  - Run notebooks in `Notebooks` folder to generate figure panels.
