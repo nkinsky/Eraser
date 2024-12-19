@@ -62,8 +62,10 @@ def get_comp_name():
         pathname = '/Users/nkinsky/Dropbox/Imaging Project/Manuscripts/Eraser/Figures'
         working_dir = '/Users/nkinsky/Documents/BU/Working/Eraser'
         session_dir = '/Users/nkinsky/Documents/BU/Working/Eraser/SessionDirectories'
-    elif comp_name == 'Evans computer':
+    elif comp_name == 'Other computer':
         pathname = 'fill in folder to plot to here evan'
+        working_dir = 'Fill in path to working directory here which containt your "Anisomycin Group", "Control Group", and "Session Directories" folders'
+        session_dir = 'Fill in path to "SessionDirectories" folder'
 
     return comp_name, working_dir, pathname, session_dir
 
