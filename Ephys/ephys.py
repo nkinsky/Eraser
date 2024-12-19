@@ -12,10 +12,12 @@ from neuropy.io.openephysio import get_dat_timestamps, get_lfp_timestamps
 from neuropy.io.neuroscopeio import NeuroscopeIO
 from neuropy.core.epoch import Epoch
 
-if environ['HOME'] == '/home/nkinsky':
+if environ['HOME'] == '/Users/nkinsky':
     working_dir = Path('/Users/nkinsky/Documents/UM/Working/Anisomycin/Recording_Rats/Wedge')
 elif environ['HOME'] == '/Users/kimqi':
     working_dir = Path('/media/kimqi/BK/Data/Anisomycin/Recording_Rats/Creampuff')
+else:
+    working_dir = None
 
 
 def get_cluster_info(folder_use, keep_good_only=True, working_dir=working_dir):
@@ -34,7 +36,7 @@ def get_cluster_info(folder_use, keep_good_only=True, working_dir=working_dir):
         return clu_info_df
 
 
-def load_events_csv(events_file_dir, start_time, working_dir=working_dir):
+def load_events_csv(events_file_dir, start_time, working_dir=working_dir, tz: str or None = 'America/Detroit'):
     """Loads epochs events file delineating start/end of each recording. """
     events_file_dir = working_dir / events_file_dir
     events_file = sorted(Path(events_file_dir).glob("*_events_full.csv"))[0]
@@ -42,7 +44,9 @@ def load_events_csv(events_file_dir, start_time, working_dir=working_dir):
     day_offset = pd.tseries.offsets.DateOffset(days=(start_time[0].date() -
                                                      pd.to_datetime(events_df['start']).dt.date[0]).days)
     starts = pd.to_datetime(events_df['start']) + day_offset
+    starts = starts.dt.tz_localize(tz)
     stops = pd.to_datetime(events_df['stop']) + day_offset
+    stops = stops.dt.tz_localize(tz)
     epochs = pd.DataFrame({'start': starts, 'stop': stops, 'label': events_df['label']})
 
     return epochs
