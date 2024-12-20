@@ -218,7 +218,8 @@ def calc_ccg_by_epoch(session_folder, timestamps=None, SR=30000, window_size=0.5
     good_clu_bool = [clu_id in good_clu for clu_id in clu_ids]
     if combine_units:  # Set all ids to first good unit
         clu_ids[good_clu_bool] = good_clu[0]
-    epochs = load_events_csv(working_dir / session_folder, timestamps.iloc[0])
+
+    epochs = load_events_csv(working_dir / session_folder, timestamps.iloc[0], working_dir=working_dir)
 
     ts = timestamps.squeeze()  # Make timestamps into a series
 
@@ -229,8 +230,8 @@ def calc_ccg_by_epoch(session_folder, timestamps=None, SR=30000, window_size=0.5
     for epoch in epochs['label']:
         print(f'Calculating CCGs for epoch {epoch}')
         epoch_use = epochs[epochs['label'] == epoch]
-        start_sec = ts.searchsorted(epoch_use['start'].dt.tz_localize(ts.iloc[0].tz))/SR
-        stop_sec = ts.searchsorted(epoch_use['stop'].dt.tz_localize(ts.iloc[0].tz))/SR
+        start_sec = ts.searchsorted(epoch_use['start'])/SR
+        stop_sec = ts.searchsorted(epoch_use['stop'])/SR
         if start_sec != stop_sec:  # Skip the below for injection or any epoch with no data!
             epoch_bool = np.bitwise_and(spike_times > start_sec, spike_times < stop_sec)
             epoch_bool = np.bitwise_and(epoch_bool, good_clu_bool)
